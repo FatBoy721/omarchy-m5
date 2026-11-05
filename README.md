@@ -11,8 +11,8 @@ Labels: **NATIVE** = seen on our J714s · **VM** = QEMU · **REPORTED** = someon
 | Linux 7.2 (slim, single core) boots to the initramfs shell, earlycon on the framebuffer | works (gz5+) | NATIVE |
 | The ~45 s idle reset | fixed in gz10: a secondary watchdog word (0x2_8833_0008, read 0x7c = armed) is now cleared; ran 264 s, no reset | NATIVE |
 | Logs without a camera (raw on disk0s5 + FAT32 on the ESP, readable from macOS) | works (gz9+), see `logs/` | NATIVE |
-| Initramfs → `switch_root` into the Omarchy ext4 rootfs → SDDM autologin → Hyprland (simpledrm + llvmpipe) | **Omarchy booted natively on gz12 (2026-11-05 00:03)**: owner saw the desktop come up; log confirmation from the ESP pending | NATIVE (owner-observed) |
-| Internal keyboard/trackpad (MTP/DockChannel) | DTB I1 built (gz12), untested | HYPOTHESIS |
+| Initramfs → `switch_root` into the Omarchy ext4 rootfs → SDDM autologin → Hyprland (simpledrm + llvmpipe) | **Omarchy booted natively on gz12 (2026-11-05 00:03)**: switch_root into the 120 GB ext4, online resize, SDDM autologin → uwsm Hyprland session, 302 s up, no reset (journal in `logs/`) | NATIVE |
+| Internal keyboard/trackpad (MTP/DockChannel) | gz12: MTP coprocessor (pre-loaded by iBoot) fails `-62` on the driver's shutdown/wake; fix in progress (attach to the running IOP) | NATIVE (failing) |
 | USB gadget / SSH | blocked: ATC0 USB power chain + eUSB2 PHY bring-up; power half in gz13, untested | HYPOTHESIS |
 | SMP (more than one core), GPU | not started; SMP is reported to need a newer stub firmware (macOS 27.3b1+) | REPORTED |
 

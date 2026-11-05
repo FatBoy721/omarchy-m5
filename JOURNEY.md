@@ -44,3 +44,5 @@ All on 2026-11-04 (US Eastern) unless noted; times are commit times of the build
 
 ## Firmware and machine facts (NATIVE)
 macOS 26.6.2, system and stub firmware mBoot-18000.161.10, 24 GB, FileVault on. Stub cloned from the host install with betizzel's `prep-stub.sh`. disk0s5 = 120,000,000,000 B Linux partition; disk0s4 = 499,998,720 B FAT32 ESP; 4096-byte logical blocks.
+
+| gz12 | 2026-11-05 00:03 | `10345b69…` | desktop kernel + DTB I1 (MTP on) + m5.root=s5 | **Omarchy desktop booted natively**: SDDM autologin → Hyprland, 302 s, no reset. MTP -62 → no keyboard/trackpad | NATIVE |
