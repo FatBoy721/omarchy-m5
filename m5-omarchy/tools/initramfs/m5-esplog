@@ -1,0 +1,133 @@
+#!/bin/sh
+# m5-esplog v4 (task 18): boot log that needs no camera. Started by /init when m5.esplog=1 (unchanged /init).
+# Replaces the slim-v3 script, which waited 60 s for nvme0n1 and then exited with only a kmsg line, and logged
+# nothing about its own failures.
+#
+# Channel 2 (raw, first): plain text at the START of the Linux partition, max 4 MiB, every 5 s:
+#   "M5LOG v1 boot=<n> uptime=<s>" + the logger's own log + /proc/uptime + /proc/interrupts + dmesg.
+#   The partition is used ONLY if: GPT type = Linux filesystem (0FC63DAF-...), size == 120,000,000,000 B, and its
+#   first 4 MiB are all zero OR start with "M5LOG". Otherwise: refuse (logged). Writes: dd oflag=direct conv=fsync,
+#   always the full 4 MiB, re-checking the "M5LOG" magic before every write.
+# Channel 1 (FAT): m5log/boot-<n>.txt on the single EFI-type vfat partition of 200-1100 MB, every 30 s.
+# Every step also goes to /dev/kmsg, so it shows on the m5fb earlycon.
+# Provenance: written by the m5boot session (~/m5boot/initramfs-v4log/bin/m5-esplog, its task 18); copied here
+# for task 27 with one change: m5.root=s5 turns channel 2 OFF (the partition then holds the rootfs).
+# VM only: m5.logdisk=<name> replaces nvme0n1 (QEMU tests use virtio-blk; the slim kernel has only nvme_apple).
+
+k() { echo "m5log: $*" > /dev/kmsg 2>/dev/null; echo "$(cut -d' ' -f1 /proc/uptime) $*" >> /tmp/m5log-self.txt; }
+DISK=nvme0n1
+for a in $(cat /proc/cmdline); do case $a in m5.logdisk=*) DISK=${a#m5.logdisk=} ;; esac; done
+LNX_TYPE=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+ESP_TYPE=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+MAX=4194304
+k "v4 start, disk=$DISK"
+
+# ---- wait for the disk, as long as it takes; say what we see every 5 s ----
+t=0
+while [ ! -b /dev/$DISK ]; do
+  if [ $((t % 10)) -eq 0 ]; then
+    k "waiting for /dev/$DISK ($((t / 2)) s): nvme class: $(ls /sys/class/nvme 2>/dev/null | tr '\n' ' ') partitions: $(awk 'NR>2{printf "%s ", $4}' /proc/partitions)"
+    dmesg | grep -v 'm5log:' | grep -iE 'nvme|apple-ans|ans2|sart|rtkit|mailbox' | tail -3 | while read -r l; do k "  dmesg: $l"; done
+  fi
+  sleep 0.5; t=$((t + 1))
+done
+k "/dev/$DISK present after $((t / 2)) s"
+sleep 1	# let the partition scan finish
+LBS=$(cat /sys/block/$DISK/queue/logical_block_size)
+k "$(ls /sys/block/$DISK | grep -c "^$DISK") partitions; logical block size $LBS"
+
+# ---- GPT reader (task 18 root cause: the initramfs's /sbin/sfdisk is dynamically linked against libfdisk,
+# libsmartcols and libncursesw, which are NOT in /lib, so it never runs; the v3 script found no ESP and wrote
+# nothing). Busybox dd/od only. UEFI spec GPT: header at LBA 1 ("EFI PART"), entries LBA @72 (u64), count @80,
+# entry size @84 (u32); entry: type GUID (mixed-endian) @0, first LBA @32 (u64). Linux partition N = entry N-1. ----
+rd() { dd if=/dev/$DISK bs=4096 iflag=skip_bytes,count_bytes skip=$1 count=$2 2>/dev/null | od -An -tx1 -v | tr -d ' \n'; }
+leval() { h=$1; r=""; while [ -n "$h" ]; do r=${h%"${h#??}"}$r; h=${h#??}; done; echo $((0x${r:-0})); }	# little-endian hex -> dec
+HDR=$(rd $LBS 92)
+if [ "${HDR:0:16}" != 4546492050415254 ]; then k "GPT header not found at LBA 1 ($LBS-byte blocks)"; GPT=""; else
+  GPT=1; ELBA=$(leval ${HDR:144:16}); ENUM=$(leval ${HDR:160:8}); ESZ=$(leval ${HDR:168:8})
+  k "GPT: entries at LBA $ELBA, $ENUM x $ESZ bytes"
+fi
+guid() {	# 32 hex chars (on-disk) -> GUID text
+  h=$1; a=${h:0:8}; b=${h:8:4}; c=${h:12:4}
+  echo "${a:6:2}${a:4:2}${a:2:2}${a:0:2}-${b:2:2}${b:0:2}-${c:2:2}${c:0:2}-${h:16:4}-${h:20:12}" | tr a-f A-F
+}
+ptype() {	# partition number, sysfs start (512-byte units) -> type GUID, or "" if the entry disagrees
+  [ -n "$GPT" ] && [ "$1" -le "$ENUM" ] || return
+  e=$(rd $((ELBA * LBS + ($1 - 1) * ESZ)) 40)
+  [ $(( $(leval ${e:64:16}) * LBS / 512 )) -eq "$2" ] || { k "GPT entry $1 start != kernel's start: ignored"; return; }
+  guid "${e:0:32}"
+}
+
+# ---- pick partitions ----
+RAW=""; ESP=""
+for p in /sys/block/$DISK/$DISK*; do
+  [ -e "$p/partition" ] || continue
+  n=${p##*/}; num=$(cat "$p/partition")
+  t=$(ptype "$num" "$(cat "$p/start")")
+  b=$(( $(cat "$p/size") * 512 ))	# sysfs size is always in 512-byte units
+  k "part $n type=$t bytes=$b"
+  if [ "$t" = $LNX_TYPE ] && [ "$b" -eq 120000000000 ]; then
+    [ -z "$RAW" ] || { k "REFUSE raw: two 120 GB Linux partitions"; RAW=BAD; }
+    [ "$RAW" = BAD ] || RAW=/dev/$n
+  fi
+  if [ "$t" = $ESP_TYPE ] && [ "$b" -ge 200000000 ] && [ "$b" -le 1100000000 ]; then
+    [ -z "$ESP" ] || { k "REFUSE esp: two ESPs"; ESP=BAD; }
+    [ "$ESP" = BAD ] || ESP=/dev/$n
+  fi
+done
+[ "$RAW" = BAD ] && RAW=""; [ "$ESP" = BAD ] && ESP=""
+if grep -qw m5.root=s5 /proc/cmdline; then [ -n "$RAW" ] && k "m5.root=s5: raw channel OFF (partition holds the rootfs)"; RAW=""; fi
+
+BOOT=1
+if [ -n "$RAW" ]; then
+  if [ "$(dd if=$RAW bs=5 count=1 2>/dev/null)" = M5LOG ]; then
+    prev=$(dd if=$RAW bs=128 count=1 2>/dev/null | head -n1 | sed -n 's/.*boot=\([0-9]*\).*/\1/p')
+    BOOT=$(( ${prev:-0} + 1 )); k "raw $RAW: existing M5LOG (boot=$prev): ok"
+  elif [ "$(dd if=$RAW bs=4096 count=1024 2>/dev/null | tr -d '\000' | head -c1 | wc -c)" -eq 0 ]; then
+    k "raw $RAW: first 4 MiB all zero: ok"
+  else
+    k "REFUSE raw $RAW: first 4 MiB neither zero nor M5LOG"; RAW=""
+  fi
+else k "no raw log partition (need type $LNX_TYPE, 120000000000 B)"; fi
+[ -n "$ESP" ] || k "no ESP log partition"
+k "boot=$BOOT raw=${RAW:-none} esp=${ESP:-none}"
+
+body() {
+  echo "M5LOG v1 boot=$BOOT uptime=$(cut -d' ' -f1 /proc/uptime)"
+  echo "--- logger"; cat /tmp/m5log-self.txt
+  echo "--- uptime"; cat /proc/uptime
+  echo "--- interrupts"; cat /proc/interrupts
+  echo "--- dmesg"; dmesg
+}
+raw_write() {
+  [ "$(dd if=$RAW bs=5 count=1 2>/dev/null)" = M5LOG ] || [ "$1" = first ] || { k "REFUSE raw: magic gone"; RAW=""; return 1; }
+  { body | head -c $((MAX - 4096)); dd if=/dev/zero bs=4096 count=1024 2>/dev/null; } | head -c $MAX > /tmp/m5log.raw
+  err=$(dd if=/tmp/m5log.raw of=$RAW bs=4096 count=1024 oflag=direct conv=fsync 2>&1) || { k "raw write FAILED: $err"; return 1; }
+  [ "$1" = first ] && k "raw write ok ($RAW)"
+}
+esp_write() {
+  mkdir -p /mnt/esp
+  # Addendum 18: natively a write "succeeded" into the initramfs /mnt with nothing on the ESP. Trust neither the
+  # exit code alone nor the directory: require the vfat mount of $ESP on /mnt/esp in /proc/mounts before writing.
+  err=$(mount -t vfat -o rw,noatime "$ESP" /mnt/esp 2>&1); rc=$?
+  if [ $rc -ne 0 ] || ! grep -q "^$ESP /mnt/esp vfat " /proc/mounts; then
+    k "esp mount $ESP FAILED (rc=$rc): ${err:-no error text}; /proc/mounts: $(grep -E '/mnt|vfat' /proc/mounts | tr '\n' ';')"
+    k "  vfat in /proc/filesystems: $(grep -c vfat /proc/filesystems); dmesg: $(dmesg | grep -iE 'fat|vfat|msdos' | tail -2 | tr '\n' ';')"
+    umount /mnt/esp 2>/dev/null; return 1
+  fi
+  mkdir -p /mnt/esp/m5log
+  [ -n "${F:-}" ] || F=/mnt/esp/m5log/boot-$BOOT.txt
+  { body > "$F.tmp" && mv "$F.tmp" "$F"; } 2>/tmp/m5log.err || k "esp write FAILED: $(cat /tmp/m5log.err)"
+  sync
+  [ -s "$F" ] && sz=$(stat -c %s "$F") || sz=0
+  umount /mnt/esp || k "esp umount failed"
+  [ -n "${ESPOK:-}" ] || { ESPOK=1; k "esp write ok: ${F#/mnt/esp/} $sz bytes on $ESP (vfat, verified mounted)"; }
+}
+
+[ -n "$RAW" ] && raw_write first
+i=0
+while :; do
+  [ -n "$RAW" ] && raw_write
+  [ -n "$ESP" ] && [ $((i % 6)) -eq 0 ] && esp_write
+  sleep 5; i=$((i + 1))
+done

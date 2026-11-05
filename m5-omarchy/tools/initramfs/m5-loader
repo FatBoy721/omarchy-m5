@@ -1,0 +1,18 @@
+#!/bin/sh
+# Option B loader: mount the Linux root on NVMe and kexec its /boot kernel, reusing the DT
+# that m1n1 already fixed up (/sys/firmware/fdt). Usage: m5-loader [rootdev]  (default: m5.root= or nvme0n1p5)
+dev=$1
+for a in $(cat /proc/cmdline); do case $a in m5.root=*) [ -z "$dev" ] && dev=${a#m5.root=} ;; esac; done
+dev=${dev:-/dev/nvme0n1p5}
+i=0; while [ ! -b "$dev" ] && [ $i -lt 20 ]; do sleep 1; i=$((i+1)); done
+[ -b "$dev" ] || { echo "m5-loader: $dev not present, staying in initramfs"; exit 1; }
+mount -o ro "$dev" /mnt || { echo "m5-loader: mount $dev failed"; exit 1; }
+k=/mnt/boot/Image; [ -f $k ] || k=/mnt/boot/Image.gz
+[ -f $k ] || { echo "m5-loader: no /boot/Image(.gz) on $dev"; umount /mnt; exit 1; }
+dtb=/sys/firmware/fdt; [ -f /mnt/boot/m5.dtb ] && [ -f /mnt/boot/USE_FILE_DTB ] && dtb=/mnt/boot/m5.dtb
+cmd="$(cat /mnt/boot/cmdline 2>/dev/null || cat /proc/cmdline | sed 's/m5.loader=1//')"
+initrd=""; [ -f /mnt/boot/initramfs.cpio.gz ] && initrd="--initrd=/mnt/boot/initramfs.cpio.gz"
+echo "m5-loader: kexec $k dtb=$dtb initrd=${initrd:-none} cmdline=$cmd"
+kexec -s -l "$k" --dtb="$dtb" $initrd --command-line="$cmd" || kexec -l "$k" --dtb="$dtb" $initrd --command-line="$cmd" || { echo "m5-loader: kexec load failed"; umount /mnt; exit 1; }
+umount /mnt; sync
+kexec -e

@@ -1,0 +1,14 @@
+[Unit]
+Description=First boot: init pacman keyring, install bundled packages (kexec-tools)
+ConditionPathExists=/var/lib/m5/firstboot-pending
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/pacman-key --init
+ExecStart=/usr/bin/pacman-key --populate archlinuxarm
+ExecStart=/bin/sh -c 'pacman -U --noconfirm /root/pkgs/*.pkg.tar.*'
+ExecStart=/usr/bin/rm -f /var/lib/m5/firstboot-pending
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Make every USB device controller a CDC-EEM gadget: netdev gets 10.55.<n>.2/24 (host uses .1).
+# EEM: bulk endpoints only, no MAC address exchange needed. Our own implementation.
+G=/sys/kernel/config/usb_gadget
+[ -d "$G" ] || { echo "m5-gadget-net: no configfs usb_gadget"; exit 1; }
+i=0; while [ -z "$(ls /sys/class/udc 2>/dev/null)" ] && [ $i -lt 30 ]; do sleep 1; i=$((i+1)); done
+n=0
+for udc in $(ls /sys/class/udc); do
+  g=$G/m5_$n; mkdir -p $g/strings/0x409 $g/configs/c.1/strings/0x409 $g/functions/eem.$n
+  echo 0x1d6b > $g/idVendor; echo 0x0104 > $g/idProduct          # Linux Foundation multifunction gadget
+  echo "m5pro-$n" > $g/strings/0x409/serialnumber
+  echo "omarchy-m5" > $g/strings/0x409/manufacturer; echo "J714s EEM $n" > $g/strings/0x409/product
+  echo "EEM" > $g/configs/c.1/strings/0x409/configuration
+  ln -s $g/functions/eem.$n $g/configs/c.1/
+  if echo "$udc" > $g/UDC 2>/dev/null; then
+    ifn=$(cat $g/functions/eem.$n/ifname)
+    ip addr add 10.55.$n.2/24 dev $ifn && ip link set $ifn up
+    echo "m5-gadget-net: udc=$udc netdev=$ifn me=10.55.$n.2 host=10.55.$n.1"
+  else
+    echo "m5-gadget-net: udc=$udc bind failed"
+  fi
+  n=$((n+1))
+done

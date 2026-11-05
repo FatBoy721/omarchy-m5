@@ -1,0 +1,12 @@
+[Unit]
+Description=USB gadget CDC-EEM networking (10.55.<n>.2/24) on every UDC
+After=sys-kernel-config.mount systemd-udev-settle.service
+Wants=sys-kernel-config.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/m5-gadget-net
+
+[Install]
+WantedBy=multi-user.target

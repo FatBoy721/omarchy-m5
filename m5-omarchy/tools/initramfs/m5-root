@@ -1,0 +1,38 @@
+#!/bin/sh
+# m5-root (task 27, m5.root=s5): find the Omarchy rootfs partition and mount it on /newroot. Exit 0 = ready.
+# Accept ONLY: GPT type Linux filesystem, size exactly 120,000,000,000 B, ext4 magic, label "omarchy". Busybox only
+# (sfdisk/e2fsprogs here can't load their libs; GPT reading as in m5-esplog, m5boot task 18).
+k() { echo "m5root: $*" > /dev/kmsg 2>/dev/null; echo "m5root: $*"; }
+DISK=nvme0n1
+for a in $(cat /proc/cmdline); do case $a in m5.logdisk=*) DISK=${a#m5.logdisk=} ;; esac; done
+LNX_TYPE=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+t=0; while [ ! -b /dev/$DISK ] && [ $t -lt 120 ]; do sleep 0.5; t=$((t + 1)); done
+[ -b /dev/$DISK ] || { k "REFUSE: /dev/$DISK never appeared"; exit 1; }
+sleep 1
+LBS=$(cat /sys/block/$DISK/queue/logical_block_size)
+rd() { dd if=$1 bs=4096 iflag=skip_bytes,count_bytes skip=$2 count=$3 2>/dev/null | od -An -tx1 -v | tr -d ' \n'; }
+leval() { h=$1; r=""; while [ -n "$h" ]; do r=${h%"${h#??}"}$r; h=${h#??}; done; echo $((0x${r:-0})); }
+guid() { h=$1; a=${h:0:8}; b=${h:8:4}; c=${h:12:4}; echo "${a:6:2}${a:4:2}${a:2:2}${a:0:2}-${b:2:2}${b:0:2}-${c:2:2}${c:0:2}-${h:16:4}-${h:20:12}" | tr a-f A-F; }
+HDR=$(rd /dev/$DISK $LBS 92)
+[ "${HDR:0:16}" = 4546492050415254 ] || { k "REFUSE: no GPT header at LBA 1"; exit 1; }
+ELBA=$(leval ${HDR:144:16}); ENUM=$(leval ${HDR:160:8}); ESZ=$(leval ${HDR:168:8})
+ROOT=""
+for p in /sys/block/$DISK/$DISK*; do
+  [ -e "$p/partition" ] || continue
+  n=${p##*/}; num=$(cat "$p/partition"); [ "$num" -le "$ENUM" ] || continue
+  e=$(rd /dev/$DISK $((ELBA * LBS + (num - 1) * ESZ)) 40)
+  [ $(( $(leval ${e:64:16}) * LBS / 512 )) -eq "$(cat "$p/start")" ] || continue
+  [ "$(guid "${e:0:32}")" = $LNX_TYPE ] && [ $(( $(cat "$p/size") * 512 )) -eq 120000000000 ] || continue
+  [ -z "$ROOT" ] || { k "REFUSE: two 120 GB Linux partitions"; exit 1; }
+  ROOT=/dev/$n
+done
+[ -n "$ROOT" ] || { k "REFUSE: no Linux-filesystem partition of exactly 120000000000 B"; exit 1; }
+SB=$(rd $ROOT 1024 136)                       # ext4 superblock: magic @56 (0xEF53 LE), volume name @120 (16 B)
+[ "${SB:112:4}" = 53ef ] || { k "REFUSE: $ROOT is not ext2/3/4 (magic ${SB:112:4})"; exit 1; }
+# label = "omarchy" + 9 NULs (16 bytes), compared as hex (no printf \x needed)
+LBL=6f6d6172636879000000000000000000
+[ "${SB:240:32}" = $LBL ] || { k "REFUSE: $ROOT label hex ${SB:240:32} != $LBL (omarchy)"; exit 1; }
+mkdir -p /newroot
+mount -t ext4 -o rw "$ROOT" /newroot || { k "REFUSE: mount $ROOT failed"; exit 1; }
+[ -x /newroot/sbin/init ] || [ -L /newroot/sbin/init ] || { k "REFUSE: no /sbin/init on $ROOT"; umount /newroot; exit 1; }
+k "root $ROOT (label omarchy) mounted on /newroot"

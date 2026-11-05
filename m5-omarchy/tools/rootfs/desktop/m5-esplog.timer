@@ -1,0 +1,11 @@
+[Unit]
+Description=m5: ESP log every 30 s
+DefaultDependencies=no
+
+[Timer]
+OnActiveSec=10s
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=sysinit.target

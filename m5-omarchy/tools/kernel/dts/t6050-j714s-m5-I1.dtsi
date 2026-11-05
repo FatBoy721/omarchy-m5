@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * m5-omarchy first-boot overrides for J714s, variant I1 (task 28; = C + MTP on). Included last by t6050-j714s.dts.
+ * NATIVE gz5: SError right after the MTP DART probe returned (the next DART to probe was
+ * dwc3_0_dart_0 @ 0x2a2f00000; the SError regs held x0 = 0x2a2f0000).
+ */
+
+/* 1. MTP (keyboard/trackpad over DockChannel) and its DART: off until DAPF is understood. */
+&mtp { status = "disabled"; };
+&mtp_mbox { status = "disabled"; };
+&mtp_dart { status = "disabled"; };
+&mtp_dockchannel { status = "disabled"; };
+&mtp_hid { status = "disabled"; };
+
+/* 2. Only the gadget port stays: dwc3_0 = ADT usb-drd0 = Port-USB-C@1 (left-back, by MagSafe).
+ *    Its DARTs and the controller had no power-domains; ADT dart-usb0 has clock-gates, so a register
+ *    access with ATC0 USB gated off would SError. Bind them to ps_atc0_usb (as Asahi t600x DTs do). */
+&dwc3_0 { power-domains = <&ps_atc0_usb>; };
+&dwc3_0_dart_0 { power-domains = <&ps_atc0_usb>; };
+&dwc3_0_dart_1 { power-domains = <&ps_atc0_usb>; };
+
+&dwc3_1 { status = "disabled"; };
+&dwc3_1_dart_0 { status = "disabled"; };
+&dwc3_1_dart_1 { status = "disabled"; };
+&dwc3_2 { status = "disabled"; };
+&dwc3_2_dart_0 { status = "disabled"; };
+&dwc3_2_dart_1 { status = "disabled"; };
+
+/* 3. (task 25 addendum) Visible console after the initcalls: a static simple-framebuffer, so simpledrm +
+ *    fbcon bind even if the loader doesn't fill/enable this node. Values: the J714s 24 GB panel as m5boot
+ *    and the ADT report it (base 0x105d3110000, 3024x1964, stride 12096, x2r10g10b10). m5boot may
+ *    overwrite reg/size/format with its runtime values. No power-domains: the display is live from iBoot
+ *    and pd_ignore_unused keeps it on (adding disp domains = PMGR writes, see gz6). */
+&framebuffer0 {
+	reg = <0x105 0xd3110000 0x0 0x16a8000>;		/* 12096 * 1964 */
+	width = <3024>;
+	height = <1964>;
+	stride = <12096>;
+	format = "x2r10g10b10";
+	status = "okay";
+};
+
+/* 4. Variant C (task 26): nothing that probes late or isn't needed for shell + NVMe. gz6 reset ~45 s after
+ *    the initcalls, around the deferred-probe timeouts and "sync_state() pending (pinctrl)" lines. */
+&dwc3_0 { status = "disabled"; };
+&dwc3_0_dart_0 { status = "disabled"; };
+&dwc3_0_dart_1 { status = "disabled"; };
+&pinctrl_nub { status = "disabled"; };
+&pinctrl_aop { status = "disabled"; };
+&pinctrl_ap { status = "disabled"; };
+&serial0 { status = "disabled"; };
+&wdt { status = "disabled"; };
+
+/* 5. Variant I1 (task 28): internal keyboard/trackpad back on. USB DARTs stay off (DTB C), which removes the
+ *    gz5 SError's other suspect (an unpowered USB0 DART read; third-party report: ATC0 USB is off at hand-off).
+ *    The MTP has no PMGR domain (ADT) and iBoot preloads its firmware (pre-loaded = 1). DAPF is not
+ *    programmed by Linux: see report 28. Trackpad firmware apple/tpmtfw-j714s.bin is in the initramfs + rootfs. */
+&mtp { status = "okay"; };
+&mtp_mbox { status = "okay"; };
+&mtp_dart { status = "okay"; };
+&mtp_dockchannel { status = "okay"; };
+&mtp_hid { status = "okay"; };

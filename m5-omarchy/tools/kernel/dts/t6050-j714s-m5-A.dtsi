@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/*
+ * m5-omarchy first-boot overrides for J714s, variant A (task 25): no USB at all. Included last by t6050-j714s.dts.
+ * NATIVE gz5: SError right after the MTP DART probe returned (the next DART to probe was
+ * dwc3_0_dart_0 @ 0x2a2f00000; the SError regs held x0 = 0x2a2f0000).
+ */
+
+/* 1. MTP (keyboard/trackpad over DockChannel) and its DART: off until DAPF is understood. */
+&mtp { status = "disabled"; };
+&mtp_mbox { status = "disabled"; };
+&mtp_dart { status = "disabled"; };
+&mtp_dockchannel { status = "disabled"; };
+&mtp_hid { status = "disabled"; };
+
+/* 2. gz6 (power-domains = ps_atc0_usb on dwc3_0 + DARTs) hard-reset the SoC during the PMGR probes:
+ *    no power-domains here, and all USB controllers + DARTs off. Expect: initramfs shell on screen. */
+&dwc3_0 { status = "disabled"; };
+&dwc3_0_dart_0 { status = "disabled"; };
+&dwc3_0_dart_1 { status = "disabled"; };
+&dwc3_1 { status = "disabled"; };
+&dwc3_1_dart_0 { status = "disabled"; };
+&dwc3_1_dart_1 { status = "disabled"; };
+&dwc3_2 { status = "disabled"; };
+&dwc3_2_dart_0 { status = "disabled"; };
+&dwc3_2_dart_1 { status = "disabled"; };
