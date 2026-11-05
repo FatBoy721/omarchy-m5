@@ -125,3 +125,21 @@ All NATIVE on the M5 Pro unless noted. Raw logs: `m5-omarchy/reports/native-u*/h
 - A local process kept connecting to the PM listener and jammed the dial-in (fixed: `range=` LAN only).
 - Arming finish-install made Omarchy the default boot volume (fixed by re-blessing macOS; arming now always restores the default).
 - Reference: the official MIT [omarchy-mac-installer](https://github.com/omacom/omarchy-mac-installer) (M1–M3) is the base for our M5 installer plan: same flow, our m5boot as the boot object.
+
+## 2026-11-05 13:01 — ROOT SHELL ON OMARCHY, NATIVE
+The breakthrough came from a reviewer's observation: **u10d** (generic-serial gadget) had already passed USB SET_CONFIGURATION, but nothing was listening on `/dev/ttyGS0`.
+**u10s** = u10d + `agetty -a root -L ttyGS0` (runner: `usb/u10s-m5-exp.sh`).
+- PC side: `echo "1d6b 0104" > /sys/bus/usb-serial/drivers/generic/new_id` → `/dev/ttyUSB0`.
+- First command round trip (`usb/native-root-shell-proof.txt`, NATIVE):
+  ```
+  PRETTY_NAME="Omarchy"
+  Linux m5-j714s 7.2.2-m5slim+ … aarch64
+  Apple MacBook Pro (14-inch, M5 Pro, 2026)
+  uid=0(root)
+  Hyprland --watchdog-fd 4
+  ```
+- Kept alive by stopping the guard timer, the initramfs autoreboot and the experiment's ExecStopPost reboot (hardware watchdog still fed by systemd).
+- `tools/serbridge.sh` + `tools/msh.py`: the serial line is bridged so worker sessions run commands on the Mac live (no reboot per experiment).
+- Also this hour: h4 proved the 3-minute guard natively (macOS back 256 s after push) and showed the host-mode gap precisely (hpm1 = SOURCE+DFP, conn usb2/usb3 = 1, but xHCI PORTSC CCS=0 / RxDetect; `irq 39: nobody cared`). W13b/W14/W15: Wi-Fi port reset/enable handshake mapped (reset-assert ack works; enable ack and LTSSM never start; W15's undocumented core read faulted).
+
+Still missing for a usable desktop: internal keyboard/trackpad (MTP), Wi-Fi (N1 link), local networking. Next work happens live over this shell.
