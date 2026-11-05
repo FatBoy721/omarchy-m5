@@ -72,3 +72,56 @@ All results NATIVE unless marked. Reports: `m5-omarchy/reports/29-50`, `wifi-n1-
 - A wait-for-macOS script parsed `usec` instead of `sec` from boot time (Mac idle 49 min). Fixed.
 - Stale ESP logs chosen by FAT mtime (all 1980) → analysed the wrong kernel once. Logs now moved aside before each run and matched by marker.
 - A watcher waited for "DONE 49" while the worker printed "DONE 50" (~1 h idle).
+
+## 2026-11-05 midday: every USB (u/h), Wi-Fi (W), keyboard and boot-loader run
+All NATIVE on the M5 Pro unless noted. Raw logs: `m5-omarchy/reports/native-u*/h*`, `wifi-n1/logs/`, `keyboard/`. Wi-Fi set notes (diagnosis + predictions): `wifi-n1/sets/*-README.md`.
+
+### USB: device mode (Mac as USB gadget, PC as host)
+| Run | Change | Result |
+|---|---|---|
+| u6 | read hpm0 (left-back port controller) | MODE "ADFU": the left-back port is Apple's DFU port and owns the USB2 pair → use another port |
+| u7 | same flow on left-front (ATC1, hpm1) | first ever enumeration on the PC (`1d6b:0104 m5-omarchy`), then `can't set config #1, error -110` |
+| u8 / u8p | ECM only + dwc3 tracing / + `iommu.passthrough=1` | same -110 → DART ruled out; trace: ep0 status stage never completes |
+| u9 | ACM only + FIFO/debug dump | same -110 (ACM also queues IN data at SET_CONFIGURATION) |
+| **u10d** | generic serial (no IN data at config) | **configured** (bConfigurationValue=1): root cause = IN data queued on another EP blocks the ep0 status stage |
+| u10e | ECM with deferred notify | still -110 → fix must be in dwc3 (u10f/u10g built) |
+
+### USB: host mode (Mac as host, Pixel 4a phone tethering)
+| Run | Change | Result |
+|---|---|---|
+| h1 | tiny initramfs, dwc3 host on ATC1, dial-out SSH to PM PC | no device; phone not powered (hpm1 asleep, SPMI reads time out) |
+| h2 | hpm1 wake_poll (aurora tipd/spmi.c GPL) + SSPS S0 | hpm1 answers: MODE "APP ", S0 OK; still no VBUS |
+| h3 | + SWSr/SWDF role swap | STATUS: power role SOURCE, data role DFP; phone briefly offers USB tethering, then drops; no enumeration |
+| obs. | owner: tethering prompt appears ~5 s while the kernel is still booting | iBoot/macOS leaves the port working; something early in Linux (suspect: loader kernel's kexec shutdown of ATC1 PMGR domains) turns it off → h4 / gz18 keep ATC1 on |
+| macOS | system_profiler | Pixel 4a (18d1:4ee7) on ATC1 bus 0x01000000 at 480 Mb/s: port mapping confirmed |
+
+### Wi-Fi (N1, apcie port 0)
+| Run | Change | Result |
+|---|---|---|
+| N1J | chain kexec_load + our DTB | stage 2 silent: it was the old Image without the AIC fix (not a DTB problem) |
+| N1K | chain, current Image + tidied DTB | **stage 2 boots on our DT** |
+| W1c | read-only, our node | module binds; PMGR APCIE_SYS_* = target f + AUTO_ENABLE (on-demand, not off) |
+| W2 | first port-0 writes | SError reading the PLL while APCIE_PHY_SW clock-gated → watchdog returned to macOS |
+| W2b | skip PLL unless PHY_SW on | died right after the lane write (W2c: every individual read after it is fine → timing) |
+| W4 | PERST# GPIO 80 + train | 0xa8 enable-ack TIMEOUT |
+| W5–W7 | lane tunable; hold APCIE_PHY_SW on; PLL/AUSPMA ADT tunables (44/45 already set by iBoot) | ack still TIMEOUT; storage unaffected |
+| W8/W8b | SMC (macsmc) + gP13 key | SMC RTKit works under our kernel; **gP13=…01 powers the N1 (CLKREQ# asserts)** |
+| W9 | Asahi port bring-up order | **PORT_STATUS.READY** for the first time |
+| W10 | Asahi config + train | **root port config space answers: Apple 106b:100c**; LTSSM stays 0x00 |
+| W11 | 6 combos gP13 value × PERST# level | gP13 level 1 = N1 power on; LTSSM 0x00 in all |
+| W12 | full RP/port/lane dumps | LTSSM never leaves 0x00 ⇒ controller not running (not "no device") |
+| W13 | clear port reset bit 16 (0x82c) | bit cleared, LTSSM still 0x00 |
+| W13b/W14 | lane reset bit 4; aurora full disable/enable handshake | running |
+
+### Keyboard / trackpad (MTP)
+| Run | Change | Result |
+|---|---|---|
+| gz17 | m5boot writes DART-mtp bypass pre-Linux | built; the owner's 1TR install did not take (no marker in logs) |
+| N1K-DARTMTP | (gz16 still) | MTP CPU_CONTROL RUN by bootloader; RTKit wake -62 |
+| N1L-MTPID | Linux-side DART bypass | DART is protect-locked (prot/plock 0x1a) when Linux runs → fix must be pre-Linux (gz18) |
+
+### Process lessons (midday)
+- One reboot per question was too slow; runs now carry several hypotheses with predicted log lines.
+- A local process kept connecting to the PM listener and jammed the dial-in (fixed: `range=` LAN only).
+- Arming finish-install made Omarchy the default boot volume (fixed by re-blessing macOS; arming now always restores the default).
+- Reference: the official MIT [omarchy-mac-installer](https://github.com/omacom/omarchy-mac-installer) (M1–M3) is the base for our M5 installer plan: same flow, our m5boot as the boot object.

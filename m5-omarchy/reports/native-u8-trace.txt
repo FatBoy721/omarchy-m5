@@ -1,0 +1,266 @@
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 254/254   #P:1
+#
+#                                _-----=> irqs-off/BH-disabled
+#                               / _----=> need-resched
+#                              | / _---=> hardirq/softirq
+#                              || / _--=> preempt-depth
+#                              ||| / _-=> migrate-disable
+#                              |||| /     delay
+#           TASK-PID     CPU#  |||||  TIMESTAMP  FUNCTION
+#              | |         |   |||||     |         |
+          insmod-2673    [000] .....    26.762068: dwc3_set_prtcap: 0x00000002aa280000: mode device
+          insmod-2673    [000] .....    26.762122: usb_ep_set_maxpacket_limit: ep0out: mps 512/512 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762133: usb_ep_set_maxpacket_limit: ep0in: mps 512/512 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762143: usb_ep_set_maxpacket_limit: ep1out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762159: usb_ep_set_maxpacket_limit: ep1in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762173: usb_ep_set_maxpacket_limit: ep2out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762188: usb_ep_set_maxpacket_limit: ep2in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762201: usb_ep_set_maxpacket_limit: ep3out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762215: usb_ep_set_maxpacket_limit: ep3in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762229: usb_ep_set_maxpacket_limit: ep4out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762243: usb_ep_set_maxpacket_limit: ep4in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762255: usb_ep_set_maxpacket_limit: ep5out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762269: usb_ep_set_maxpacket_limit: ep5in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762283: usb_ep_set_maxpacket_limit: ep6out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762297: usb_ep_set_maxpacket_limit: ep6in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762310: usb_ep_set_maxpacket_limit: ep7out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762322: usb_ep_set_maxpacket_limit: ep7in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762336: usb_ep_set_maxpacket_limit: ep8out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762350: usb_ep_set_maxpacket_limit: ep8in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762364: usb_ep_set_maxpacket_limit: ep9out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762379: usb_ep_set_maxpacket_limit: ep9in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762392: usb_ep_set_maxpacket_limit: ep10out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762405: usb_ep_set_maxpacket_limit: ep10in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762418: usb_ep_set_maxpacket_limit: ep11out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762433: usb_ep_set_maxpacket_limit: ep11in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762446: usb_ep_set_maxpacket_limit: ep12out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762462: usb_ep_set_maxpacket_limit: ep12in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762475: usb_ep_set_maxpacket_limit: ep13out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762489: usb_ep_set_maxpacket_limit: ep13in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762500: usb_ep_set_maxpacket_limit: ep14out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762513: usb_ep_set_maxpacket_limit: ep14in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762528: usb_ep_set_maxpacket_limit: ep15out: mps 5320/5320 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .....    26.762543: usb_ep_set_maxpacket_limit: ep15in: mps 1024/1024 streams 0 mult 0 burst 0 addr 00 released:disabled --> 1
+          insmod-2673    [000] .l...    26.762592: usb_gadget_set_state: speed 0/3 state 0 0mA [sg:bus-powered:activated:disconnected] --> 0
+            head-2793    [000] .....    28.903568: dwc3_alloc_request: 0x00000002aa280000: : req 00000000b50d2ad0 length 0/0 zsI ==> 0
+            head-2793    [000] .....    28.903571: usb_ep_alloc_request: ep0out: req 00000000b50d2ad0 length 0/0 sgs 0/0 stream 0 zsI status 0 --> 0
+            head-2793    [000] .....    28.903575: usb_gadget_set_selfpowered: speed 0/3 state 0 0mA [sg:self-powered:activated:disconnected] --> 0
+            head-2793    [000] .l...    28.903977: dwc3_alloc_request: 0x00000002aa280000: : req 00000000074731da length 0/0 zsI ==> 0
+            head-2793    [000] .l...    28.903977: usb_ep_alloc_request: ep2in: req 00000000074731da length 0/0 sgs 0/0 stream 0 zsI status 0 --> 0
+            head-2793    [000] .....    28.934060: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start New Configuration' [409] params 00000000 00000000 00000000 --> status: Successful
+            head-2793    [000] .....    28.934065: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Set Endpoint Configuration' [401] params 00001000 00000500 00000000 --> status: Successful
+            head-2793    [000] .....    28.934068: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Set Endpoint Transfer Resource' [402] params 00000001 00000000 00000000 --> status: Successful
+            head-2793    [000] .....    28.934069: dwc3_gadget_ep_enable: 0x00000002aa280000: ep0out: mps 512/512 streams 0 burst 1 ring 0/0 flags E:swbp:>
+            head-2793    [000] .....    28.934072: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Set Endpoint Configuration' [401] params 00001000 02000500 00000000 --> status: Successful
+            head-2793    [000] .....    28.934074: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Set Endpoint Transfer Resource' [402] params 00000001 00000000 00000000 --> status: Successful
+            head-2793    [000] .....    28.934075: dwc3_gadget_ep_enable: 0x00000002aa280000: ep0in: mps 512/512 streams 0 burst 1 ring 0/0 flags E:swbp:<
+            head-2793    [000] .....    28.934076: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+            head-2793    [000] .....    28.934081: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+            head-2793    [000] .....    28.938062: usb_gadget_connect: speed 0/3 state 0 0mA [sg:self-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.083201: dwc3_event: 0x00000002aa280000: event (00000101): Reset [U0]
+     irq/44-dwc3-2794    [000] D..1.    29.093220: dwc3_event: 0x00000002aa280000: event (00000201): Connection Done [U0]
+     irq/44-dwc3-2794    [000] D..1.    29.093229: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Set Endpoint Configuration' [401] params 80000200 00000500 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.093231: dwc3_gadget_ep_enable: 0x00000002aa280000: ep0out: mps 64/512 streams 0 burst 1 ring 0/0 flags E:swBp:>
+     irq/44-dwc3-2794    [000] D..1.    29.093235: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Set Endpoint Configuration' [401] params 80000200 02000500 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.093235: dwc3_gadget_ep_enable: 0x00000002aa280000: ep0in: mps 64/512 streams 0 burst 1 ring 0/0 flags E:swbp:<
+     irq/44-dwc3-2794    [000] D..1.    29.144862: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.144864: dwc3_ctrl_req: 0x00000002aa280000: Get Device Descriptor(Index = 0, Length = 64)
+     irq/44-dwc3-2794    [000] D..2.    29.144884: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 18 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.144890: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.144892: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/18 sgs 0/0 stream 0 ZsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.144892: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.144907: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.144908: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.144914: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 18/18 ZsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.144915: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 18/18 sgs 0/0 stream 0 ZsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.144915: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.144915: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.144921: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.144953: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.144953: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.144955: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.144960: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.148608: dwc3_event: 0x00000002aa280000: event (00000101): Reset [U0]
+     irq/44-dwc3-2794    [000] D..1.    29.148610: usb_gadget_vbus_draw: speed 3/3 state 0 0mA [sg:self-powered:activated:connected] --> -95
+     irq/44-dwc3-2794    [000] D....    29.148614: usb_gadget_set_state: speed 3/3 state 5 0mA [sg:self-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.155050: dwc3_event: 0x00000002aa280000: event (00000201): Connection Done [U0]
+     irq/44-dwc3-2794    [000] D..1.    29.155056: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Set Endpoint Configuration' [401] params 80000200 00000500 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.155058: dwc3_gadget_ep_enable: 0x00000002aa280000: ep0out: mps 64/512 streams 0 burst 1 ring 0/0 flags E:swBp:>
+     irq/44-dwc3-2794    [000] D..1.    29.155061: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Set Endpoint Configuration' [401] params 80000200 02000500 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.155061: dwc3_gadget_ep_enable: 0x00000002aa280000: ep0in: mps 64/512 streams 0 burst 1 ring 0/0 flags E:swbp:<
+     irq/44-dwc3-2794    [000] D..1.    29.207280: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.207282: dwc3_ctrl_req: 0x00000002aa280000: Set Address(Addr = 09)
+     irq/44-dwc3-2794    [000] D..1.    29.207290: usb_gadget_set_state: speed 3/3 state 6 0mA [sg:self-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.207290: dwc3_event: 0x00000002aa280000: event (000020c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.207291: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c33 sofn 00000000 (HLcs:SC:status2)
+     irq/44-dwc3-2794    [000] D..1.    29.207297: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.207312: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.207313: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c32 sofn 00000000 (hLcs:SC:status2)
+     irq/44-dwc3-2794    [000] D..1.    29.207315: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.207320: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218124: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218125: dwc3_ctrl_req: 0x00000002aa280000: Get Device Descriptor(Index = 0, Length = 18)
+     irq/44-dwc3-2794    [000] D..2.    29.218138: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 18 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.218144: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218145: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/18 sgs 0/0 stream 0 zsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218145: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218162: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218162: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.218167: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 18/18 zsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.218168: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 18/18 sgs 0/0 stream 0 zsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218168: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218168: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218173: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218207: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218207: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218210: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.218215: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218461: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218461: dwc3_ctrl_req: 0x00000002aa280000: Get Configuration Descriptor(Index = 0, Length = 9)
+     irq/44-dwc3-2794    [000] D..2.    29.218468: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 9 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.218474: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218474: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/9 sgs 0/0 stream 0 zsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218474: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218483: dwc3_event: 0x00000002aa280000: event (000090c2): ep0in: Transfer Not Ready [00000000] (Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218507: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218507: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.218510: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 9/9 zsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.218511: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 9/9 sgs 0/0 stream 0 zsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218511: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218511: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218516: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218551: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218551: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218553: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.218558: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218567: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218567: dwc3_ctrl_req: 0x00000002aa280000: Get Configuration Descriptor(Index = 0, Length = 88)
+     irq/44-dwc3-2794    [000] D..2.    29.218575: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 88 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.218581: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218581: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/88 sgs 0/0 stream 0 zsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218581: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218590: dwc3_event: 0x00000002aa280000: event (000090c2): ep0in: Transfer Not Ready [00000000] (Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218615: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218615: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.218620: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 88/88 zsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.218620: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 88/88 sgs 0/0 stream 0 zsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218620: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218620: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218625: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218660: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218660: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218662: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.218667: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218832: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218833: dwc3_ctrl_req: 0x00000002aa280000: Get String Descriptor(Index = 0, Length = 255)
+     irq/44-dwc3-2794    [000] D..2.    29.218841: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 4 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.218847: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218847: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/4 sgs 0/0 stream 0 ZsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218847: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218861: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218861: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.218865: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 4/4 ZsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.218865: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 4/4 sgs 0/0 stream 0 ZsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218866: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218866: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218871: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218907: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218907: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.218910: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.218915: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218952: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218952: dwc3_ctrl_req: 0x00000002aa280000: Get String Descriptor(Index = 2, Length = 255)
+     irq/44-dwc3-2794    [000] D..2.    29.218960: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 22 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.218965: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.218966: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/22 sgs 0/0 stream 0 ZsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.218966: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218975: dwc3_event: 0x00000002aa280000: event (000090c2): ep0in: Transfer Not Ready [00000000] (Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218997: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.218997: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.219001: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 22/22 ZsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.219001: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 22/22 sgs 0/0 stream 0 ZsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.219002: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219002: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.219007: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219041: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219041: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.219043: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.219048: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219114: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219114: dwc3_ctrl_req: 0x00000002aa280000: Get String Descriptor(Index = 1, Length = 255)
+     irq/44-dwc3-2794    [000] D..2.    29.219122: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 2 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.219128: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219129: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/2 sgs 0/0 stream 0 ZsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.219129: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219138: dwc3_event: 0x00000002aa280000: event (000090c2): ep0in: Transfer Not Ready [00000000] (Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219159: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219159: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.219164: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 2/2 ZsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.219164: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 2/2 sgs 0/0 stream 0 ZsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.219164: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219164: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.219169: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219203: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219203: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.219206: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.219211: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219319: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219319: dwc3_ctrl_req: 0x00000002aa280000: Get String Descriptor(Index = 3, Length = 255)
+     irq/44-dwc3-2794    [000] D..2.    29.219327: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 2 ctrl 00000c53 sofn 00000000 (HLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..2.    29.219331: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219332: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/2 sgs 0/0 stream 0 ZsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.219332: dwc3_event: 0x00000002aa280000: event (000010c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219341: dwc3_event: 0x00000002aa280000: event (000090c2): ep0in: Transfer Not Ready [00000000] (Active) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219363: dwc3_event: 0x00000002aa280000: event (0000c042): ep0in: Transfer Complete (sIL) [Data Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219363: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003fffff79000 size 0 ctrl 00000c52 sofn 00000000 (hLcs:SC:data)
+     irq/44-dwc3-2794    [000] D..1.    29.219368: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 2/2 ZsI ==> 0
+     irq/44-dwc3-2794    [000] D....    29.219368: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 2/2 sgs 0/0 stream 0 ZsI status 0 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.219369: dwc3_event: 0x00000002aa280000: event (000020c0): ep0out: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219369: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c43 sofn 00000000 (HLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.219374: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.219408: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.219408: dwc3_complete_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c42 sofn 00000000 (hLcs:SC:status3)
+     irq/44-dwc3-2794    [000] D..1.    29.219410: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+     irq/44-dwc3-2794    [000] D..1.    29.219415: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..1.    29.220233: dwc3_event: 0x00000002aa280000: event (0000c040): ep0out: Transfer Complete (sIL) [Setup Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.220233: dwc3_ctrl_req: 0x00000002aa280000: Set Configuration(Config = 1)
+     irq/44-dwc3-2794    [000] D..1.    29.220239: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start New Configuration' [20409] params 00000000 00000000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..2.    29.220315: usb_gadget_set_state: speed 3/3 state 7 0mA [sg:self-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..2.    29.220318: usb_ep_disable: ep2in: mps 1024/1024 streams 16 mult 0 burst 0 addr 82 released:disabled --> 1
+     irq/44-dwc3-2794    [000] D..3.    29.220323: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep2in: cmd 'Set Endpoint Configuration' [401] params 00040086 0a080200 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..3.    29.220326: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep2in: cmd 'Set Endpoint Transfer Resource' [402] params 00000001 00000000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..3.    29.220331: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep2in: cmd 'Start Transfer' [406] params 000003ff fffe4000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..3.    29.220333: dwc3_gadget_ep_enable: 0x00000002aa280000: ep2in: mps 16/1024 streams 16 burst 0 ring 0/0 flags E:swBp:<
+     irq/44-dwc3-2794    [000] D..2.    29.220333: usb_ep_enable: ep2in: mps 16/1024 streams 16 mult 1 burst 0 addr 82 released:enabled --> 1
+     irq/44-dwc3-2794    [000] D..3.    29.220431: dwc3_ep_queue: 0x00000002aa280000: : req 00000000074731da length 0/8 zsI ==> -115
+     irq/44-dwc3-2794    [000] D..3.    29.220436: dwc3_prepare_trb: 0x00000002aa280000: ep2in: trb 00000000aa547a4a (E1:D0) buf 000003fffff79e50 size 1x 8 ctrl 00000811 sofn 00000000 (Hlcs:sC:normal)
+     irq/44-dwc3-2794    [000] D..3.    29.220440: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep2in: cmd 'Update Transfer' [20007] params 00000000 00000000 00000000 --> status: Successful
+     irq/44-dwc3-2794    [000] D..2.    29.220440: usb_ep_queue: ep2in: req 00000000074731da length 0/8 sgs 0/0 stream 0 zsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..2.    29.220442: usb_gadget_set_remote_wakeup: speed 3/3 state 7 0mA [sg:self-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..2.    29.220443: usb_gadget_clear_selfpowered: speed 3/3 state 7 0mA [sg:bus-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..2.    29.220443: usb_gadget_vbus_draw: speed 3/3 state 7 0mA [sg:bus-powered:activated:connected] --> -95
+     irq/44-dwc3-2794    [000] D..1.    29.220444: usb_ep_queue: ep0out: req 00000000b50d2ad0 length 0/0 sgs 0/0 stream 0 zsI status -115 --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.220444: usb_gadget_set_state: speed 3/3 state 7 0mA [sg:bus-powered:activated:connected] --> 0
+     irq/44-dwc3-2794    [000] D..1.    29.220446: dwc3_event: 0x00000002aa280000: event (000020c2): ep0in: Transfer Not Ready [00000000] (Not Active) [Status Phase]
+     irq/44-dwc3-2794    [000] D..1.    29.220446: dwc3_prepare_trb: 0x00000002aa280000: ep0in: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 0 ctrl 00000c33 sofn 00000000 (HLcs:SC:status2)
+     irq/44-dwc3-2794    [000] D..1.    29.220452: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+          m5-exp-858     [000] d..1.   155.906134: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0in: cmd 'End Transfer' [10508] params 00000000 00000000 00000000 --> status: Successful
+          m5-exp-858     [000] d..1.   155.906140: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Set Stall' [404] params 00000000 00000000 00000000 --> status: Successful
+          m5-exp-858     [000] d..1.   155.906142: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000b50d2ad0 length 0/0 zsI ==> -108
+          m5-exp-858     [000] d....   155.906144: usb_gadget_giveback_request: ep0out: req 00000000b50d2ad0 length 0/0 sgs 0/0 stream 0 zsI status -108 --> 0
+          m5-exp-858     [000] d..1.   155.906204: dwc3_prepare_trb: 0x00000002aa280000: ep0out: trb 00000000c0900559 (E0:D0) buf 000003ffffff8000 size 8 ctrl 00000c23 sofn 00000000 (HLcs:SC:setup)
+          m5-exp-858     [000] d..1.   155.906210: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep0out: cmd 'Start Transfer' [406] params 000003ff ffff8000 00000000 --> status: Successful
+          m5-exp-858     [000] d..1.   155.906216: dwc3_gadget_ep_cmd: 0x00000002aa280000: ep2in: cmd 'End Transfer' [20c08] params 00000000 00000000 00000000 --> status: Successful
+          m5-exp-858     [000] d..1.   155.907231: dwc3_gadget_giveback: 0x00000002aa280000: : req 00000000074731da length 0/8 zsI ==> -108
+          m5-exp-858     [000] d....   155.907231: usb_gadget_giveback_request: ep2in: req 00000000074731da length 0/8 sgs 0/0 stream 0 zsI status -108 --> 0
+     irq/44-dwc3-2794    [000] D..1.   155.907257: dwc3_event: 0x00000002aa280000: event (080101c2): ep0in: Endpoint Command Complete
+          m5-exp-858     [000] d..1.   163.914045: dwc3_gadget_ep_disable: 0x00000002aa280000: ep0out: mps 64/512 streams 0 burst 1 ring 0/0 flags E:swBp:>
+          m5-exp-858     [000] d..1.   163.914049: dwc3_gadget_ep_disable: 0x00000002aa280000: ep0in: mps 64/512 streams 0 burst 1 ring 0/0 flags E:swbp:<
+          m5-exp-858     [000] .....   163.914057: usb_gadget_set_state: speed 3/3 state 0 0mA [sg:bus-powered:activated:connected] --> 0
+          m5-exp-858     [000] d..1.   163.914063: usb_gadget_vbus_draw: speed 3/3 state 0 0mA [sg:bus-powered:activated:connected] --> -95
+          m5-exp-858     [000] d..3.   163.914178: dwc3_gadget_ep_disable: 0x00000002aa280000: ep2in: mps 16/1024 streams 16 burst 0 ring 1/0 flags E:swbp:<
+          m5-exp-858     [000] d..2.   163.914181: usb_ep_disable: ep2in: mps 16/1024 streams 16 mult 1 burst 0 addr 82 released:disabled --> 1
+          m5-exp-858     [000] .....   163.914182: usb_gadget_disconnect: speed 3/3 state 0 0mA [sg:bus-powered:activated:connected] --> -110
+          m5-exp-858     [000] .....   164.918405: usb_gadget_connect: speed 3/3 state 0 0mA [sg:bus-powered:activated:connected] --> 0
