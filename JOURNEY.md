@@ -143,3 +143,10 @@ The breakthrough came from a reviewer's observation: **u10d** (generic-serial ga
 - Also this hour: h4 proved the 3-minute guard natively (macOS back 256 s after push) and showed the host-mode gap precisely (hpm1 = SOURCE+DFP, conn usb2/usb3 = 1, but xHCI PORTSC CCS=0 / RxDetect; `irq 39: nobody cared`). W13b/W14/W15: Wi-Fi port reset/enable handshake mapped (reset-assert ack works; enable ack and LTSSM never start; W15's undocumented core read faulted).
 
 Still missing for a usable desktop: internal keyboard/trackpad (MTP), Wi-Fi (N1 link), local networking. Next work happens live over this shell.
+
+## 2026-11-05 13:52 — SSH INTO NATIVE OMARCHY OVER USB-C
+- The gadget offers one configuration with **gser + CDC-EEM** (both bulk-only; anything with an interrupt-IN endpoint stalls SET_CONFIGURATION on this controller).
+- The first EEM attempts "failed" only on the PC side: `usbserial_generic` (bound by VID:PID) also grabbed the EEM interface, and NetworkManager then dropped the manual address. Fix: `tools/eemfix.sh` (unbind generic from the class 02/0c interface, bind `cdc_eem`) + `nmcli device set usb0 managed no`.
+- Result (NATIVE, `usb/native-ssh-proof.txt`): ping 10.55.0.1 at ~0.2 ms, `ssh root@10.55.0.1` → `uid=0(root)`, `PRETTY_NAME="Omarchy"`, 7.2.2-m5slim+.
+- Worker sessions reach the Mac through `tools/sshbridge.sh`. All further hardware work (Wi-Fi port experiments, keyboard coprocessor) is now done live, not one reboot per question.
+- Boot-loader (gz18) install for the keyboard fix failed 3× (startup-picker boot goes straight to the installed gz16; system-1TR `kmutil` refuses with a local-policy error; re-arming no longer drops into the paired recoveryOS). Under investigation before asking the owner again.
