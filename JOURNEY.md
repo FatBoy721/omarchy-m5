@@ -51,3 +51,24 @@ macOS 26.6.2, system and stub firmware mBoot-18000.161.10, 24 GB, FileVault on. 
 | gz15 | 2026-11-05 01:10 | `c726bebc…` | loader (kexec) + apple_wdt + watchdog daemon + DTB I3 (MTP fw reserved-mem) | desktop OK; MTP still -62; kexec `EBUSY` → fell back to desktop (owner power-cycled) | NATIVE |
 | guard | 2026-11-05 02:02 | `ca7eb95b…` | m5drop guard: reboot 15 min after sddm unless ESP/m5stay | fired at 925 s, Mac back in macOS unattended | NATIVE |
 | gz16 | 2026-11-05 02:30 | `7a2d134f…` | loader `nr_cpus=1` (spin-table kexec fix), kexec fail ⇒ reboot | kexec works; test kernel ran and auto-rebooted to macOS; its ESP logs were empty → fixed test initrd v2 | NATIVE |
+
+## 2026-11-05 morning: hands-free loop, Aurora kernel, USB, Wi-Fi, keyboard (gz16 onward)
+All results NATIVE unless marked. Reports: `m5-omarchy/reports/29-50`, `wifi-n1-REPORT.md`, raw logs `native-t*/u*.txt`.
+
+| What | Result | Label |
+|---|---|---|
+| Hands-free loop | macOS pushes Image/initrd/cmdline to ESP `m5next/`, `bless --nextonly`, reboots; gz16 loader kexecs it; guard/watchdog bring the Mac back to macOS; logs read from ESP. See REMOTE-LOOP.md | NATIVE |
+| Disk after kexec | needs `m5_pmgr_allow=ans nvme_apple.force_cold_reset=1` (ANS reset) | NATIVE |
+| Chain kexec | arm64 `kexec_file_load` ignores `--dtb`; built a CONFIG_KEXEC chain kernel to load our own DTB | in progress |
+| Aurora 7.3 kernel (GPL) | boots via the chain after two fixes: AIC at EL2 (don't touch VM_TMR_FIQ_ENA) and a SART t6050 port; disk works | NATIVE |
+| Wi-Fi (N1) | chip on apcie port 0 (106b:1901-1903); firmware located on the Mac; PCIe link not up yet. Lesson: never allow-list apcie_* domains genpd can power off as unused (shared with storage) | blocked |
+| Keyboard/trackpad (MTP) | firmware sits in MTP SRAM, but its CPU never starts (RUN accepted, CPU_STATUS stays 0x4c); active DART TCRs locked by PROTECT. Next: identity DART mapping via DT before lock | blocked |
+| USB ATC0 | power up one domain at a time (genpd path hung), PHY RUN, dwc3 binds, UDC exists, but "not attached" | NATIVE |
+| Why USB stayed detached | left-back port (by MagSafe) = Apple DFU port; its USB-C controller hpm0 reports MODE "ADFU" and owns the USB2 pair | NATIVE |
+| Port map | left-back = hpm0/ATC0, left-front = hpm1 (USID 0xA)/ATC1 usb-drd1 0x2aa280000, right = hpm2/ATC2 (die 1). u7 targets left-front | NATIVE ADT; u7 pending |
+
+### Mistakes this morning
+- A tmux message to a worker was typed but never sent (~25 min lost). Fix: file-based messages + Enter sent separately + verify.
+- A wait-for-macOS script parsed `usec` instead of `sec` from boot time (Mac idle 49 min). Fixed.
+- Stale ESP logs chosen by FAT mtime (all 1980) → analysed the wrong kernel once. Logs now moved aside before each run and matched by marker.
+- A watcher waited for "DONE 49" while the worker printed "DONE 50" (~1 h idle).
