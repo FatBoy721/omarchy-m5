@@ -1,21 +1,36 @@
 # Omarchy-M5-Pro
 
-Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), booted bare-metal next to macOS. This is the working journey: every build, every native result (including the failures and the claims we had to retract), the source and how we work. Nothing here is a finished product.
+> *"It boots."* — us, 47 times, about 11 of which were true.
 
-## Status (2026-11-05)
-Labels: **NATIVE** = seen on our J714s · **VM** = QEMU · **REPORTED** = someone else's claim, not reproduced · **HYPOTHESIS** = our guess.
+Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator, no "works on my M2". This repo is the whole messy journey: every build, every native result, every failure, and every claim we had to walk back with our tail between our legs. It is not a product. It is a lab notebook with a commit history.
+
+## TL;DR (2026-11-05, 13:52)
+**We are SSH'd into Omarchy running natively on an M5 Pro, as root, over a USB-C cable.** Hyprland is running. Nobody can type on it yet (the keyboard is a coprocessor that refuses to wake up), and it has no Wi-Fi (the Wi-Fi chip is powered, ringing the doorbell, and the port won't open the door). But we're *in*, and everything from here happens live instead of one reboot per question.
+
+## Status
+Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **REPORTED** = someone else said so · **HYPOTHESIS** = vibes, clearly labelled.
 
 | What | State | Label |
 |---|---|---|
-| Our own boot object (m5boot) runs from iBoot as a raw fuOS image | works since beacon3 (green paint), gz3 (console) | NATIVE |
-| Linux 7.2 (slim, single core) boots to the initramfs shell, earlycon on the framebuffer | works (gz5+) | NATIVE |
-| The ~45 s idle reset | fixed in gz10: a secondary watchdog word (0x2_8833_0008, read 0x7c = armed) is now cleared; ran 264 s, no reset | NATIVE |
-| **Hands-free loop** (SSH → one-shot boot into Omarchy → test → back to macOS by itself), see REMOTE-LOOP.md | works since gz16 | NATIVE |
-| Logs without a camera (raw on disk0s5 + FAT32 on the ESP, readable from macOS) | works (gz9+), see `logs/` | NATIVE |
-| Initramfs → `switch_root` into the Omarchy ext4 rootfs → SDDM autologin → Hyprland (simpledrm + llvmpipe) | **Omarchy booted natively on gz12 (2026-11-05 00:03)**: switch_root into the 120 GB ext4, online resize, SDDM autologin → uwsm Hyprland session, 302 s up, no reset (journal in `logs/`) | NATIVE |
-| Internal keyboard/trackpad (MTP/DockChannel) | gz12: MTP coprocessor (pre-loaded by iBoot) fails `-62` on the driver's shutdown/wake; fix in progress (attach to the running IOP) | NATIVE (failing) |
-| USB gadget / SSH | blocked: ATC0 USB power chain + eUSB2 PHY bring-up; power half in gz13, untested | HYPOTHESIS |
-| SMP (more than one core), GPU | not started; SMP is reported to need a newer stub firmware (macOS 27.3b1+) | REPORTED |
+| Our own boot object (m5boot) runs from iBoot | first green screen at beacon3, console at gz3 | NATIVE |
+| Linux 7.2 boots | yes (gz5+) | NATIVE |
+| The mystery ~45 s reset | a second watchdog hiding at 0x2_8833_0008. Cleared in gz10. Rest in peace. | NATIVE |
+| **Omarchy desktop** (SDDM → Hyprland) | gz12, 00:03 on 2026-11-05; still running today | NATIVE |
+| Hands-free test loop (macOS → Omarchy → back, no humans) | gz16 + guard/watchdog; the "3-minute auto return" now verified for real (h4) | NATIVE |
+| **Root shell over USB serial** | 13:01: u10s (gser gadget + `agetty`) — `uid=0(root)`, `PRETTY_NAME="Omarchy"` | NATIVE |
+| **SSH over USB-C** | 13:52: gser + CDC-EEM, `ssh root@10.55.0.1`, 0.2 ms ping | NATIVE |
+| Internal keyboard / trackpad | MTP coprocessor: firmware loaded, CPU won't start, its DART is locked before Linux. Fix (gz18) built and VM-tested; installing it has defeated us 3 times | NATIVE (failing) |
+| Wi-Fi (N1) | chip powered via SMC key gP13 (CLKREQ# asserts!), port READY, root port answers as Apple 106b:100c, link state machine refuses to leave 0x00. Now being poked live | NATIVE (failing) |
+| USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
+| SMP, GPU, battery, Touch ID, camera, speakers… | later. One miracle at a time. | — |
+
+## Greatest hits from the logbook
+- **"Our code runs!"** — it was a black screen. The build hadn't even been installed. (Retracted, see JOURNEY.md.)
+- **A watcher that waited forever for "DONE 49"** while the worker had politely printed "DONE 50". One hour, gone.
+- **A wait loop that matched its own command line** and reported "still running" about itself. Twice. Different days, same `pgrep`.
+- **The firewall listener jammed** by a mystery local process knocking every 10 seconds, so the Mac's first dial-in call went to voicemail.
+- **USB SSH "didn't work" for an hour** because the PC's serial driver also grabbed the network interface, then NetworkManager ate the IP address. The Mac was fine the whole time.
+- **The breakthrough idea** (put a shell on the USB serial port that had *already worked*) came from a human-forwarded review, not from us. Credit where due.
 
 ## How it boots
 1. **Stub macOS** (a small APFS volume group next to macOS) created with **betizzel's MIT stub scripts** (`prep-stub.sh` / `finish-install.sh`, github.com/betizzel/omarchy-m5). In the stub's paired 1TR: `bputil -nc` (Permissive on the stub only) and `kmutil configure-boot --raw --entry-point 2048 --lowest-virtual-address 0`. macOS itself stays at Full Security.
@@ -25,7 +40,7 @@ Labels: **NATIVE** = seen on our J714s · **VM** = QEMU · **REPORTED** = someon
 5. **Omarchy rootfs** built from signed packages (ALARM + Omarchy's channel), with an overlay for autologin, software rendering and logging to the ESP.
 
 ## How we work
-- **Owner** (the human): owns the Mac, makes every destructive or physical decision, does the physical steps (power-holds, typing credentials in 1TR, photos early on).
+- **Owner** (the human): owns the Mac, makes every destructive or physical decision, holds the power button far more often than promised, and keeps everyone honest.
 - **PM**: a Claude session that writes tasks (`*/tasks/`), reviews results, runs read-only and approved commands on the Mac.
 - **Workers**: Claude sessions doing one task at a time. `m5-omarchy/` is the research/kernel/rootfs worker (`reports/` are its write-ups). `m5boot/` is a separate clean-room implementer that sees only a cited spec (`m5boot/spec`).
 - Rules: label every result, never claim an install that wasn't verified, keep provenance, no secrets. When a result turned out wrong it was **retracted in place**, never deleted (see JOURNEY.md).
