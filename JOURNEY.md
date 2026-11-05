@@ -46,3 +46,8 @@ All on 2026-11-04 (US Eastern) unless noted; times are commit times of the build
 macOS 26.6.2, system and stub firmware mBoot-18000.161.10, 24 GB, FileVault on. Stub cloned from the host install with betizzel's `prep-stub.sh`. disk0s5 = 120,000,000,000 B Linux partition; disk0s4 = 499,998,720 B FAT32 ESP; 4096-byte logical blocks.
 
 | gz12 | 2026-11-05 00:03 | `10345b69…` | desktop kernel + DTB I1 (MTP on) + m5.root=s5 | **Omarchy desktop booted natively**: SDDM autologin → Hyprland, 302 s, no reset. MTP -62 → no keyboard/trackpad | NATIVE |
+| gz13 | 2026-11-05 | `d77ffc4d…` | gz12 + DTB U1 + ATC0 power allow-list (USB power test) | built, not booted yet | — |
+| gz14 | 2026-11-05 00:30 | `b786e82e…` | input-v2 kernel (MTP cold-restart) + rootfs v3 (input logs) | desktop OK; MTP `CPU_CONTROL at probe: stopped` → -62 → no keyboard | NATIVE |
+| gz15 | 2026-11-05 01:10 | `c726bebc…` | loader (kexec) + apple_wdt + watchdog daemon + DTB I3 (MTP fw reserved-mem) | desktop OK; MTP still -62; kexec `EBUSY` → fell back to desktop (owner power-cycled) | NATIVE |
+| guard | 2026-11-05 02:02 | `ca7eb95b…` | m5drop guard: reboot 15 min after sddm unless ESP/m5stay | fired at 925 s, Mac back in macOS unattended | NATIVE |
+| gz16 | 2026-11-05 02:30 | `7a2d134f…` | loader `nr_cpus=1` (spin-table kexec fix), kexec fail ⇒ reboot | kexec works; test kernel ran and auto-rebooted to macOS; its ESP logs were empty → fixed test initrd v2 | NATIVE |
