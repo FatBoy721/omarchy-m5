@@ -1,6 +1,6 @@
 # Journey: every build and what it did on the Mac
 
-**Latest result:** FT13 cleanly acknowledges the integrated AFE reset, but the trackpad still times out. Bounded CPU clock changes alter measured instruction throughput; boot speed restored afterward. Keyboard typing is owner-confirmed on FT9, with severe lag. Trackpad and Wi-Fi remain unresolved. [FT-series findings and corrections](keyboard/STATUS-2026-11-05.md).
+**Latest result:** FT14 verifies the real DAPF/MMIO mappings; the owner confirms keyboard typing again, but the trackpad still times out. A fresh controller-ID query succeeds. Bounded FT13 CPU clock changes altered measured instruction throughput; boot speed was restored afterward. Trackpad and Wi-Fi remain unresolved. [FT-series findings and corrections](keyboard/STATUS-2026-11-05.md).
 
 All on 2026-11-04 (US Eastern) unless noted; times are commit times of the build. Hashes are SHA-256 of the boot object (`m5boot*.bin`) as installed with `kmutil`. Labels: **NATIVE** (on our J714s), **INVALID** (claimed, later found never installed), **VM**, **PENDING**. Photos and videos of the screen are summarized as text; none are published.
 
