@@ -20,8 +20,12 @@ make O=../obj ARCH=arm64 LLVM=1 olddefconfig
 make O=../obj ARCH=arm64 LLVM=1 W=1 -j"$(nproc)" \
   KBUILD_BUILD_VERSION=23 KBUILD_BUILD_TIMESTAMP="Fri Nov  6 07:00:00 EST 2026" Image
 ```
+- **Build inside a git checkout of the base**, as above, not from a tarball or `git archive`.
+  - `scripts/setlocalversion` adds the `+` to `7.2.2-m5lk+` only in a git tree whose HEAD is not a release tag.
+  - A tree without `.git` gives `7.2.2-m5lk` (different `uname -r`, vermagic and Image hash).
+  - For a tarball build you must reproduce `LOCALVERSION` yourself.
 - **Our result:** `obj/arch/arm64/boot/Image` sha256 `faeec23e6f646e2a676cc136f7a72e22d136ac3b0e173787497f8275680192c2`, `uname -v` = `#23 SMP PREEMPT Fri Nov  6 07:00:00 EST 2026`.
-- **Reproducibility:** an independent from-scratch rebuild on our side (FT19 tree + `src-dchid-ft21.diff`) gave the same hash. Toolchain: clang/LLD 23.1.3. Other toolchains build fine but won't match the hash.
+- **Reproducibility:** an independent reconstruction from this public export (fresh base at `236788cd2`, then `git apply` of the full diff, `ft21.config`, the build above) gave exactly `faeec23e…`. Our own from-scratch rebuild (FT19 tree + `src-dchid-ft21.diff`) did too. Toolchain: clang/LLD 23.1.3. Other toolchains build fine but won't match the hash.
 
 ## Using it (what we did; adapt with care)
 - **Not included:** booting needs our m5boot loader chain and initramfs, which is not a turnkey installer. No Apple firmware, device tree dumps, calibration data or keys are included or needed from us.
