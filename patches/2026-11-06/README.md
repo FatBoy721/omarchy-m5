@@ -17,3 +17,11 @@ Both diffs are against our FT19 kernel tree (Asahi `asahi-wip-7.2` base plus our
   - It runs only after the firmware has itself requested a reset (`0xa2`) and the start has timed out.
   - It is followed by a fresh firmware image and power-ON only.
   - Only a positive result (trackpad READY) would be informative.
+
+## `tier2-ftype/`: keyboard-light power gate + dchid SET report type (kernel #28; built, reviewed, NOT yet tested natively)
+- **Full diff vs the Asahi base** (`236788cd2`). A fresh checkout plus this diff and config reproduces our Image exactly (`5dba3502…`). See `REPRODUCE.md`.
+- **`src-tier2-kbd-vs-r3t.diff`:** keyboard-backlight activation without allow-listing the FPWM0 power domain.
+  - `read` is a read-only preflight. `1` works only if FPWM0 is already powered.
+  - `force` is a one-shot kernel token allowing exactly one power-on store, with no auto-gating and no boot-time write. We have not authorized `force` for our own first native run.
+  - Host tests are in `tests/`.
+- **`src-dchid-set-report-type.diff`:** HID-core feature SETs are framed as FEATURE (`0x80`) instead of OUTPUT (`0x40`). No new sender; GETs and output SETs are unchanged.
