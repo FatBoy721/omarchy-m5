@@ -168,6 +168,7 @@ All results below are **NATIVE** on the J714s. Full details and build hashes: [k
 | FT7 | opt-in classic transport, avoiding the shared-ring `0x91` timeout | live SSH stays up; a guarded real GPIO pin-20 data-bit change causes `IPD HIDSPI attached`; STM ID query now succeeds |
 | SMC S1 | read-only controller driver, no key writes or child drivers | `pcIO` metadata is `hex_`, size 8; identifies the proposed AFE-reset path, does not test it |
 | **FT9** | set the same GPIO bit before the first MTP RUN | correct `05ac:0359` controller identity at boot; **owner confirms keyboard typing, very slowly**. Trackpad still fails |
+| **FT10** | port PM2 firmware-managed reset from J714c; fix interrupted-sleep guard cancellation | USB root SSH and disarm verified; keyboard device opens. Trackpad AFE image received, then attach fails (`No HINT_L`), startup times out. Still no working trackpad or SMC key writes |
 
 The temporary FT7 GPIO change was restored before reboot. FT9 repeats it at startup only with exact-state and power-state guards. USB SSH is verified on FT9; a permanent unattended reboot cycle is still pending.
 

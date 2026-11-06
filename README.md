@@ -22,7 +22,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | **Root shell over USB serial** | 13:01: u10s (gser gadget + `agetty`) — `uid=0(root)`, `PRETTY_NAME="Omarchy"` | NATIVE |
 | **SSH over USB-C** | FT6, FT7 and FT9: gser + CDC-EEM; root commands and a file read verified before cancelling each return timer | NATIVE |
 | **Internal keyboard** | **FT9: owner-confirmed typing**, very slow. Correct controller ID `05ac:0359` discovered at boot | NATIVE |
-| Internal trackpad | registers as Apple MTP multi-touch, but opening its input device returns `EIO`; AFE reset path identified, not yet tested | NATIVE (failing) |
+| Internal trackpad | FT10 PM2 firmware-managed reset reaches AFE bootload, then attach fails (`No HINT_L`); startup times out. Host AFE reset remains untested | NATIVE (failing) |
 | Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`; still unresolved | NATIVE (failing) |
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
 | SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
