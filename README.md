@@ -4,7 +4,7 @@
 
 Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator, no "works on my M2". This repo is the whole messy journey: every build, every native result, every failure, and every claim we had to walk back with our tail between our legs. It is not a product. It is a lab notebook with a commit history.
 
-## TL;DR (2026-11-05, FT9 update)
+## TL;DR (2026-11-05, FT13 update)
 **The built-in keyboard types in native Omarchy. The owner has tested it.** It is still very slow: this test kernel enables one CPU, and the framebuffer desktop saturates it. USB-C root SSH works on the same build. The trackpad enumerates but does not work; Wi-Fi still has no PCIe link.
 
 The keyboard breakthrough was getting the MTP firmware past two blocked accesses, enabling the missing Apple HID driver, and setting one GPIO data bit **before** the keyboard processor starts. [Native findings, build hashes, and corrections](keyboard/STATUS-2026-11-05.md). This is an experimental bring-up, not a finished daily-driver install.
@@ -17,15 +17,16 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | Our own boot object (m5boot) runs from iBoot | first green screen at beacon3, console at gz3 | NATIVE |
 | Linux 7.2 boots | yes (gz5+) | NATIVE |
 | The mystery ~45 s reset | a second watchdog hiding at 0x2_8833_0008. Cleared in gz10. Rest in peace. | NATIVE |
-| **Omarchy desktop** (SDDM → Hyprland) | running on FT9; one CPU and framebuffer rendering, severe lag | NATIVE |
+| **Omarchy desktop** (SDDM → Hyprland) | boots through FT13; one CPU and framebuffer rendering, severe lag | NATIVE |
 | Hands-free test loop (macOS → Omarchy → back, no humans) | gz16 + guard/watchdog; the "3-minute auto return" now verified for real (h4) | NATIVE |
 | **Root shell over USB serial** | 13:01: u10s (gser gadget + `agetty`) — `uid=0(root)`, `PRETTY_NAME="Omarchy"` | NATIVE |
-| **SSH over USB-C** | FT6, FT7 and FT9: gser + CDC-EEM; root commands and a file read verified before cancelling each return timer | NATIVE |
+| **SSH over USB-C** | verified through FT13: gser + CDC-EEM; root commands and a file read checked before cancelling the return timer | NATIVE |
 | **Internal keyboard** | **FT9: owner-confirmed typing**, very slow. Correct controller ID `05ac:0359` discovered at boot | NATIVE |
-| Internal trackpad | FT10 PM2 firmware-managed reset reaches AFE bootload, then attach fails (`No HINT_L`); startup times out. Host AFE reset remains untested | NATIVE (failing) |
+| Internal trackpad | FT13 integrates host AFE reset; both SMC writes acknowledged, startup still times out. Real MMIO mapping test is being reviewed | NATIVE (failing) |
 | Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`; still unresolved | NATIVE (failing) |
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
 | SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
+| CPU clock control | FT13 bounded states 5/6/7 trial changes instruction throughput as expected; restored boot state 6, write gate closed. No desktop-speed improvement yet verified | NATIVE |
 | Persistent unattended access, battery, Touch ID, camera, speakers… | not verified complete | — |
 
 **Correction:** the old claim that iBoot leaves MTP's DART locked with live translation tables was wrong. FT1 read SID0 with no valid table, streams disabled, and no SID0 lock. The later tables we had inspected were Linux's own. See the [correction and native evidence](keyboard/STATUS-2026-11-05.md#correction-to-the-earlier-dart-theory).
