@@ -9,6 +9,8 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 
 The keyboard breakthrough was getting the MTP firmware past two blocked accesses, enabling the missing Apple HID driver, and setting one GPIO data bit **before** the keyboard processor starts. [Native findings, build hashes, and corrections](keyboard/STATUS-2026-11-05.md). This is an experimental bring-up, not a finished daily-driver install.
 
+**New priority (2026-11-06): a usable laptop.** We are porting the posted J714c platform code: SMC, battery, sensors, lid/power button, RTC, backlight. See [PLATFORM-PORT.md](PLATFORM-PORT.md). Trackpad work is paused at a written rationale.
+
 ## Status
 Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **REPORTED** = someone else said so · **HYPOTHESIS** = vibes, clearly labelled.
 
@@ -27,7 +29,8 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
 | SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
 | CPU clock control | FT13 bounded states 5/6/7 trial changes instruction throughput as expected; restored boot state 6, write gate closed. No desktop-speed improvement yet verified | NATIVE |
-| Persistent unattended access, battery, Touch ID, camera, speakers… | not verified complete | — |
+| Battery / AC, sensors, lid, power button, RTC | porting the J714c SMC work ([PLATFORM-PORT.md](PLATFORM-PORT.md)); a battery readout on the current kernel is prepared and under review, not yet run | — |
+| Persistent unattended access, Touch ID, camera, speakers… | not verified complete | — |
 
 **Correction:** the old claim that iBoot leaves MTP's DART locked with live translation tables was wrong. FT1 read SID0 with no valid table, streams disabled, and no SID0 lock. The later tables we had inspected were Linux's own. See the [correction and native evidence](keyboard/STATUS-2026-11-05.md#correction-to-the-earlier-dart-theory).
 
@@ -48,7 +51,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 
 ## How we work
 - **Owner** (the human): owns the Mac, makes every destructive or physical decision, holds the power button far more often than promised, and keeps everyone honest.
-- **Current operator**: Codex, following the Claude handoff; one native operator at a time.
+- **Current operator**: the m5boot Claude session is the sole Mac/PC hardware operator; one native operator at a time. Codex manages only.
 - **Engineering workers**: Claude sessions on the build host, doing source analysis and isolated builds. They do not independently touch the Mac. Antigravity is a separate research-only scout, writing findings incrementally.
 - `m5-omarchy/` and `m5boot/` below are the published earlier snapshot. The new [status report](keyboard/STATUS-2026-11-05.md) records the later FT-series results; the source snapshot is not yet a complete reproduction of FT9.
 - Rules: label every result, never claim an install that wasn't verified, keep provenance, no secrets. When a result turned out wrong it was **retracted in place**, never deleted (see JOURNEY.md).
