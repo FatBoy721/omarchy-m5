@@ -4,8 +4,10 @@
 
 Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator, no "works on my M2". This repo is the whole messy journey: every build, every native result, every failure, and every claim we had to walk back with our tail between our legs. It is not a product. It is a lab notebook with a commit history.
 
-## TL;DR (2026-11-05, 13:52)
-**We are SSH'd into Omarchy running natively on an M5 Pro, as root, over a USB-C cable.** Hyprland is running. Nobody can type on it yet (the keyboard is a coprocessor that refuses to wake up), and it has no Wi-Fi (the Wi-Fi chip is powered, ringing the doorbell, and the port won't open the door). But we're *in*, and everything from here happens live instead of one reboot per question.
+## TL;DR (2026-11-05, FT9 update)
+**The built-in keyboard types in native Omarchy. The owner has tested it.** It is still very slow: this test kernel enables one CPU, and the framebuffer desktop saturates it. USB-C root SSH works on the same build. The trackpad enumerates but does not work; Wi-Fi still has no PCIe link.
+
+The keyboard breakthrough was getting the MTP firmware past two blocked accesses, enabling the missing Apple HID driver, and setting one GPIO data bit **before** the keyboard processor starts. [Native findings, build hashes, and corrections](keyboard/STATUS-2026-11-05.md). This is an experimental bring-up, not a finished daily-driver install.
 
 ## Status
 Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **REPORTED** = someone else said so · **HYPOTHESIS** = vibes, clearly labelled.
@@ -15,14 +17,18 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | Our own boot object (m5boot) runs from iBoot | first green screen at beacon3, console at gz3 | NATIVE |
 | Linux 7.2 boots | yes (gz5+) | NATIVE |
 | The mystery ~45 s reset | a second watchdog hiding at 0x2_8833_0008. Cleared in gz10. Rest in peace. | NATIVE |
-| **Omarchy desktop** (SDDM → Hyprland) | gz12, 00:03 on 2026-11-05; still running today | NATIVE |
+| **Omarchy desktop** (SDDM → Hyprland) | running on FT9; one CPU and framebuffer rendering, severe lag | NATIVE |
 | Hands-free test loop (macOS → Omarchy → back, no humans) | gz16 + guard/watchdog; the "3-minute auto return" now verified for real (h4) | NATIVE |
 | **Root shell over USB serial** | 13:01: u10s (gser gadget + `agetty`) — `uid=0(root)`, `PRETTY_NAME="Omarchy"` | NATIVE |
-| **SSH over USB-C** | 13:52: gser + CDC-EEM, `ssh root@10.55.0.1`, 0.2 ms ping | NATIVE |
-| Internal keyboard / trackpad | MTP coprocessor: firmware loaded, CPU won't start, its DART is locked before Linux. Fix (gz18) built and VM-tested; installing it has defeated us 3 times | NATIVE (failing) |
-| Wi-Fi (N1) | chip powered via SMC key gP13 (CLKREQ# asserts!), port READY, root port answers as Apple 106b:100c, link state machine refuses to leave 0x00. Now being poked live | NATIVE (failing) |
+| **SSH over USB-C** | FT6, FT7 and FT9: gser + CDC-EEM; root commands and a file read verified before cancelling each return timer | NATIVE |
+| **Internal keyboard** | **FT9: owner-confirmed typing**, very slow. Correct controller ID `05ac:0359` discovered at boot | NATIVE |
+| Internal trackpad | registers as Apple MTP multi-touch, but opening its input device returns `EIO`; AFE reset path identified, not yet tested | NATIVE (failing) |
+| Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`; still unresolved | NATIVE (failing) |
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
-| SMP, GPU, battery, Touch ID, camera, speakers… | later. One miracle at a time. | — |
+| SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
+| Persistent unattended access, battery, Touch ID, camera, speakers… | not verified complete | — |
+
+**Correction:** the old claim that iBoot leaves MTP's DART locked with live translation tables was wrong. FT1 read SID0 with no valid table, streams disabled, and no SID0 lock. The later tables we had inspected were Linux's own. See the [correction and native evidence](keyboard/STATUS-2026-11-05.md#correction-to-the-earlier-dart-theory).
 
 ## Greatest hits from the logbook
 - **"Our code runs!"** — it was a black screen. The build hadn't even been installed. (Retracted, see JOURNEY.md.)
@@ -35,14 +41,15 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 ## How it boots
 1. **Stub macOS** (a small APFS volume group next to macOS) created with **betizzel's MIT stub scripts** (`prep-stub.sh` / `finish-install.sh`, github.com/betizzel/omarchy-m5). In the stub's paired 1TR: `bputil -nc` (Permissive on the stub only) and `kmutil configure-boot --raw --entry-point 2048 --lowest-virtual-address 0`. macOS itself stays at Full Security.
 2. **m5boot** (`m5boot/`, ours, clean-room): a raw ARM64 image with a branch at offset 0, padded to 16 KiB (the stock-image iBoot panic on 26.6.x is avoided by this header, NATIVE). It reads iBoot's boot_args/ADT, disables the watchdogs, builds a FDT, inflates an embedded `Image.gz` and jumps to Linux.
-3. **Linux**: Asahi's `asahi-wip-7.2` + betizzel's T6050 patches + ours (`m5-omarchy/tools/kernel/patches`: framebuffer earlycon, PMGR write logging / read-only / allow-list). DT overrides in `m5-omarchy/tools/kernel/dts`.
+3. **Linux**: Asahi's `asahi-wip-7.2` + betizzel's T6050 patches + ours (`m5-omarchy/tools/kernel/patches`: framebuffer earlycon, PMGR write logging / read-only / allow-list). DT overrides in `m5-omarchy/tools/kernel/dts`. The installed gzft1 loader blacklists its input-related probes so the instrumented test kernel gets the first MTP start. One ESP `m5next/` set is consumed for that kernel switch.
 4. **Initramfs** (busybox): logs to disk, then `m5.root=s5` finds the 120 GB Linux partition (label `omarchy`) and `switch_root`s into it.
 5. **Omarchy rootfs** built from signed packages (ALARM + Omarchy's channel), with an overlay for autologin, software rendering and logging to the ESP.
 
 ## How we work
 - **Owner** (the human): owns the Mac, makes every destructive or physical decision, holds the power button far more often than promised, and keeps everyone honest.
-- **PM**: a Claude session that writes tasks (`*/tasks/`), reviews results, runs read-only and approved commands on the Mac.
-- **Workers**: Claude sessions doing one task at a time. `m5-omarchy/` is the research/kernel/rootfs worker (`reports/` are its write-ups). `m5boot/` is a separate clean-room implementer that sees only a cited spec (`m5boot/spec`).
+- **Current operator**: Codex, following the Claude handoff; one native operator at a time.
+- **Engineering workers**: Claude sessions on the build host, doing source analysis and isolated builds. They do not independently touch the Mac. Antigravity is a separate research-only scout, writing findings incrementally.
+- `m5-omarchy/` and `m5boot/` below are the published earlier snapshot. The new [status report](keyboard/STATUS-2026-11-05.md) records the later FT-series results; the source snapshot is not yet a complete reproduction of FT9.
 - Rules: label every result, never claim an install that wasn't verified, keep provenance, no secrets. When a result turned out wrong it was **retracted in place**, never deleted (see JOURNEY.md).
 
 ## AI and m1n1

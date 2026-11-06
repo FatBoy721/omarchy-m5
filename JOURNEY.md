@@ -1,5 +1,7 @@
 # Journey: every build and what it did on the Mac
 
+**Latest result:** the owner confirms built-in keyboard typing on FT9 (2026-11-05), with severe lag. Trackpad and Wi-Fi remain unresolved. [FT-series findings and corrections](keyboard/STATUS-2026-11-05.md).
+
 All on 2026-11-04 (US Eastern) unless noted; times are commit times of the build. Hashes are SHA-256 of the boot object (`m5boot*.bin`) as installed with `kmutil`. Labels: **NATIVE** (on our J714s), **INVALID** (claimed, later found never installed), **VM**, **PENDING**. Photos and videos of the screen are summarized as text; none are published.
 
 ## Before m5boot ran
@@ -150,3 +152,23 @@ Still missing for a usable desktop: internal keyboard/trackpad (MTP), Wi-Fi (N1 
 - Result (NATIVE, `usb/native-ssh-proof.txt`): ping 10.55.0.1 at ~0.2 ms, `ssh root@10.55.0.1` → `uid=0(root)`, `PRETTY_NAME="Omarchy"`, 7.2.2-m5slim+.
 - Worker sessions reach the Mac through `tools/sshbridge.sh`. All further hardware work (Wi-Fi port experiments, keyboard coprocessor) is now done live, not one reboot per question.
 - Boot-loader (gz18) install for the keyboard fix failed 3× (startup-picker boot goes straight to the installed gz16; system-1TR `kmutil` refuses with a local-policy error; re-arming no longer drops into the paired recoveryOS). Under investigation before asking the owner again.
+
+## 2026-11-05, later: FT1–FT9 keyboard bring-up
+
+All results below are **NATIVE** on the J714s. Full details and build hashes: [keyboard status](keyboard/STATUS-2026-11-05.md).
+
+| Run | Change | Result |
+|---|---|---|
+| FT1 | installed gzft1 gives an instrumented kernel the first MTP start | decoded SID0 read fault at `0x28830c000`; no valid iBoot SID0 table existed, retracting the locked-table theory |
+| FT2 | read-only RAM substitute at that IOVA | firmware advances to a write fault at the same address |
+| FT3 | read/write RAM substitute, with cache maintenance | full RTKit handshake and `MTP Says Hello`; next fault at GPIO address `0x2881e4050` |
+| FT4 | second RAM substitute for the GPIO page | firmware no longer crashes; keyboard ready and multi-touch input registered, not yet usable |
+| FT5 | enable `HID_APPLE` and its LED dependencies | keyboard input device registers too; owner reports it does not work, bounded capture records zero events |
+| FT6 | matching USB helper modules, dynamic DT support, gser + EEM | root SSH command round trip and file read succeed on the same kernel as the input changes |
+| FT7 | opt-in classic transport, avoiding the shared-ring `0x91` timeout | live SSH stays up; a guarded real GPIO pin-20 data-bit change causes `IPD HIDSPI attached`; STM ID query now succeeds |
+| SMC S1 | read-only controller driver, no key writes or child drivers | `pcIO` metadata is `hex_`, size 8; identifies the proposed AFE-reset path, does not test it |
+| **FT9** | set the same GPIO bit before the first MTP RUN | correct `05ac:0359` controller identity at boot; **owner confirms keyboard typing, very slowly**. Trackpad still fails |
+
+The temporary FT7 GPIO change was restored before reboot. FT9 repeats it at startup only with exact-state and power-state guards. USB SSH is verified on FT9; a permanent unattended reboot cycle is still pending.
+
+Two access lessons from the takeover: the earlier permanent-SSH attempt booted a different kernel build and rejected its USB modules; checking only `uname -r` was insufficient. A separate recovery-staging mistake caused an unintended second kexec. The live-switch preflight now rejects an active `m5next/` set. Neither successful USB setup nor a successful build substitutes for a command round trip.
