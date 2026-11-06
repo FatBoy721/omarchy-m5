@@ -24,7 +24,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | **Root shell over USB serial** | 13:01: u10s (gser gadget + `agetty`) — `uid=0(root)`, `PRETTY_NAME="Omarchy"` | NATIVE |
 | **SSH over USB-C** | verified through FT19: gser + CDC-EEM; root commands and a file read checked before cancelling the return timer | NATIVE |
 | **Internal keyboard** | **FT9, FT14 and FT18-r2: owner-confirmed typing**. FT18-r2 reported much faster; no quantified latency test. Controller ID `05ac:0359` | NATIVE |
-| Internal trackpad | FT19 reached a real second attach using a fresh image; the same readiness handshake fails. Firmware requests a host reset. No working pointer | NATIVE (failing) |
+| Internal trackpad | **FT21: firmware reports the multi-touch interface READY** after a host AFE reset pulse sent in response to the firmware's own reset request, then a fresh image. Classified as a clickpad; admitted by the desktop after a userspace re-add. **Physical pointer/click/scroll still being confirmed.** Manual one-shot; [reproduce](patches/2026-11-06/ft21-reset-fresh/REPRODUCE.md) | NATIVE (READY; physical pending) |
 | Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`; still unresolved | NATIVE (failing) |
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
 | SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
