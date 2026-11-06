@@ -40,7 +40,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 
 ## How it boots
 1. **Stub macOS** (a small APFS volume group next to macOS) created with **betizzel's MIT stub scripts** (`prep-stub.sh` / `finish-install.sh`, github.com/betizzel/omarchy-m5). In the stub's paired 1TR: `bputil -nc` (Permissive on the stub only) and `kmutil configure-boot --raw --entry-point 2048 --lowest-virtual-address 0`. macOS itself stays at Full Security.
-2. **m5boot** (`m5boot/`, ours, clean-room): a raw ARM64 image with a branch at offset 0, padded to 16 KiB (the stock-image iBoot panic on 26.6.x is avoided by this header, NATIVE). It reads iBoot's boot_args/ADT, disables the watchdogs, builds a FDT, inflates an embedded `Image.gz` and jumps to Linux.
+2. **m5boot** (`m5boot/`, initially written without reading m1n1): a raw ARM64 image with a branch at offset 0, padded to 16 KiB (the stock-image iBoot panic on 26.6.x is avoided by this header, NATIVE). It reads iBoot's boot_args/ADT, disables the watchdogs, builds a FDT, inflates an embedded `Image.gz` and jumps to Linux.
 3. **Linux**: Asahi's `asahi-wip-7.2` + betizzel's T6050 patches + ours (`m5-omarchy/tools/kernel/patches`: framebuffer earlycon, PMGR write logging / read-only / allow-list). DT overrides in `m5-omarchy/tools/kernel/dts`. The installed gzft1 loader blacklists its input-related probes so the instrumented test kernel gets the first MTP start. One ESP `m5next/` set is consumed for that kernel switch.
 4. **Initramfs** (busybox): logs to disk, then `m5.root=s5` finds the 120 GB Linux partition (label `omarchy`) and `switch_root`s into it.
 5. **Omarchy rootfs** built from signed packages (ALARM + Omarchy's channel), with an overlay for autologin, software rendering and logging to the ESP.
@@ -53,7 +53,9 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 - Rules: label every result, never claim an install that wasn't verified, keep provenance, no secrets. When a result turned out wrong it was **retracted in place**, never deleted (see JOURNEY.md).
 
 ## AI and m1n1
-- **We did not use, read, clone, build or run m1n1 or any of its forks** (AsahiLinux/m1n1, aurora-silicon aura/m1n1, others). Upstream m1n1 asks AI tools not to use it; we treated its forks the same way. m5boot was written from public documentation (Asahi docs, XNU headers, Linux sources) only; m1n1 behaviour described by third parties is marked as such.
+- **The initial m5boot and the FT9 result predate our m1n1 source audit.** That phase used public documentation (Asahi docs, XNU headers, Linux sources), without reading m1n1 or its forks.
+- **On November 5, the owner opened source reuse for the next phase.** We now read upstream m1n1, aura and community forks to investigate secondary CPU startup, clocking and PCIe PHY initialization. Future changes derived from those implementations must identify their source and preserve the applicable per-file licenses; they cannot be described as clean-room work.
+- Source audit references: [AsahiLinux/m1n1 `70757dc`](https://github.com/AsahiLinux/m1n1/tree/70757dc74c2dac485188acaa2fa7e73be5b108ee), [aurora-silicon/aura `077aabe`](https://github.com/aurora-silicon/aura/tree/077aabecd595fab9ebe34d3f3a28f10a82865d17), and [aurora-silicon/m1n1 `cf57aeb`](https://github.com/aurora-silicon/m1n1/tree/cf57aebc36b2c51c546d97f09e9bf390ff3f7be7). Source findings are not native test results.
 - **Asahi Linux's policy forbids LLM-assisted contributions to Asahi.** Nothing in this repo is submitted to Asahi, and it should not be.
 
 ## Credits
