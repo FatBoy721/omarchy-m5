@@ -1,6 +1,6 @@
 # Journey: every build and what it did on the Mac
 
-**Latest result:** FT16 verifies the earlier AP-readiness handshake, but the trackpad still reports `No HINT_L` and times out. USB root SSH stays available. FT14 verified real DAPF/MMIO mappings and owner-confirmed keyboard typing; FT13 verified bounded CPU clock changes and restored boot speed afterward. Trackpad and Wi-Fi remain unresolved. [FT-series findings and corrections](keyboard/STATUS-2026-11-05.md).
+**Latest result:** FT17's controlled retry reaches power-off but does not restart the AFE boot attempt. The trackpad still does not work. The internal readiness pin reads low after failure, the exact board firmware file has been reproduced, and USB SSH remains available. FT14 verified real DAPF/MMIO mappings and owner-confirmed keyboard typing; FT13 verified bounded CPU clock changes and restored boot speed afterward. Trackpad and Wi-Fi remain unresolved. [FT-series findings and corrections](keyboard/STATUS-2026-11-05.md).
 
 All on 2026-11-04 (US Eastern) unless noted; times are commit times of the build. Hashes are SHA-256 of the boot object (`m5boot*.bin`) as installed with `kmutil`. Labels: **NATIVE** (on our J714s), **INVALID** (claimed, later found never installed), **VM**, **PENDING**. Photos and videos of the screen are summarized as text; none are published.
 
