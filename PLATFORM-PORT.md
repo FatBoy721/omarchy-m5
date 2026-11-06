@@ -22,7 +22,9 @@ Our boot object builds the live device tree, so editing a board `.dts` would cha
 - Lid and power-button events need one SMC notification-enable write. That write is off by default and awaits the owner's decision.
 - The first platform boot ignores lid, power-key and idle actions and refuses all system sleep. That stays until our USB-gadget access is shown to survive resume.
 
-## First practical step (prepared; under independent review; not run)
-On the current FT19 kernel, with no new kernel or reboot: the unmodified upstream `macsmc-power` battery/AC driver loaded as a module, plus a small module that registers its standard child device under the existing SMC. Its charge-control writes are refused.
+## First practical step: battery readout (NATIVE, negative)
+On the FT19 kernel, with no new kernel, after an independent review: the unmodified upstream `macsmc-power` battery/AC driver was loaded as a module, together with a small module registering its standard child device under the existing SMC. Its charge-control writes are refused by our SMC write gate.
 
-A third-party report of a probe hang on another board (J716s) is a known risk. Results will be added here only from the operator's native run.
+**Result: Linux hard-hung, and the SoC watchdog reset the Mac back into macOS.** No SMC write could reach the SMC. Which step stalled is unproven; this matches the third-party J716s report of a probe hang.
+
+Next: a per-key diagnostic that logs each key's metadata before querying it, so a stall names its key. The combined SMC + display build is ready but held: it contains the same driver, and its other children use the same SMC calls.

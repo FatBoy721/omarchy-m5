@@ -29,7 +29,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
 | SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
 | CPU clock control | FT13 bounded states 5/6/7 trial changes instruction throughput as expected; restored boot state 6, write gate closed. No desktop-speed improvement yet verified | NATIVE |
-| Battery / AC, sensors, lid, power button, RTC | porting the J714c SMC work ([PLATFORM-PORT.md](PLATFORM-PORT.md)); a battery readout on the current kernel is prepared and under review, not yet run | — |
+| Battery / AC, sensors, lid, power button, RTC | NATIVE (failing): porting the J714c SMC work ([PLATFORM-PORT.md](PLATFORM-PORT.md)); the first battery readout hard-hung (watchdog reset to macOS); diagnosing the stalling SMC key | — |
 | Persistent unattended access, Touch ID, camera, speakers… | not verified complete | — |
 
 **Correction:** the old claim that iBoot leaves MTP's DART locked with live translation tables was wrong. FT1 read SID0 with no valid table, streams disabled, and no SID0 lock. The later tables we had inspected were Linux's own. See the [correction and native evidence](keyboard/STATUS-2026-11-05.md#correction-to-the-earlier-dart-theory).
