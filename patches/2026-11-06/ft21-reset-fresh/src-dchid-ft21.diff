@@ -1,0 +1,184 @@
+--- ../codex-ft19-fresh/src/drivers/hid/dockchannel-hid/dockchannel-hid.c	2026-11-05 23:49:39.050445506 -0500
++++ src/drivers/hid/dockchannel-hid/dockchannel-hid.c	2026-11-06 01:01:34.771620757 -0500
+@@ -12,6 +12,7 @@
+ #include <linux/firmware.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/hid.h>
++#include <linux/init.h>
+ #include <linux/mutex.h>
+ #include <linux/platform_device.h>
+ #include <linux/slab.h>
+@@ -905,24 +906,85 @@
+ static void m5_rx_log(struct dockchannel_hid *dchid, const char *why, const char *who);	/* FT7, defined below */
+ 
+ /*
+- * FT19 (m5 test kernel only): m5_mt_fresh, a root-writable runtime bool, default 0. Replaces FT18's
+- * m5_mt_renotify. Firmware 5340 (CODEX-MTP-NOTIFY-DISPATCH.md, CODEX-MTP-HOST-BUFFER-MUTATION.md): 0x95 only
+- * caches {addr, size}; the bootload runs on PM2 HasChanged(ON), patches TCAL/FCAL calibration into the mapped
+- * image in place, and its cleanup zeroes the cache. FT18r2 native read-only diff: the old coherent image differs
+- * from the host copy only inside TCAL/FCAL (2836 bytes, outside 0); the host copy matches the on-disk payload.
+- * When set, the NEXT normal hid_hw_open() of multi-touch after a recorded start timeout may, exactly once:
+- *   1. verify the host-only first-ACK copy against its first-ACK FNV-1a 64;
+- *   2. allocate ONE fresh coherent buffer, fill it from that copy, and verify it by full readback memcmp;
+- *   3. supersede (never write or free) the old coherent image: it stays allocated and mapped until remove()
+- *      after a successful MTP stop, and is retained with the new one if the stop fails;
+- *   4. CMD_SEND_FIRMWARE with the NEW IOVA through the existing builder; only after a successful ACK and
+- *      rechecks: PM2 ON only, via the existing m5_pm2_fw_set_power(iface, 2).
+- * No OFF, no SLEEP, no host SMC/GPIO/PMGR/MTP reset. The one-shot is consumed before any check or command.
+- * Runs under hdev->ll_open_lock. Never automatic. Fail closed: otherwise the FT16 -EINPROGRESS latch.
++ * FT21-RESET-FRESH (m5 test kernel only; touchpad-only variant of FT19; CODEX-FT20-OPERATOR-DESIGN.md and the
++ * corrected CODEX-FT20-RESET-RATIONALE.md; independent review GO-with-changes, all applied):
++ * m5_mt_reset_fresh, a root-writable runtime bool, default 0 (replaces FT19's m5_mt_fresh). When set, the NEXT
++ * normal hid_hw_open() of multi-touch, exactly once, and only if BOTH (no order between them) an observed
++ * firmware reset request {0xa2, 0x01} this boot AND a recorded start timeout:
++ *   1. verifies the host-only first-ACK copy (FNV-1a 64), allocates ONE fresh coherent buffer, fills and
++ *      verifies it (full readback memcmp), rechecks transport/READY;
++ *   2. host AFE reset pulse on SMC pcIO with ONLY the two authorized payloads (m5_afe_write; macsmc gate,
++ *      boot-cmdline budget macsmc.m5_pcio_budget=2): provider lookup -> once-per-boot m5_afe_used ->
++ *      assert 0x011c000000010001 -> 50 ms -> release 0x011c000000010000 (ALWAYS once the assert was sent, i.e.
++ *      unless it returned -EPERM) -> 50 ms settle (operator-selected test bound, not ADT-derived). Any write
++ *      error stops here: no 0x95, no ON, fresh buffer freed (never announced). No PM2 framing around it;
++ *   3. supersedes the old image (never written or freed before a successful MTP stop), CMD_SEND_FIRMWARE with
++ *      the NEW IOVA (ACK required), recheck, then PM2 ON only via m5_pm2_fw_set_power(iface, 2).
++ * No OFF, no SLEEP, no 0x42, no other key/GPIO/PMGR/MTP reset. The one-shot is consumed after the gates and
++ * before any check or command. Runs under hdev->ll_open_lock. Never automatic. Fail closed: otherwise the FT16
++ * -EINPROGRESS latch. Only a positive result is informative (see the design's pre-registered reading).
+  */
+-static bool m5_mt_fresh;
+-module_param(m5_mt_fresh, bool, 0644);
+-MODULE_PARM_DESC(m5_mt_fresh, "m5 FT19: allow one multi-touch fresh-image 0x95 + PM2 ON-only after a start timeout");
++static bool m5_mt_reset_fresh;
++module_param(m5_mt_reset_fresh, bool, 0644);
++MODULE_PARM_DESC(m5_mt_reset_fresh, "m5 FT21: one multi-touch AFE pcIO pulse + fresh-image 0x95 + PM2 ON-only after 0xa2 and a start timeout");
++
++/*
++ * Cross-context: set (WRITE_ONCE, never cleared) by the RX 0xa2 log handler (dchid_packet_work, workqueue) for a
++ * valid 2-byte {0xa2, 0x01}; read (READ_ONCE) by the one-shot under ll_open_lock. It triggers nothing by itself.
++ */
++static bool m5_a2_seen_mt;
++
++/*
++ * FT21 F1 (m5review): the pulse needs exactly 2 macsmc pcIO budget units, otherwise an allowed assert could be
++ * followed by a refused release. The budget is boot-cmdline-only (macsmc.c, 0400, clamped, never replenished),
++ * so require exactly ONE word-bounded "macsmc.m5_pcio_budget=" token on the saved command line, with value "2".
++ */
++static bool m5_budget_is_2(void)
++{
++	static const char tok[] = "macsmc.m5_pcio_budget=";
++	const char *c = saved_command_line, *p, *hit = NULL;
++	int n = 0;
++
++	for (p = c; (p = strstr(p, tok)); p += sizeof(tok) - 1) {
++		if (p != c && p[-1] != ' ')
++			continue;
++		hit = p + sizeof(tok) - 1;
++		n++;
++	}
++	return n == 1 && hit[0] == '2' && (hit[1] == ' ' || hit[1] == '\0');
++}
++
++/* FT21: the pulse. Returns 0 only if both writes returned >= 0. */
++static int m5_afe_pulse(struct dchid_iface *iface)
++{
++	struct device *dev = iface->dchid->dev;
++	struct apple_smc *smc = IS_BUILTIN(CONFIG_MFD_MACSMC) ? m5_afe_smc(dev) : NULL;
++	int a, r;
++
++	if (!smc) {
++		dev_err(dev, "m5: reset %s: SMC provider not bound: no pulse\n", iface->name);
++		return -ENODEV;
++	}
++	if (atomic_xchg(&m5_afe_used, 1)) {
++		dev_err(dev, "m5: reset %s: host AFE reset already attempted this boot: no pulse\n", iface->name);
++		return -EALREADY;
++	}
++	dev_info(dev, "m5: reset %s: assert sending\n", iface->name);
++	a = m5_afe_write(iface, smc, true);
++	if (a == -EPERM) {
++		dev_err(dev, "m5: reset %s: assert refused by the macsmc gate (nothing sent): no release\n", iface->name);
++		return a;
++	}
++	if (a >= 0)
++		fsleep(50 * USEC_PER_MSEC);
++	r = m5_afe_write(iface, smc, false);	/* release: always once the assert may have been sent */
++	dev_info(dev, "m5: reset %s: release sent (assert %d release %d)\n", iface->name, a, r);
++	if (a < 0 || r < 0)
++		return a < 0 ? a : r;
++	fsleep(50 * USEC_PER_MSEC);
++	dev_info(dev, "m5: reset %s: settle end\n", iface->name);
++	return 0;
++}
+ 
+ /* Transport up and READY still pending; logs which phase found otherwise. */
+ static int m5_mt_fresh_recheck(struct dchid_iface *iface, const char *phase)
+@@ -949,15 +1011,17 @@
+ 	void *new;
+ 	int ret;
+ 
+-	if (!READ_ONCE(m5_mt_fresh) || !iface->starting)
++	if (!READ_ONCE(m5_mt_reset_fresh) || !iface->starting)
+ 		return -EINPROGRESS;	/* FT16 path */
+ 	if (!m5_pm2_fw_iface(iface) || m5_dchid_pm2_host || !iface->m5_fw_sent ||
+ 	    !iface->m5_start_timed_out || iface->m5_retry_used || !iface->firmware || !iface->m5_fw_ref ||
+-	    iface->m5_old_fw) {
+-		dev_warn(dev, "m5: fresh %s refused (fw-pm2 %d host %d fw_sent %d timed_out %d used %d buf %d ref %d old %d)\n",
++	    iface->m5_old_fw || !READ_ONCE(m5_a2_seen_mt) || atomic_read(&m5_afe_used) ||
++	    !(IS_BUILTIN(CONFIG_MFD_MACSMC) && m5_afe_smc(dev)) || !m5_budget_is_2()) {
++		dev_warn(dev, "m5: reset %s refused (fw-pm2 %d host %d fw_sent %d timed_out %d used %d buf %d ref %d old %d a2 %d afe_used %d smc %d budget2 %d)\n",
+ 			 iface->name, m5_pm2_fw_iface(iface), m5_dchid_pm2_host, iface->m5_fw_sent,
+ 			 iface->m5_start_timed_out, iface->m5_retry_used, !!iface->firmware, !!iface->m5_fw_ref,
+-			 !!iface->m5_old_fw);
++			 !!iface->m5_old_fw, READ_ONCE(m5_a2_seen_mt), atomic_read(&m5_afe_used),
++			 IS_BUILTIN(CONFIG_MFD_MACSMC) && m5_afe_smc(dev), m5_budget_is_2());
+ 		return -EINPROGRESS;
+ 	}
+ 	if (completion_done(&iface->ready))
+@@ -994,7 +1058,20 @@
+ 		dev_err(dev, "m5: fresh %s: readback mismatch: freed, nothing sent\n", iface->name);
+ 		return -EIO;
+ 	}
+-	ret = m5_mt_fresh_recheck(iface, "before swap");
++	ret = m5_mt_fresh_recheck(iface, "before pulse");
++	if (ret) {
++		dma_free_coherent(dev, size, new, new_dma);	/* never announced to the device */
++		return ret < 0 ? ret : 0;
++	}
++
++	/* FT21: the one variable vs FT19. Any write error: stop, nothing announced. */
++	ret = m5_afe_pulse(iface);
++	if (ret < 0) {
++		dma_free_coherent(dev, size, new, new_dma);	/* never announced to the device */
++		dev_err(dev, "m5: reset %s: pulse failed %d: fresh buffer freed, no 0x95, no ON\n", iface->name, ret);
++		return ret;
++	}
++	ret = m5_mt_fresh_recheck(iface, "after pulse");
+ 	if (ret) {
+ 		dma_free_coherent(dev, size, new, new_dma);	/* never announced to the device */
+ 		return ret < 0 ? ret : 0;
+@@ -1043,7 +1120,7 @@
+ 	if (!completion_done(&iface->ready)) {
+ 		ret = dchid_start_interface(iface);
+ 		if (ret == -EINPROGRESS)
+-			ret = m5_mt_fresh_start(iface);
++			ret = m5_mt_fresh_start(iface);	/* FT21: gated by m5_mt_reset_fresh */
+ 		if (ret < 0)
+ 			return ret;
+ 
+@@ -1051,7 +1128,7 @@
+ 			if (m5_pm2_fw_iface(iface))
+ 				iface->m5_start_timed_out = true;
+ 			dev_err(iface->dchid->dev, "iface %s start timed out%s\n", iface->name,
+-				iface->m5_retry_used ? " (after m5 fresh)" : "");
++				iface->m5_retry_used ? " (after m5 reset+fresh)" : "");
+ 			return -ETIMEDOUT;
+ 		}
+ 		if (iface->m5_retry_used)
+@@ -1444,6 +1521,8 @@
+ 				     length, length >= 2 ? p[1] : 0xff);
+ 		return;
+ 	}
++	if (p[1] == 1)
++		WRITE_ONCE(m5_a2_seen_mt, true);	/* FT21 gate flag only; outside the ratelimited print */
+ 	iface = smp_load_acquire(&dchid->ifaces[p[1]]);
+ 	dev_warn_ratelimited(dchid->dev, "m5: fw reset request 0xa2 iface %u (%s): observed only, no host reset/response\n",
+ 			     p[1], iface ? iface->name : "unknown");

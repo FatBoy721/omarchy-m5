@@ -28,3 +28,9 @@ On the FT19 kernel, with no new kernel, after an independent review: the unmodif
 **Result: Linux hard-hung, and the SoC watchdog reset the Mac back into macOS.** No SMC write could reach the SMC. Which step stalled is unproven; this matches the third-party J716s report of a probe hang.
 
 Next: a per-key diagnostic that logs each key's metadata before querying it, so a stall names its key. The combined SMC + display build is ready but held: it contains the same driver, and its other children use the same SMC calls.
+
+## Source published (2026-11-06; built and reviewed, not yet tested natively)
+- [`patches/2026-11-06/platform-r2/`](patches/2026-11-06/platform-r2/): the combined platform build. Display (eDP connector) and firewall kernel support are included. The SMC children are compiled in but **all off**, and the battery driver is **removed**.
+- [`patches/2026-11-06/ft21-reset-fresh/`](patches/2026-11-06/ft21-reset-fresh/): a separate trackpad-only experiment (host AFE reset after the firmware's own reset request, then a fresh image and power-ON).
+
+Both are queued with the operator: platform first, then the trackpad experiment. Results will be added here only from native runs.
