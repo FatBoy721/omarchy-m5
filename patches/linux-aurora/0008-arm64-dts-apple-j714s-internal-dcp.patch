@@ -1,0 +1,251 @@
+From 669ec5bf91354b270395a5b8aec3fda7f12d0186 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 22:10:51 -0600
+Subject: [PATCH 8/8] arm64: dts: apple: j714s: describe the internal DCP
+
+Add t6050-dcp.dtsi with the J714s internal display as iBoot leaves it:
+the DCP (apple,t6050-dcp) and its ASC v4 mailbox, dart-dcp and
+dart-disp0 (apple,t6050-dart: locked four-level roots, fw_mirror/
+fw_tree), the display subsystem, the PIODMA stream, the PMC window
+holding the DISP_INT bandwidth scratch, the disp0 provider clocks
+<361 458> and a /reserved-memory framebuffer region for /vram.
+Addresses, interrupts and streams are those of the J714s runtime ADT.
+The J714s panel is added in the board file.
+
+Every node starts disabled. m1n1 (omarchy-m5 patch 0008) enables them
+only after checking that the DCP is running on locked DARTs, fills the
+framebuffer region and writes apple,firmware-version and
+apple,firmware-compat (the running build, e.g. 27.2.98.1 on 27.3
+beta 1); the DT's <0 0 0> compat placeholder matches no IOMFB table.
+No node names a power domain: the mailbox and the DARTs use runtime PM
+and would power DISP_CPU off under the running display. simpledrm's
+framebuffer0 stays as the fallback console.
+---
+ arch/arm64/boot/dts/apple/t6050-dcp.dtsi  | 179 ++++++++++++++++++++++
+ arch/arm64/boot/dts/apple/t6050-j714s.dts |  17 ++
+ 2 files changed, 196 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/apple/t6050-dcp.dtsi
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-dcp.dtsi b/arch/arm64/boot/dts/apple/t6050-dcp.dtsi
+new file mode 100644
+index 000000000..459368ee6
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-dcp.dtsi
+@@ -0,0 +1,179 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * T6050 internal display: the DCP, its ASC mailbox, the two display DARTs,
++ * the display subsystem and its PIODMA stream, as iBoot leaves them on the
++ * J714s (runtime ADT, stub mBoot-20457.60.65.0.1, arm-io ranges
++ * +0x200000000):
++ *
++ *   /arm-io/dcp         iop,ascwrap-v6 0x48ae00000 +0x88000, iop-vbar
++ *                       0x48a850000 +0x4000; AIC 1043..1050 (the first four
++ *                       are the ASC mailbox, in mailbox order).
++ *   /arm-io/dart-dcp    dart,t8110 0x48a340000 +0x20000, AIC 990; SID 23 is
++ *                       the AP's (mapper-dcp), SID 24 the exclave's.
++ *   /arm-io/dart-disp0  dart,t8110 0x48a300000 +0xc000 (reg[0] only: the
++ *                       second bank 0x48a314000 and the shared 0x2803f0000
++ *                       are not ours), AIC 990; SIDs 0 (scanout) and 16
++ *                       (PIODMA) are the AP's, 3 and 4 the exclave's.
++ *   /arm-io/disp0       disp0,t605x, reg[0..4] = disp-0..disp-4 below,
++ *                       clock-ids <361 458>.
++ *   Both DARTs: vm-base 1 TiB, vm-size 3 TiB.
++ *
++ * The bootloader leaves the DCP running on its own firmware, with both DARTs
++ * locked (PROTECT) on four-level tables of its own. The DART driver keeps
++ * those roots (fw_mirror/fw_tree for apple,t6050-dart) and the DCP driver
++ * adopts the running session; nothing here may reset either.
++ *
++ * Power: the DCP's ADT clock/power gate DISP_CPU_V (606) is virtual; its
++ * parents are DISP_FE (153, ps_disp_fe) and DISP_CPU (155, ps_disp_cpu),
++ * under DISP_SYS (150, ps_disp_sys). disp0's DISP_MIE_DPB (608),
++ * DISP_FB_ACTIVE (607) and DISP_CARVE_OUT (605) are virtual and parentless.
++ * None of these nodes names a power domain: the mailbox and the DART use
++ * runtime PM, and a genpd consumer that suspends (or a DCP probe that fails
++ * and detaches) would power off DISP_CPU under the running display. With no
++ * consumer, pd_ignore_unused keeps the domains as the bootloader left them.
++ *
++ * Every node starts disabled. m1n1 enables them only after checking that the
++ * DCP firmware is preloaded and running, DISP_CPU_V is powered, the ASC CPU
++ * runs and both DARTs are locked on the ADT's tables; it then fills the
++ * framebuffer reservation and the firmware identity. On any failed check it
++ * leaves (sets) them disabled and simpledrm keeps the panel.
++ */
++
++/ {
++	aliases {
++		/* m1n1 finds the display nodes through these. */
++		dcp = &dcp;
++		disp0 = &display;
++		disp0-piodma = &disp0_piodma;
++	};
++
++	/*
++	 * disp0's firmware provider clocks 361 and 458, in ADT clock-ids
++	 * order. The ADT gives no rate; until one is known the firmware is
++	 * told 0 Hz, as T6041's DCP is.
++	 */
++	clk_disp0_361: clock-disp0-361 {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <0>;
++		clock-output-names = "clk_disp0_361";
++	};
++
++	clk_disp0_458: clock-disp0-458 {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <0>;
++		clock-output-names = "clk_disp0_458";
++	};
++
++	/* Component master without MMIO, outside the simple-bus. */
++	display: display-subsystem {
++		compatible = "apple,display-subsystem";
++		/* disp0_dart is locked by the bootloader and must come first */
++		iommus = <&disp0_dart 0>;
++		memory-region = <&dcp_fb>;
++		memory-region-names = "framebuffer";
++		status = "disabled";
++	};
++};
++
++&{/reserved-memory} {
++	/*
++	 * The boot framebuffer (ADT /vram), outside the RAM handed to Linux.
++	 * m1n1 fills reg, renames the node and enables it with the DCP.
++	 */
++	dcp_fb: framebuffer@0 {
++		compatible = "framebuffer";
++		reg = <0 0 0 0>;
++		no-map;
++		status = "disabled";
++	};
++};
++
++&soc {
++	/* The ASC v4 mailbox at dcp + 0x8000 */
++	dcp_mbox: mailbox@48ae08000 {
++		compatible = "apple,t6050-asc-mailbox", "apple,asc-mailbox-v4";
++		reg = <0x4 0x8ae08000 0x0 0x4000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 1043 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 1044 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 1045 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 1046 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "send-empty", "send-not-empty",
++				  "recv-empty", "recv-not-empty";
++		#mbox-cells = <0>;
++		status = "disabled";
++	};
++
++	/* dart-dcp and dart-disp0 share ADT interrupt 990 */
++	dcp_dart: iommu@48a340000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x4 0x8a340000 0x0 0x20000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 990 IRQ_TYPE_LEVEL_HIGH>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x0 0x300 0x0>;
++		status = "disabled";
++	};
++
++	disp0_dart: iommu@48a300000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x4 0x8a300000 0x0 0xc000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 990 IRQ_TYPE_LEVEL_HIGH>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x0 0x300 0x0>;
++		status = "disabled";
++	};
++
++	/*
++	 * disp0 reg[4], the PMC window the bandwidth scratch lives in. The
++	 * DISP_INT request (pmgr bwr-agent 0, BIRQ 150) is assumed at
++	 * +0x20000 + 0x4000 * agent, which matches T8142's DISP_INT (+0x20000)
++	 * and T6050's DISP_EXT0 (agent 3, +0x2c000). No driver binds here.
++	 */
++	dcp_pmc: pmc-metadata@286700000 {
++		reg = <0x2 0x86700000 0x0 0x114000>;
++		#apple,bw-scratch-cells = <3>;
++		status = "disabled";
++	};
++
++	dcp: dcp@48ae00000 {
++		compatible = "apple,t6050-dcp", "apple,dcp";
++		reg = <0x4 0x8ae00000 0x0 0x4000>,
++		      <0x4 0x88000000 0x0 0x4000000>,
++		      <0x4 0x8a240000 0x0 0x10000>,
++		      <0x4 0x8a3ac000 0x0 0x4000>,
++		      <0x4 0x8a800000 0x0 0x800000>,
++		      <0x2 0x86700000 0x0 0x114000>,
++		      <0x4 0x8a850000 0x0 0x4000>;
++		reg-names = "coproc", "disp-0", "disp-1", "disp-2", "disp-3",
++			    "disp-4", "iop-vbar";
++		mboxes = <&dcp_mbox>;
++		mbox-names = "mbox";
++		iommus = <&dcp_dart 23>;
++		apple,bw-scratch = <&dcp_pmc 0 5 0x20000>;
++		clocks = <&clk_disp0_361>, <&clk_disp0_458>;
++		apple,clock-ids = <361 458>;
++		memory-region = <&dcp_fb>;
++		memory-region-names = "framebuffer";
++		/*
++		 * Placeholder: m1n1 overwrites it (and apple,firmware-version)
++		 * with the running firmware's version, e.g. <27 2 98 1> on
++		 * mBoot-20457.60.65.0.1. Each build needs its own IOMFB method
++		 * table; the driver refuses to bind to one it has no table for.
++		 * <0 0 0> matches none, so a loader that does not fill it in
++		 * cannot get the DCP driven with the wrong table.
++		 */
++		apple,firmware-compat = <0 0 0>;
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++		status = "disabled";
++
++		disp0_piodma: piodma {
++			iommus = <&disp0_dart 16>;
++		};
++	};
++};
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+index 9965db66d..b93cec2d3 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+@@ -11,6 +11,7 @@
+ 
+ #include "t6050.dtsi"
+ #include "t6050-jxxx.dtsi"
++#include "t6050-dcp.dtsi"
+ #include <dt-bindings/leds/common.h>
+ 
+ / {
+@@ -48,6 +49,22 @@ &framebuffer0 {
+ 	apple,internal-panel;
+ };
+ 
++/*
++ * 14.2" 3024x1964 at 254 ppi (ADT dot-pitch-float), 1890 rows below the
++ * 74-row notch; 600 nits SDR (ADT backlight user-accessible-max-nits),
++ * mini-LED, Display P3 (ADT product artwork-display-gamut).
++ */
++&dcp {
++	panel: panel {
++		compatible = "apple,panel-j714", "apple,panel-mini-led", "apple,panel";
++		width-mm = <302>;
++		height-mm = <196>;
++		adj-height-mm = <189>;
++		apple,max-brightness = <600>;
++		apple,color-gamut = "display-p3";
++	};
++};
++
+ /* J714s is a binned SKU: 5 cores per cluster, cpu5/cpu11/cpu17 fused off */
+ &cpu_m0_5 { status = "disabled"; };
+ &cpu_m1_5 { status = "disabled"; };
+-- 
+2.56.0
+

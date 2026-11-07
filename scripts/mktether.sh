@@ -8,6 +8,8 @@
 # running, so the proxyclient has to live on the other machine.
 #
 #   scripts/mktether.sh              -> build/tether-bundle.tar.gz
+#   KERNEL_FLAVOR=aurora scripts/mktether.sh -> build/tether-aurora-bundle.tar.gz
+# Both variants use build/m1n1-chain.bin (override with M1N1_CHAIN).
 #   scp build/tether-bundle.tar.gz thinkpad:
 #
 # Everything in the bundle is self-contained: m1n1's proxyclient package,
@@ -18,20 +20,35 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-OUT="build/tether-bundle.tar.gz"
-STAGE="build/tether"
 BOARD="j714s"
+KERNEL_FLAVOR="${KERNEL_FLAVOR:-asahi}"
+CHAIN="${M1N1_CHAIN:-build/m1n1-chain.bin}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
-DTB="vendor/linux/arch/arm64/boot/dts/apple/t6050-$BOARD.dtb"
-KERNEL="vendor/linux/arch/arm64/boot/Image.gz"
+case "$KERNEL_FLAVOR" in
+    asahi)
+        OUT="build/tether-bundle.tar.gz"
+        STAGE="build/tether"
+        BOOT="vendor/linux/arch/arm64/boot"
+        BUILD_COMMAND="make kernel"
+        ;;
+    aurora)
+        OUT="build/tether-aurora-bundle.tar.gz"
+        STAGE="build/tether-aurora"
+        BOOT="build/linux-aurora-out/arch/arm64/boot"
+        BUILD_COMMAND="make kernel-aurora"
+        ;;
+    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi or aurora)" ;;
+esac
+DTB="$BOOT/dts/apple/t6050-$BOARD.dtb"
+KERNEL="$BOOT/Image.gz"
 
 [ -d vendor/m1n1/proxyclient ] || die "vendor/m1n1 missing - run: make fetch"
-[ -f "$KERNEL" ]               || die "$KERNEL missing - run: make kernel"
-[ -f "$DTB" ]                  || die "$DTB missing - run: make dtbs"
+[ -f "$KERNEL" ]               || die "$KERNEL missing - run: $BUILD_COMMAND"
+[ -f "$DTB" ]                  || die "$DTB missing - run: $BUILD_COMMAND"
 [ -f build/initramfs.cpio.gz ] || die "initramfs missing - run: make initramfs"
-[ -f build/m1n1-chain.bin ]    || die "build/m1n1-chain.bin missing - run: CHAINLOADING=1 scripts/build-m1n1.sh && cp vendor/m1n1/build/m1n1.bin build/m1n1-chain.bin"
+[ -f "$CHAIN" ]               || die "$CHAIN missing - run: CHAINLOADING=1 scripts/build-m1n1.sh && cp vendor/m1n1/build/m1n1.bin build/m1n1-chain.bin"
 
 echo "==> Staging $STAGE"
 rm -rf "$STAGE"
@@ -50,8 +67,10 @@ cp scripts/probes/*.py dt/t6050-pmgr.dtsi "$STAGE/hv/"
 cp "$KERNEL"                 "$STAGE/boot/Image.gz"
 cp "$DTB"                    "$STAGE/boot/t6050-$BOARD.dtb"
 cp build/initramfs.cpio.gz   "$STAGE/boot/"
-cp build/m1n1-chain.bin      "$STAGE/boot/"
-[ -f build/m1n1-chain-payload.bin ] && cp build/m1n1-chain-payload.bin "$STAGE/boot/"
+cp "$CHAIN"                 "$STAGE/boot/m1n1-chain.bin"
+if [ "$KERNEL_FLAVOR" = asahi ] && [ -f build/m1n1-chain-payload.bin ]; then
+    cp build/m1n1-chain-payload.bin "$STAGE/boot/"
+fi
 
 # earlycon=efifb: kernel log on the panel from setup_arch() on (patch 0001);
 # pd_ignore_unused: T6050 SErrors when genpd powers off unclaimed domains
@@ -67,9 +86,9 @@ BOOTARGS="earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused c
 
 cat > "$STAGE/boot-linux.sh" <<EOF
 #!/bin/sh
-# Boot the M5's kernel over the m1n1 proxy. Iterations are memory-only:
-# nothing on the M5's disk is touched, and a failed boot just needs a
-# power-cycle back into m1n1.
+# Boot the M5's kernel over the m1n1 proxy without changing the installed
+# boot object. The default cmdline mounts the existing SSD root read-write.
+# A failed boot may need a power-cycle back into m1n1.
 set -e
 cd "\${0%/*}"
 : "\${M1N1DEVICE:=/dev/m1n1}"
@@ -280,6 +299,10 @@ cat > "$STAGE/README.md" <<EOF
 Drives a MacBook Pro M5 Pro (J714s / T6050) sitting in m1n1 proxy mode
 from this Linux host over USB-C.
 
+Kernel variant: \`$KERNEL_FLAVOR\`. Kernel and DTB are from \`$BOOT\`;
+the chainloadable m1n1 is from \`$CHAIN\`. No installed boot object is changed.
+The default cmdline boots the existing internal SSD root, read-write.
+
 ## Host setup (Arch)
 
     sudo pacman -S --needed python python-pyserial python-construct
@@ -296,19 +319,29 @@ then re-login. Without the udev rule, pass \`M1N1DEVICE=/dev/ttyACM0\`.
 
 ## Boot Linux (the normal loop)
 
+    ./chainload.sh
+    python3 hv/nvme-proxy-probe.py
     ./boot-linux.sh
 
 Override the cmdline without repacking:
 
     BOOTARGS="... initcall_debug" ./boot-linux.sh   # start from the default in boot-linux.sh
 
-The kernel log is drawn on the M5's own panel below the marker bands by
-\`earlycon=efifb\` from early setup_arch() on, and by fbcon once simpledrm
-binds - no cable needed. \`keep_bootcon\` keeps both, so a crash before
-fbcon is still readable. m1n1's messages land on \`/dev/m1n1-sec\`
-(\`picocom -b 1500000 /dev/m1n1-sec\`).
+The console uses \`console=tty0\` on the Mac's panel: simpledrm on the
+default kernel, Apple DCP on the Aurora variant. Early marker bands are
+disabled in normal builds. The m1n1 USB serial device disappears at Linux
+handoff; reconnect over the USB network. If pyserial reports a non-TTY
+miniterm error after "Preparing to boot kernel", check the panel/network
+before trying another load. m1n1's own output uses \`/dev/m1n1-sec\`.
+
+For the Aurora DCP fallback, append \`nomodeset\` to the full default
+cmdline via \`BOOTARGS\`: simpledrm will keep the display. Firmware tables
+are build-specific; the tested stub is mBoot-20457.60.65.0.1 (27.3 beta 1).
 
 ## Boot Linux under the hypervisor (console over USB)
+
+This optional hypervisor path has not been qualified for the Aurora/DCP
+kernel; use the normal tethered loop above for that variant.
 
     ./chainload.sh                 # the patched m1n1 hosts the hypervisor
     hv/vuart-log.py /dev/m1n1-sec hv/vuart.log &   # or: picocom /dev/m1n1-sec
@@ -323,61 +356,25 @@ single core.
 ## Iterate on m1n1 itself
 
     ./chainload.sh                     # the bundled CHAINLOADING=1 build
-    ./chainload.sh boot/m1n1-chain-payload.bin   # m1n1 + kernel + dt + initramfs
+
+Only the default bundle may also contain \`boot/m1n1-chain-payload.bin\`,
+an optional prebuilt m1n1 + kernel + DT + initramfs payload. It is not
+included in the Aurora bundle.
 
 After \`chainload.sh\` the new m1n1 re-enumerates its USB gadget and drops
 back into proxy mode, so run \`./boot-linux.sh\` again afterwards.
 
-## Where we are: the kernel boots
+## Hardware baseline
 
-The previous build answered the big question: **red, green, blue and white
-all appeared.** Linux entered, enabled the MMU, parsed our devicetree,
-finished \`paging_init()\` and reached \`console_init()\` - so AIC, the
-timers, memblock and the DT are all working. This is not a boot failure
-any more; it is purely a console problem.
+With stub firmware mBoot-20457.60.65.0.1, all 15 usable CPUs start. Keep
+\`arm64.nowfxt kvm-arm.wfi_trap_policy=trap\`; the kernel saves registers
+around WFI, so \`idle=nop\` is no longer needed. The three fused-off CPU
+slots are not failed starts. Only older stub firmware needs \`maxcpus=1\`.
 
-So this build extends the bands along the console chain itself. Each band
-is 16 rows of 256 px down the left edge:
-
-| rows | colour | meaning |
-|------|--------|---------|
-| 0-15    | RED     | kernel entry (\`head.S\`, MMU **off**) - *confirmed* |
-| 16-31   | GREEN   | C running, MMU on, before the DT is parsed - *confirmed* |
-| 32-47   | BLUE    | \`paging_init()\` returned - *confirmed* |
-| 48-63   | WHITE   | reached \`console_init()\` - *confirmed* |
-| 64-79   | CYAN    | **simpledrm probed the framebuffer successfully** |
-| 80-95   | MAGENTA | **fbcon took over the console** |
-| 96-111  | ORANGE  | \`kernel_init\` is about to exec \`/init\` |
-| 112-127 | BLUE    | **/init is running** (painted from userspace via /dev/mem) |
-| 128-143 | WHITE   | /dev/fb0 or /dev/dri/card0 exists |
-| 144-159 | YELLOW  | painted by m1n1 before the jump (control) |
-
-Reading the new bands:
-
-- no cyan            -> simpledrm never bound the \`/chosen/framebuffer\`
-  node; the DRM device does not exist, so nothing can draw
-- cyan, no magenta   -> the framebuffer exists but fbcon never took the
-  console, so \`console=tty0\` stayed on dummycon
-- cyan + magenta, still no text -> the console is bound and drawing
-  somewhere we cannot see (wrong base/stride/format in the handed-over
-  framebuffer node)
-- orange + blue(112) -> userspace is alive; the kernel booted end to end
-  and only the console path is broken
-- blue(112) + white(128) -> even the device nodes are present
-
-If userspace comes up, \`/init\` also prints \`dmesg | grep drm\` and the
-contents of /dev/dri - worth photographing if any text ever appears.
-
-One caveat, stated up front so it is not mistaken for evidence: the red
-band is written with the MMU off, which is uncached - *unless* m1n1 enters
-the kernel with the MMU and caches still on, in which case that store can
-sit in a dirty cache line and never reach the panel. So "green but no red"
-means the entry store was absorbed, **not** that entry was skipped. Every
-other marker uses a Device-nGnRE mapping and has no such ambiguity.
-
-    ./chainload.sh && ./boot-linux.sh
-
-Then photograph the left edge of the panel and report which bands appear.
+The default kernel is the simpledrm fallback. Aurora adds the internal
+DCP display driver, brightness control and display off/on. Neither kernel
+provides GPU acceleration. See the repository's docs/bringup.md for the
+verified feature scope and experimental-kernel limitations.
 
 ## Dumping the final FDT
 
@@ -396,23 +393,22 @@ The runtime tree is **not** the on-disk \`devicetree.img4\`: iBoot patches
 it first (737280 bytes at runtime vs 835984 on disk), and the two disagree
 about this very DART. Analyze only the runtime dump.
 
-## Expected noise on first boot
+## Checking the boot
 
-m1n1 prints \`Starting CPU n …  Failed!\` for every secondary. SMP is known
-broken on T6050 - secondaries never execute the reset vector. It is
-bounded (100 ms per core, ~1.4 s total) and not fatal; that is why the
-kernel cmdline pins \`maxcpus=1\`.
-
-Success looks like the initramfs banner
-("omarchy-m5: userspace is alive on T6050") on the M5's panel.
+Look for 14 secondary CPUs reporting \`Started.\`, then a login console.
+Over SSH, check \`cat /sys/devices/system/cpu/online\` (0-14),
+\`findmnt /\` (the SSD root), and \`cat /sys/class/graphics/fb0/name\`.
+The Aurora DCP console reports \`appledrmfb\`; fallback reports
+\`simpledrmdrmfb\`. A failed root mount leaves the diagnostic initramfs
+shell rather than booting the SSD.
 EOF
 
 echo "==> Packing $OUT"
-tar -czf "$OUT" -C build tether
+tar -czf "$OUT" -C "${STAGE%/*}" "${STAGE##*/}"
 rm -rf "$STAGE"
 
 ls -lh "$OUT"
 echo
 echo "Copy to the ThinkPad:"
 echo "  scp $OUT <host>:"
-echo "  ssh <host> 'tar xzf tether-bundle.tar.gz && cat tether/README.md'"
+echo "  ssh <host> 'tar xzf ${OUT##*/} && cat ${STAGE##*/}/README.md'"

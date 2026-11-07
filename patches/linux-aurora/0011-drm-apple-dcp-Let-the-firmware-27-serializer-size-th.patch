@@ -1,0 +1,152 @@
+From 662a8f0324a2d49625250e331ace5b76e6a8e097 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 22:14:23 -0600
+Subject: [PATCH 11/13] drm/apple: dcp: Let the firmware 27 serializer size the
+ swap request
+
+The firmware 27 swap_submit (A458) record has been one fixed layout,
+struct dcp_swap_submit_req_v27 (0xff4 bytes), serialized by
+iomfb_serialize_present_v27() and completed by each caller with the
+brightness fields, and sent with sizeof() of that struct. Firmware 27.3
+changes the record and its size.
+
+Have iomfb_serialize_present_v27() take the DCP, copy the brightness
+fields from the H17P record itself, and return the record and its size,
+which the swap submission sends. The paired-DCP path, which runs on
+firmware 27.0 only, checks that it got the 27.0 record it splits.
+
+No change to the bytes sent on firmware 27.0 or 27.2.
+---
+ .../gpu/drm/apple/iomfb-peer-runtime-v27.inc    | 11 ++++++++---
+ drivers/gpu/drm/apple/iomfb_template.c          | 16 ++++------------
+ drivers/gpu/drm/apple/iomfb_v27.c               | 17 +++++++++++++++--
+ drivers/gpu/drm/apple/iomfb_v27.h               |  5 +++--
+ 4 files changed, 30 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
+index 04d6e68aa..bf9b8a787 100644
+--- a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
++++ b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
+@@ -60,6 +60,7 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
+ 	struct dcp_swap_start_resp_h17p *resp = data;
+ 	struct apple_dcp *peer = dcp_peer_scanout_v27(owner);
+ 	u32 id = owner->swap.h17p.swap.swap_id;
++	u32 size;
+ 
+ 	lockdep_assert_held(&owner->iomfb.lock);
+ 	if (IS_ERR_OR_NULL(peer) || peer != cookie || resp->ret || resp->swap_id != id) {
+@@ -73,9 +74,13 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
+ 		dcp_peer_swap_error(owner, "surface preparation", -EINVAL);
+ 		return;
+ 	}
+-	iomfb_serialize_present_v27(&owner->present_v27, &owner->swap.h17p);
+-	owner->present_v27.swap.brightness_update = owner->present_h17p.swap[0x354] & 1;
+-	owner->present_v27.swap.brightness_nits = get_unaligned_le64(owner->present_h17p.swap + 0x35e);
++	/* Peer scanout runs only on firmware 27.0 (dcp_peer_firmware_v27()),
++	 * whose record is present_v27; the split below assumes that layout. */
++	iomfb_serialize_present_v27(owner, &owner->swap.h17p, &size);
++	if (WARN_ON_ONCE(size != sizeof(owner->present_v27))) {
++		dcp_peer_swap_error(owner, "swap record layout", -EINVAL);
++		return;
++	}
+ 	dcp_peer_split_swap_v27(&owner->present_v27, &owner->peer_present_v27,
+ 				owner->peer_tiling.width);
+ 	if (dcp_present_retires(owner))
+diff --git a/drivers/gpu/drm/apple/iomfb_template.c b/drivers/gpu/drm/apple/iomfb_template.c
+index 165d864ff..673ba5206 100644
+--- a/drivers/gpu/drm/apple/iomfb_template.c
++++ b/drivers/gpu/drm/apple/iomfb_template.c
+@@ -362,6 +362,7 @@ static void dcp_swap_submit(struct apple_dcp *dcp, bool oob,
+ 			    dcp_callback_t cb, void *cookie)
+ {
+ 	const void *data = request;
++	u32 size = sizeof(*request);
+ 
+ 	if (dcp->hw.iomfb_method_profile != DCP_IOMFB_METHODS_H17G) {
+ 		iomfb_serialize_present_h17p(&dcp->present_h17p, request);
+@@ -371,23 +372,14 @@ static void dcp_swap_submit(struct apple_dcp *dcp, bool oob,
+ 			return;
+ 		}
+ #if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
+-		iomfb_serialize_present_v27(&dcp->present_v27, request);
+-		dcp->present_v27.swap.brightness_update =
+-			dcp->present_h17p.swap[0x354] & 1;
+-		dcp->present_v27.swap.brightness_nits =
+-			get_unaligned_le64(dcp->present_h17p.swap + 0x35e);
+-		data = &dcp->present_v27;
++		/* The record and its size depend on the firmware 27.x build. */
++		data = iomfb_serialize_present_v27(dcp, request, &size);
+ #else
+ 		data = &dcp->present_h17p;
+ #endif
+ 	}
+ 
+-	dcp_push(dcp, oob, &dcp_methods[dcpep_swap_submit],
+-#if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
+-		 sizeof(struct dcp_swap_submit_req_v27),
+-#else
+-		 sizeof(*request),
+-#endif
++	dcp_push(dcp, oob, &dcp_methods[dcpep_swap_submit], size,
+ 		 sizeof(struct dcp_swap_submit_resp_h17p), (void *)data, cb, cookie);
+ }
+ #else
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.c b/drivers/gpu/drm/apple/iomfb_v27.c
+index 5f8d1d949..db548a23e 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.c
++++ b/drivers/gpu/drm/apple/iomfb_v27.c
+@@ -12,9 +12,18 @@
+ #include "version_utils.h"
+ #include "dcp-internal.h"
+ 
+-void iomfb_serialize_present_v27(struct dcp_swap_submit_req_v27 *wire,
+-				const struct dcp_swap_submit_req_h17p *request)
++/*
++ * Serialize @request, with the backlight iomfb_apply_backlight_h17p() wrote
++ * to dcp->present_h17p, into this firmware build's swap_submit record.
++ * Returns the record; *size is its length, the A458 request size.
++ */
++const void *iomfb_serialize_present_v27(struct apple_dcp *dcp,
++					const struct dcp_swap_submit_req_h17p *request,
++					u32 *size)
+ {
++	struct dcp_swap_submit_req_v27 *wire = &dcp->present_v27;
++	const u8 *backlight = dcp->present_h17p.swap;
++
+ 	memset(wire, 0, sizeof(*wire));
+ 	memcpy(wire->swap.timestamp, request->swap.timestamp,
+ 	       sizeof(wire->swap.timestamp));
+@@ -23,10 +32,14 @@ void iomfb_serialize_present_v27(struct dcp_swap_submit_req_v27 *wire,
+ 	memcpy(&wire->swap.swap_id, &request->swap.swap_id,
+ 	       offsetof(struct dcp_swap_v27, reserved_158) -
+ 	       offsetof(struct dcp_swap_v27, swap_id));
++	wire->swap.brightness_update = backlight[0x354] & 1;
++	wire->swap.brightness_nits = get_unaligned_le64(backlight + 0x35e);
+ 	memcpy(wire->surf, request->surf, sizeof(wire->surf));
+ 	memcpy(wire->surf_iova, request->surf_iova,
+ 	       sizeof(*request) -
+ 	       offsetof(struct dcp_swap_submit_req_h17p, surf_iova));
++	*size = sizeof(*wire);
++	return wire;
+ }
+ 
+ struct dcp_h17p_hotplug_request {
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.h b/drivers/gpu/drm/apple/iomfb_v27.h
+index cc300dd30..53ccc2843 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.h
++++ b/drivers/gpu/drm/apple/iomfb_v27.h
+@@ -93,8 +93,9 @@ struct iomfb_v27_build {
+ /* The firmware 27.x build of a compat string; NULL if the driver has no table for it. */
+ const struct iomfb_v27_build *iomfb_v27_find_build(const char *compat);
+ 
+-void iomfb_serialize_present_v27(struct dcp_swap_submit_req_v27 *wire,
+-				const struct dcp_swap_submit_req_h17p *request);
++const void *iomfb_serialize_present_v27(struct apple_dcp *dcp,
++					const struct dcp_swap_submit_req_h17p *request,
++					u32 *size);
+ bool iomfb_v27_callback_size_valid(unsigned int tag, u32 input, u32 output);
+ void iomfb_firmware_state_cleanup_v27(void *data);
+ int iomfb_modeset_v27(struct apple_dcp *dcp, struct drm_crtc_state *state);
+-- 
+2.56.0
+

@@ -1,0 +1,51 @@
+From 96c096aaed2373defeeeaa380e67401037deb199 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@users.noreply.github.com>
+Date: Fri, 6 Nov 2026 22:53:15 -0600
+Subject: [PATCH] drm/apple: firmware 27 blends the X byte as alpha
+
+T6050's DCP firmware 27 (H17GSCD) applies the fourth byte of an XRGB8888
+surface as alpha, as H17P does: an XRGB console whose X is 0 stays black,
+while the same white with X = 0xff shows (J714s, firmware 27.3 beta 1:
+a frame with X = 0 in the top half and X = 0xff in the bottom half lit
+only the bottom half). Give firmware 27 the H17P treatment: fbdev uses
+ARGB8888 so fbcon writes opaque pixels, and the primary plane offers only
+formats with alpha so compositors write it.
+---
+ drivers/gpu/drm/apple/apple_drv.c | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/apple/apple_drv.c b/drivers/gpu/drm/apple/apple_drv.c
+index cf7ab94fa..c5ebbd8a6 100644
+--- a/drivers/gpu/drm/apple/apple_drv.c
++++ b/drivers/gpu/drm/apple/apple_drv.c
+@@ -170,11 +170,13 @@ static int apple_drm_fbdev_probe(struct drm_fb_helper *helper,
+ 		if (t8132_ext_crtc(crtc))
+ 			continue;
+ 		dcp = platform_get_drvdata(to_apple_crtc(crtc)->dcp);
+-		if (dcp->fw_compat == DCP_FIRMWARE_H17P) {
++		if (dcp->fw_compat == DCP_FIRMWARE_H17P ||
++		    dcp->fw_compat == DCP_FIRMWARE_V_27_0) {
+ 			/*
+ 			 * H17P applies the stored fourth byte as straight alpha,
+-			 * the H17G (M5) profile too: an XRGB console with X = 0
+-			 * stays black. ARGB makes fbcon write it opaque.
++			 * the H17G (M5) profile and T6050's firmware 27 too: an
++			 * XRGB console with X = 0 stays black. ARGB makes fbcon
++			 * write it opaque.
+ 			 */
+ 			sizes->surface_bpp = 32;
+ 			sizes->surface_depth = 32;
+@@ -924,7 +926,9 @@ static int apple_probe_per_dcp(struct device *dev,
+ 							supports_l10r,
+ 							supports_xrgb2101010,
+ 							dcp_data->hw.iomfb_method_profile ==
+-								DCP_IOMFB_METHODS_H17G,
++								DCP_IOMFB_METHODS_H17G ||
++							dcp_data->fw_compat ==
++								DCP_FIRMWARE_V_27_0,
+ 							plane_type, interchange,
+ 							supports_premultiplied);
+ 		}
+-- 
+2.56.0
+

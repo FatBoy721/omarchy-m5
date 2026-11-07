@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 21:50:46 -0600
+Subject: [PATCH 4/7] pmdomain: core: honour pd_ignore_unused in sync_state
+
+Unchanged from omarchy-m5 patches/linux/0004 (applies as-is to
+integration/aurora). With pd_ignore_unused on the command line,
+genpd_power_off_unused() leaves unclaimed domains on, but the provider
+sync_state paths still powered them off. On T6050 powering off an
+unclaimed PMGR domain raises an SError (and would kill m1n1's framebuffer).
+---
+ drivers/pmdomain/core.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/pmdomain/core.c b/drivers/pmdomain/core.c
+index a721a9363..c1398ecb3 100644
+--- a/drivers/pmdomain/core.c
++++ b/drivers/pmdomain/core.c
+@@ -3735,7 +3735,9 @@ void of_genpd_sync_state(struct device_node *np)
+ 		if (genpd->provider == of_fwnode_handle(np)) {
+ 			genpd_lock(genpd);
+ 			genpd->stay_on = false;
+-			genpd_power_off(genpd, false, false, 0);
++			/* pd_ignore_unused: keep what the bootloader enabled */
++			if (!pd_ignore_unused)
++				genpd_power_off(genpd, false, false, 0);
+ 			genpd_unlock(genpd);
+ 		}
+ 	}
+@@ -3763,7 +3765,8 @@ static void genpd_provider_sync_state(struct device *dev)
+ 	case GENPD_SYNC_STATE_SIMPLE:
+ 		genpd_lock(genpd);
+ 		genpd->stay_on = false;
+-		genpd_power_off(genpd, false, false, 0);
++		if (!pd_ignore_unused)
++			genpd_power_off(genpd, false, false, 0);
+ 		genpd_unlock(genpd);
+ 		break;
+ 

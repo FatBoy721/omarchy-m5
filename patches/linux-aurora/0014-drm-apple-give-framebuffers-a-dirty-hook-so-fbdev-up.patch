@@ -1,0 +1,38 @@
+From 0c3dd453129eb61a4eca5359ddf2d78d358a518f Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@users.noreply.github.com>
+Date: Fri, 6 Nov 2026 22:46:48 -0600
+Subject: [PATCH] drm/apple: give framebuffers a dirty hook so fbdev updates
+ are swapped
+
+The J714s internal panel self-refreshes: the DCP shows only what a swap
+presents. With drm_gem_fb_create, framebuffers have no dirty hook, so
+drm_fbdev_dma maps the scanout buffer directly and fbcon's drawing never
+causes a commit; the panel kept the last swapped frame (black at boot).
+drm_gem_fb_create_with_dirty makes fbdev-dma use a shadow buffer with
+deferred I/O and turns damage (and DRM_IOCTL_MODE_DIRTYFB) into atomic
+commits, which the DCP driver presents as swaps.
+---
+ drivers/gpu/drm/apple/apple_drv.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/apple/apple_drv.c b/drivers/gpu/drm/apple/apple_drv.c
+index 8d4399c3e..cf7ab94fa 100644
+--- a/drivers/gpu/drm/apple/apple_drv.c
++++ b/drivers/gpu/drm/apple/apple_drv.c
+@@ -558,7 +558,12 @@ static const struct drm_mode_config_funcs apple_mode_config_funcs = {
+ 	.atomic_state_free	= apple_atomic_state_free,
+ 	.atomic_check		= drm_atomic_helper_check,
+ 	.atomic_commit		= drm_atomic_helper_commit,
+-	.fb_create		= drm_gem_fb_create,
++	/*
++	 * Panels that self-refresh (the J714s internal panel) only show what
++	 * a swap presents, so writes to a scanned-out buffer need a commit:
++	 * the dirty hook turns fbdev damage and DIRTYFB into one.
++	 */
++	.fb_create		= drm_gem_fb_create_with_dirty,
+ };
+ 
+ static void apple_atomic_commit_tail(struct drm_atomic_commit *state)
+-- 
+2.56.0
+

@@ -1,0 +1,49 @@
+From 29dcf6c5b4942beca8175c7c8dbc626420a313b6 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 22:16:18 -0600
+Subject: [PATCH 12/13] dt-bindings: display: apple,dcp: Accept firmware 27.2
+ and 27.3 beta 1
+
+The T6050 DCP driver now has method tables for firmware 27.0, 27.2 and
+27.3 beta 1, chosen by apple,firmware-compat. Allow the compat values
+the loader writes for them: <27 0 0>, <27 2 0> and <27 2 98 1> (m1n1
+reports a beta as <major minor-1 98 n>, so 27.3 beta 1 is 27.2.98.1).
+---
+ .../bindings/display/apple,dcp.yaml           | 21 +++++++++++++++----
+ 1 file changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/Documentation/devicetree/bindings/display/apple,dcp.yaml b/Documentation/devicetree/bindings/display/apple,dcp.yaml
+index 533ec7aac..49e5df741 100644
+--- a/Documentation/devicetree/bindings/display/apple,dcp.yaml
++++ b/Documentation/devicetree/bindings/display/apple,dcp.yaml
+@@ -466,10 +466,23 @@ allOf:
+         - apple,firmware-compat
+       properties:
+         apple,firmware-compat:
+-          items:
+-            - const: 27
+-            - const: 0
+-            - const: 0
++          description:
++            The firmware 27 builds the driver has method tables for, as the
++            loader reports them; 27.2.98.1 is 27.3 beta 1.
++          oneOf:
++            - items:
++                - const: 27
++                - const: 0
++                - const: 0
++            - items:
++                - const: 27
++                - const: 2
++                - const: 0
++            - items:
++                - const: 27
++                - const: 2
++                - const: 98
++                - const: 1
+     else:
+       properties:
+         clocks:
+-- 
+2.56.0
+

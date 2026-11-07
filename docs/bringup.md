@@ -413,6 +413,169 @@ address works: `ssh bay@fe80::4d:35ff:fe00:2%<host gadget interface>`.
 If proxyclient doesn't enumerate, try the other USB-C ports - the gadget
 binds to one specific dwc3 port.
 
+### Aurora kernel with internal DCP (experimental)
+
+This is a separate Linux kernel, not the Aura Mach-O Stage 1 trial. It
+keeps the installed raw m1n1 and the SSD root filesystem. The default
+`make kernel` still builds `vendor/linux`; `make kernel-aurora` builds
+`build/linux-aurora` out of tree in `build/linux-aurora-out`.
+
+The source is pinned to aurora-silicon/linux
+`5b0f106acdd71de11400464adfeb8c87a83b20b0` (PR #1012), plus the ordered
+series in `patches/linux-aurora/`. Configuration is
+`configs/aurora-j714s.config`, merged after arm64 defconfig and
+`asahi.config`. Preparation verifies the ordered patch identities, applies
+only a missing suffix, and refuses conflicting tracked changes or history;
+it never resets a source checkout.
+
+From an already configured bring-up host:
+
+```sh
+scripts/apply-patches.sh
+CHAINLOADING=1 scripts/build-m1n1.sh
+cp vendor/m1n1/build/m1n1.bin build/m1n1-chain.bin
+CHAINLOADING=0 scripts/build-m1n1.sh
+make kernel-aurora
+make initramfs
+KERNEL_FLAVOR=aurora scripts/mktether.sh
+# -> build/tether-aurora-bundle.tar.gz, containing tether-aurora/
+```
+
+The m1n1 rebuild includes patches 0007 (reserve live coprocessor log
+buffers) and 0008 (internal DCP handoff). It is uploaded to RAM, **not**
+enrolled with `kmutil`. The exact enrolled Stage 1 rollback image remains
+untouched. To package another chain image explicitly, set
+`M1N1_CHAIN=/path/to/chain.bin`.
+
+Extract the Aurora bundle into its own directory on the tether host.
+With the Mac in its resident m1n1 proxy:
+
+```sh
+cd tether-aurora
+./chainload.sh
+python3 hv/nvme-proxy-probe.py
+python3 hv/wdt-arm.py 120
+./boot-linux.sh
+```
+
+The NVMe preflight performs the existing cold-ANS preparation and reads
+the GPT; it does not write the SSD. Linux subsequently mounts the existing
+root read-write. USB serial loss at handoff is expected; use the panel
+and USB-network SSH to check the result. See the IPv6 fallback above if
+host routing prevents access to `10.55.0.2`.
+
+**Display contract.** The tested stub is mBoot-20457.60.65.0.1
+(macOS 27.3 beta 1, DCP firmware compatibility `27.2.98.1`). Method tags
+and swap layouts differ between 27.x builds; never label a new build as
+27.0 just to make the driver bind. m1n1 checks the running DCP, power
+domains, locked DART tables and ADT/DT addresses before enabling the nodes.
+It does not write those DCP, DART or PMGR registers. Unknown/invalid handoff
+state leaves the nodes disabled; the driver rejects unknown method tables.
+
+The 27.3 method map and request layout were derived from firmware dispatch,
+size checks and field accesses, cross-checked with 27.0/27.2, then exercised
+on this J714s. Patch 0013 handles the enlarged A458 swap request and shifted
+method tags. Patch 0014 submits fbdev damage to the self-refreshing panel.
+Patch 0015 uses ARGB and alpha-capable primary-plane formats: in a split
+white-frame test only pixels with the fourth byte set to `0xff` were
+visible, while `0x00` stayed black. Firmware binaries and runtime ADTs
+are not included in the patch series.
+
+**Observed on the Mac:** all 15 CPUs, SSD root, USB SSH, a readable
+`appledrmfb` console, brightness changes through `apple-panel-bl`, and
+display blank/unblank. The panel is 3024x1890 below the notch. Brightness
+and display off/on were confirmed visually, not inferred from sysfs.
+Awake SMC power averages at the console were 9.09 W at brightness setting 300 and
+5.55 W blanked (15 samples each, keyboard light 200/255); this is not a
+sleep-power measurement. A patched Hyprland desktop is now verified below;
+lid suspend/resume still needs qualification on this kernel. There is no
+GPU acceleration.
+
+**Input configuration:** both `CONFIG_HID_MAGICMOUSE` and
+`CONFIG_HID_APPLE_MTP_HAPTIC` must resolve to `y`. Aurora's optional haptic
+dependency caps magicmouse at `m` when haptics is `m`; that silently left
+the first DCP builds without a trackpad driver or firmware upload, even
+though the fragment requested magicmouse `y`. This image does not ship
+modules, so the build now checks the resolved input-driver configuration.
+Do not add an AFE reset to work around a driver that has not bound.
+The rebuilt tether bundle was boot-tested as Linux
+`7.3.0-g96c096aaed23 #6`: magicmouse initialized MTP haptics, the
+multi-touch interface became ready, and a physical swipe/click produced
+222 position-axis events plus a left-button press and release. These were
+read from the real trackpad event device; no synthetic input was injected.
+The same packaged boot retained all 15 CPUs, SSD root and `appledrmfb`.
+
+**Hyprland on the alpha-only DCP plane:** the packaged Hyprland 0.57.1
+crashed with SIGABRT in `Render::IFramebuffer::alloc`, including in safe
+mode. The Lua config passed `--verify-config` and was not the cause.
+Initial mode tests assumed `XRGB8888`, but this primary plane advertises
+`ARGB8888`/`ABGR8888`, not XRGB. GBM rejected every initial mode-test buffer,
+leaving zero-sized monitor resources that hit the framebuffer assertion.
+`start-hyprland` then repeatedly relaunched the same failing binary.
+
+[`patches/hyprland/0001-output-support-alpha-only-scanout.patch`](../patches/hyprland/0001-output-support-alpha-only-scanout.patch)
+targets upstream v0.57.1, commit
+`acc1aa0bfd4bd575dcb0f76c35ccf12b660a1ab9`. It chooses an advertised
+eight-bit format before mode testing, retains the existing XRGB/XBGR
+preference where supported, and adds ARGB/ABGR candidates to the eight-
+and ten-bit format tests and diagnostic names. Do not restore false XRGB
+advertising in the kernel or reinterpret XRGB buffers as ARGB.
+
+The exercised Release build used Aquamarine 0.16.0, hyprutils 0.14.3,
+hyprgraphics 0.6.0, hyprcursor 0.1.13 and hyprlang 0.6.8 from the Mac's
+sysroot. It used hyprland-protocols 0.8.0 at
+`cd1aba6bd78775825eb230b3a4274c48b6705eb7`, the pinned udis86 submodule,
+and CMake's Glaze v7.2.0 dependency. CMake options were `Release`,
+`NO_HYPRPM=ON`, `BUILD_TESTING=OFF`; the built target was `Hyprland`.
+The cross-compiler was GCC 16.2.0, but its newer C++ headers introduced a
+symbol absent from the Mac's libstdc++. The successful build used
+`-nostdinc++` and the matching GCC 16.1.1 C++ headers, including the target
+and `backward` include directories, from the cached package
+`gcc-16.1.1+r12+g301eb08fa2c5-1-aarch64.pkg.tar.xz`.
+Rebuild against the installed target dependency versions, not arbitrary
+host headers or libraries.
+
+The tested binary is installed at `/usr/local/bin/Hyprland`, with
+`/usr/local/bin/hyprland` pointing to it. `/usr/bin/Hyprland`, installed
+packages, and `~/.config/hypr/hyprland.lua` were not changed. Both command
+names resolve to the local build, and the regular `start-hyprland`
+launcher was exercised without a custom path. In an already-open shell,
+clear any cached old executable path before the next launch:
+
+```sh
+hash -r
+start-hyprland
+```
+
+This local override survives package upgrades, so rebuild or retire it
+when the target libraries or upstream format handling change. To return
+to the packaged binary, first exit Hyprland, remove only
+`/usr/local/bin/hyprland` and `/usr/local/bin/Hyprland`, then run `hash -r`.
+The unpatched 0.57.1 binary still needs the simpledrm/default-kernel
+fallback; removing the override alone does not fix its DCP crash.
+
+**Desktop proof:** on the same `7.3.0-g96c096aaed23 #6` boot, the patched
+compositor started with the original config, reported `eDP-2` at
+3024x1890 / 120 Hz / scale 2 with `currentFormat: ARGB8888`, and produced
+no config errors. DRM reported an active primary-plane framebuffer at
+that mode. Native Wayland Foot and Kitty windows rendered in captured
+desktop images, and the user confirmed the desktop was visible on the
+physical panel. The final installed build was then restarted through
+the regular launcher and checked again with a native Kitty window.
+Keyboard and MTP trackpad devices were enumerated by Hyprland.
+This is basic desktop bring-up, not a performance, suspend or GPU test.
+Aquamarine still logs failures to create its auxiliary GPU renderer on
+this render-node-less device; those messages did not prevent software
+composition and DCP scanout and were not hidden.
+
+**Fallback:** append `nomodeset` to the full cmdline from `boot-linux.sh`
+using `BOOTARGS` to keep simpledrm on the Aurora kernel. To return to the
+original kernel, reboot/power-cycle to m1n1 and use the default
+`build/tether-bundle.tar.gz` instead. Its kernel/DTB are never replaced by
+`make kernel-aurora`. The new m1n1 handoff was also boot-tested with the
+default kernel: all 15 CPUs, SSD root, simpledrm and trackpad returned.
+No boot-policy change is needed in either direction.
+
 ### Standalone (no second machine - one 1TR ceremony per image)
 
 m1n1 parses everything appended after its own image as a payload chain
@@ -469,10 +632,12 @@ keyboard/trackpad and the USB gadget.
 Cores idle in WFI since patch 0012: 5.6 W in total and 1.6 W for the SoC
 ("Heatpipe Power"), against 15.3 W and 9.7 W with `idle=nop` (SMC sensors,
 same kernel, idle at the console with the panel and keyboard backlight on).
-Nothing turns the panel off yet (that needs the DCP). Patch 0013 registers
-cpuidle, so s2idle freezes the tick and timekeeping: on 2026-11-07, after a
-lid sleep of about 23 s, `CLOCK_BOOTTIME - CLOCK_MONOTONIC` was 23.5 s
-(`suspend_stats` success 1, fail 0; all 15 CPUs back). With `idle=nop`
+The default simpledrm kernel does not turn the panel off; the experimental
+Aurora/DCP kernel can blank it, but has not yet been qualified for lid sleep.
+Patch 0013 registers cpuidle, so s2idle freezes the tick and timekeeping:
+on 2026-11-07, after a lid sleep of about 23 s,
+`CLOCK_BOOTTIME - CLOCK_MONOTONIC` was 23.5 s (`suspend_stats` success 1,
+fail 0; all 15 CPUs back). With `idle=nop`
 timekeeping kept running and a long sleep tripped systemd's service watchdogs
 (journald was restarted on wake).
 

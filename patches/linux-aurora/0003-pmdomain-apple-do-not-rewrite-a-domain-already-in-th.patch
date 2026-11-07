@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 21:50:46 -0600
+Subject: [PATCH 3/7] pmdomain: apple: do not rewrite a domain already in the
+ wanted auto-PM state
+
+Ported from omarchy-m5 patches/linux/0003 onto integration/aurora's probe,
+which now also has apple,no-auto-pm (want = 0) and the T8132
+inherited/firmware-owned/no_auto_enable cases (untouched).
+
+On T6050 the probe-time read-modify-write of a domain that the bootloader
+already put under auto-PM only stores 0 to the write-1-to-clear flags,
+yet the store, issued while the domain is auto-gated, never completes and
+hangs the bus. Skip it when the AUTO_ENABLE bit already matches.
+---
+ drivers/pmdomain/apple/pmgr-pwrstate.c | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/pmdomain/apple/pmgr-pwrstate.c b/drivers/pmdomain/apple/pmgr-pwrstate.c
+index 5be473160..43f084609 100644
+--- a/drivers/pmdomain/apple/pmgr-pwrstate.c
++++ b/drivers/pmdomain/apple/pmgr-pwrstate.c
+@@ -605,10 +605,22 @@ static int apple_pmgr_ps_probe(struct platform_device *pdev)
+ 		ps->genpd.flags |= GENPD_FLAG_DEFER_OFF | GENPD_FLAG_ACTIVE_WAKEUP;
+ 	}
+ 
+-	/* Turn on auto-PM if the domain is already on, unless it must stay off */
+-	if (active && !ps->firmware_owned && !ps->inherited_on && !ps->no_auto_enable)
+-		regmap_update_bits(regmap, ps->offset, APPLE_PMGR_FLAGS | APPLE_PMGR_AUTO_ENABLE,
+-				   ps->no_auto_pm ? 0 : APPLE_PMGR_AUTO_ENABLE);
++	/*
++	 * Turn on auto-PM if the domain is already on, unless it must stay off.
++	 * A domain whose auto-PM bit is already as wanted needs no write: the
++	 * update would only store 0 to the write-1-to-clear flags. On T6050 such
++	 * a store, issued while the bootloader has the domain auto-gated, never
++	 * completes and hangs the bus.
++	 */
++	if (active && !ps->firmware_owned && !ps->inherited_on && !ps->no_auto_enable) {
++		u32 want = ps->no_auto_pm ? 0 : APPLE_PMGR_AUTO_ENABLE;
++		u32 reg;
++
++		if (regmap_read(regmap, ps->offset, &reg) ||
++		    (reg & APPLE_PMGR_AUTO_ENABLE) != want)
++			regmap_update_bits(regmap, ps->offset,
++					   APPLE_PMGR_FLAGS | APPLE_PMGR_AUTO_ENABLE, want);
++	}
+ 
+ 	ret = pm_genpd_init(&ps->genpd, NULL, !active);
+ 	if (ret < 0) {

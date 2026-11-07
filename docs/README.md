@@ -24,6 +24,10 @@ skip). This index is the fuller map.
 - **[`bringup.md`](bringup.md)** - the tethered dev loop (`make` targets, macOS
   quirks) and the **one-time on-device install** (partitioning + `kmutil`),
   including resize / re-install.
+- **[Aurora kernel with internal DCP](bringup.md#aurora-kernel-with-internal-dcp-experimental)** -
+  pinned kernel/patch series, separate tether bundle, firmware-build-specific
+  display support and the simpledrm/default-kernel fallback. This is separate
+  from the optional Aura Mach-O Stage 1 trial.
 
 ## Background / planning
 

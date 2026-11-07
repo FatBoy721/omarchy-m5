@@ -1,0 +1,222 @@
+From 3552f2b9c3f61a9fb074b518707c5712ac2dd807 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 22:12:34 -0600
+Subject: [PATCH 09/13] drm/apple: dcp: Choose the firmware 27 method table by
+ firmware build
+
+Firmware 27.2 renumbered the IOMFB AP methods: the IOMobileFramebufferAP
+methods moved up by 50, and set_create_DFB, vi_set_temperature_hint and
+dfb_ready_query by one. The UPPipe methods are unchanged. A DCP running
+27.2 that is sent a 27.0 tag panics ("link_rpc_lookup callback not
+found").
+
+Keep a method table per 27.x build, described by a struct
+iomfb_v27_build, and choose it at probe from apple,firmware-compat
+("27.0.0" or "27.2.0"). A firmware-compat with no table is refused at
+probe with a message naming it, where a 27.x string other than 27.0.0
+was refused silently before. The template's calls and the paired-DCP
+swap resolve their tags through dcp->v27_build.
+
+The 27.2 table is PR #894's dcp_methods_27_2; its A478 entry is this
+tree's iomfbep_set_brightness_correction (PR #894: dcpep_pipe_set_428).
+Static analysis of the 27.2 t605xdcp image agrees with all 41 entries,
+including A385 dfb_ready_query.
+
+Based on aurora-silicon/linux PR #894 commit 6728f8c61c59 ("drm/apple:
+dcp: Choose the firmware 27 method table by firmware build") by Jeff
+Queisser <funkzy@users.noreply.github.com>, adapted to a per-build
+descriptor so later builds can carry their swap layout with the table.
+
+Co-developed-by: Jeff Queisser <funkzy@users.noreply.github.com>
+---
+ drivers/gpu/drm/apple/dcp-internal.h          |  2 +
+ drivers/gpu/drm/apple/dcp.c                   | 13 +++-
+ .../gpu/drm/apple/iomfb-peer-runtime-v27.inc  |  4 +-
+ drivers/gpu/drm/apple/iomfb_v27.c             | 78 ++++++++++++++++++-
+ drivers/gpu/drm/apple/iomfb_v27.h             | 10 +++
+ 5 files changed, 103 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/apple/dcp-internal.h b/drivers/gpu/drm/apple/dcp-internal.h
+index ba5e0574c..07d919f7e 100644
+--- a/drivers/gpu/drm/apple/dcp-internal.h
++++ b/drivers/gpu/drm/apple/dcp-internal.h
+@@ -452,6 +452,8 @@ struct apple_dcp {
+ 
+ 	/* firmware version and compatible firmware version */
+ 	enum dcp_firmware_version fw_compat;
++	/* Firmware 27.x: this build's method tags (iomfb_v27_find_build()). */
++	const struct iomfb_v27_build *v27_build;
+ 	/* Bumped by every iomfb poweron; see afk_compact_slot(). */
+ 	u32 afk_power_gen;
+ 	bool external;
+diff --git a/drivers/gpu/drm/apple/dcp.c b/drivers/gpu/drm/apple/dcp.c
+index d6fd74fd7..dda0ef9df 100644
+--- a/drivers/gpu/drm/apple/dcp.c
++++ b/drivers/gpu/drm/apple/dcp.c
+@@ -4949,8 +4949,11 @@ static enum dcp_firmware_version dcp_check_firmware_version(struct device *dev)
+ 
+ 	if (hw->firmware_compat == DCP_FIRMWARE_V_27_0) {
+ 		ret = dcp_read_fw_version(dev, "apple,firmware-compat", compat_str);
+-		if (ret < 0 || strcmp(compat_str, "27.0.0"))
++		if (ret < 0 || !iomfb_v27_find_build(compat_str)) {
++			dev_err(dev, "DCP firmware-compat %s has no 27.x method table\n",
++				ret < 0 ? "missing" : compat_str);
+ 			return DCP_FIRMWARE_UNKNOWN;
++		}
+ 		return DCP_FIRMWARE_V_27_0;
+ 	}
+ 
+@@ -6019,6 +6022,14 @@ static int dcp_platform_probe_pipe(struct platform_device *pdev)
+ 	iomfb_queue_init(dcp);
+ 
+ 	dcp->fw_compat = fw_compat;
++	if (fw_compat == DCP_FIRMWARE_V_27_0) {
++		char compat_str[DCP_FW_VERSION_STR_LEN];
++
++		/* Checked by dcp_check_firmware_version(). */
++		dcp_read_fw_version(dev, "apple,firmware-compat", compat_str);
++		dcp->v27_build = iomfb_v27_find_build(compat_str);
++		dev_info(dev, "firmware 27.x build %s\n", dcp->v27_build->compat);
++	}
+ 	/*
+ 	 * Probe-lifetime like the desktop state: component bind opens a devres
+ 	 * group on this device and releases it on failure or unbind.
+diff --git a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
+index c2a681328..04d6e68aa 100644
+--- a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
++++ b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
+@@ -83,12 +83,12 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
+ 	dcp_peer_swap_armed_v27(owner, id);
+ 	trace_iomfb_swap_submit(owner, id);
+ 	trace_iomfb_swap_submit(peer, id);
+-	dcp_push(owner, false, &dcp_methods[dcpep_swap_submit], sizeof(owner->present_v27),
++	dcp_push(owner, false, &owner->v27_build->methods[dcpep_swap_submit], sizeof(owner->present_v27),
+ 		 sizeof(struct dcp_swap_submit_resp_v27), &owner->present_v27,
+ 		 dcp_peer_submitted, owner);
+ 	if (READ_ONCE(owner->crashed))
+ 		return;
+-	dcp_push(peer, false, &dcp_methods[dcpep_swap_submit], sizeof(owner->peer_present_v27),
++	dcp_push(peer, false, &peer->v27_build->methods[dcpep_swap_submit], sizeof(owner->peer_present_v27),
+ 		 sizeof(struct dcp_swap_submit_resp_v27), &owner->peer_present_v27,
+ 		 dcp_peer_submitted, owner);
+ 	if (READ_ONCE(peer->crashed))
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.c b/drivers/gpu/drm/apple/iomfb_v27.c
+index c6df81bf8..bbcf62e6a 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.c
++++ b/drivers/gpu/drm/apple/iomfb_v27.c
+@@ -51,7 +51,8 @@ static_assert(offsetof(struct dcp_swap_v27, brightness_update) == 0x354);
+ static_assert(offsetof(struct dcp_swap_v27, brightness_nits) == 0x35e);
+ static_assert(sizeof(struct dcp_swap_v27) == 0x6e0);
+ 
+-static const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
++/* Firmware 27.0, the build Aurora's t6050-gpu table was written for. */
++static const struct dcp_method_entry dcp_methods_27_0[dcpep_num_methods] = {
+ 	IOMFB_METHOD("A000", dcpep_late_init_signal),
+ 	IOMFB_METHOD("A027", dcpep_setup_video_limits),
+ 	IOMFB_METHOD("A136", iomfbep_a131_pmu_service_matched),
+@@ -95,6 +96,81 @@ static const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
+ 	IOMFB_METHOD("A483", dcpep_register_dfb_surface),
+ };
+ 
++/*
++ * Firmware 27.2 renumbered the AP methods: UnifiedPipeline2 grew into
++ * A400/A401, so IOMobileFramebufferAP moved up by 50 (start_signal A451,
++ * get_color_remap_mode A477), and set_create_DFB, vi_set_temperature_hint
++ * and dfb_ready_query up by one. The UPPipe A0xx and A1xx IDs are
++ * unchanged. The firmware rejects an unknown tag with a panic
++ * ("link_rpc_lookup callback not found").
++ */
++static const struct dcp_method_entry dcp_methods_27_2[dcpep_num_methods] = {
++	IOMFB_METHOD("A000", dcpep_late_init_signal),
++	IOMFB_METHOD("A027", dcpep_setup_video_limits),
++	IOMFB_METHOD("A136", iomfbep_a131_pmu_service_matched),
++	IOMFB_METHOD("A137", iomfbep_a132_backlight_service_matched),
++	IOMFB_METHOD("A390", dcpep_set_create_dfb),
++	IOMFB_METHOD("A391", iomfbep_a358_vi_set_temperature_hint),
++	IOMFB_METHOD("A451", dcpep_start_signal),
++	IOMFB_METHOD("A456", dcpep_swap_start),
++	IOMFB_METHOD("A458", dcpep_swap_submit),
++	IOMFB_METHOD("A461", dcpep_set_display_device),
++	IOMFB_METHOD("A462", dcpep_is_main_display),
++	IOMFB_METHOD("A463", dcpep_set_digital_out_mode),
++	IOMFB_METHOD("A473", iomfbep_set_matrix),
++	IOMFB_METHOD("A477", iomfbep_get_color_remap_mode),
++	IOMFB_METHOD("A500", dcpep_set_parameter_dcp),
++	IOMFB_METHOD("A504", dcpep_create_default_fb),
++	IOMFB_METHOD("A037", dcpep_get_dfb_compression_info),
++	IOMFB_METHOD("A036", dcpep_get_dfb_info),
++	IOMFB_METHOD("A103", dcpep_get_dfb_layout),
++	IOMFB_METHOD("A503", dcpep_get_dfb_state),
++	IOMFB_METHOD("A104", dcpep_set_dfb_dimensions),
++	IOMFB_METHOD("A105", dcpep_commit_dfb_info),
++	IOMFB_METHOD("A035", dcpep_dfb_query),
++	IOMFB_METHOD("A385", dcpep_dfb_ready_query),
++	IOMFB_METHOD("A353", dcpep_pipe_query_353),
++	IOMFB_METHOD("A352", dcpep_pipe_set_352),
++	IOMFB_METHOD("A465", dcpep_pipe_cfg_415),
++	IOMFB_METHOD("A033", dcpep_pipe_cfg_031),
++	IOMFB_METHOD("A464", dcpep_pipe_cfg_414),
++	IOMFB_METHOD("A539", dcpep_pipe_query_478),
++	IOMFB_METHOD("A535", dcpep_pipe_query_474),
++	IOMFB_METHOD("A537", dcpep_pipe_set_476),
++	IOMFB_METHOD("A478", iomfbep_set_brightness_correction),
++	IOMFB_METHOD("A508", dcpep_enable_disable_video_power_savings),
++	IOMFB_METHOD("A516", dcpep_first_client_open),
++	IOMFB_METHOD("A517", iomfbep_last_client_close),
++	IOMFB_METHOD("A525", dcpep_set_display_refresh_properties),
++	IOMFB_METHOD("A528", dcpep_flush_supports_power),
++	IOMFB_METHOD("A529", iomfbep_abort_swaps_dcp),
++	IOMFB_METHOD("A534", dcpep_set_power_state),
++	IOMFB_METHOD("A533", dcpep_register_dfb_surface),
++};
++
++/* The firmware 27.x builds, by the loader's apple,firmware-compat. */
++static const struct iomfb_v27_build iomfb_v27_builds[] = {
++	{
++		.compat = "27.0.0",
++		.methods = dcp_methods_27_0,
++	},
++	{
++		.compat = "27.2.0",
++		.methods = dcp_methods_27_2,
++	},
++};
++
++const struct iomfb_v27_build *iomfb_v27_find_build(const char *compat)
++{
++	for (unsigned int i = 0; i < ARRAY_SIZE(iomfb_v27_builds); i++)
++		if (!strcmp(compat, iomfb_v27_builds[i].compat))
++			return &iomfb_v27_builds[i];
++	return NULL;
++}
++
++/* The template's calls resolve through the table probe chose for this build. */
++#define dcp_methods (dcp->v27_build->methods)
++
+ #define iomfb_modeset_h17p iomfb_modeset_v27
+ #define iomfb_flush_h17p iomfb_flush_v27
+ #define iomfb_poweron_h17p iomfb_poweron_v27
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.h b/drivers/gpu/drm/apple/iomfb_v27.h
+index ac1ded5eb..065ef483a 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.h
++++ b/drivers/gpu/drm/apple/iomfb_v27.h
+@@ -78,6 +78,16 @@ static_assert(offsetof(struct dcp_swap_submit_req_v27, swap_null) == 0xfea);
+ static_assert(offsetof(struct dcp_swap_v27, brightness_update) == 0x354);
+ static_assert(offsetof(struct dcp_swap_v27, brightness_nits) == 0x35e);
+ 
++/* What differs between the firmware 27.x builds the driver knows. */
++struct iomfb_v27_build {
++	/* The loader's apple,firmware-compat, as dcp_read_fw_version() prints it. */
++	const char *compat;
++	const struct dcp_method_entry *methods;
++};
++
++/* The firmware 27.x build of a compat string; NULL if the driver has no table for it. */
++const struct iomfb_v27_build *iomfb_v27_find_build(const char *compat);
++
+ void iomfb_serialize_present_v27(struct dcp_swap_submit_req_v27 *wire,
+ 				const struct dcp_swap_submit_req_h17p *request);
+ bool iomfb_v27_callback_size_valid(unsigned int tag, u32 input, u32 output);
+-- 
+2.56.0
+

@@ -1,0 +1,193 @@
+From 95b643c4c5b50f824a98e71af5b970b719a2b2da Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 22:13:18 -0600
+Subject: [PATCH 10/13] drm/apple: dcp: Keep the dual-DCP bring-up paths to
+ firmware 27.0
+
+The opt-in dual-DCP (VFTG peer) bring-up code in dcp-peer-*-v27.inc
+hard-codes firmware 27.0's IOMobileFramebufferAP tags: swap_start A406,
+swap_submit A408, set_digital_out_mode A413, set_matrix A423,
+brightness correction A428 and set_power_state A484, and it builds 27.0
+swap records. From 27.2 on, A406, A408, A413, A423 and A428 fall in the
+empty A402-A449 range (lookup failure, DCP panic), and A484 is an
+unrelated method. Now that 27.2 and later builds are accepted at probe,
+those paths must not reach them.
+
+The paths are off by default (peer_allocation_probe and peer_scanout
+are both false). Mark the builds the paths were written for in
+struct iomfb_v27_build (only 27.0), and replace each firmware check in
+the peer code with dcp_peer_firmware_v27(), so that with the module
+parameters set a 27.2 or later DCP is never reserved as or paired with
+a peer, and its peer sysfs probes refuse with -EBUSY.
+---
+ drivers/gpu/drm/apple/dcp-internal.h               | 12 ++++++++++++
+ drivers/gpu/drm/apple/dcp-peer-probe-v27.inc       |  2 +-
+ drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc     |  4 ++--
+ drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc  |  8 ++++----
+ drivers/gpu/drm/apple/dcp-peer-v27.inc             |  6 +++---
+ drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc |  4 ++--
+ drivers/gpu/drm/apple/iomfb_v27.c                  |  1 +
+ drivers/gpu/drm/apple/iomfb_v27.h                  |  5 +++++
+ 8 files changed, 30 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/apple/dcp-internal.h b/drivers/gpu/drm/apple/dcp-internal.h
+index 07d919f7e..12926a2bd 100644
+--- a/drivers/gpu/drm/apple/dcp-internal.h
++++ b/drivers/gpu/drm/apple/dcp-internal.h
+@@ -1087,6 +1087,18 @@ static inline bool dcp_surface_element_geometry(const struct apple_dcp *dcp)
+ 	return dcp->fw_compat == DCP_FIRMWARE_V_27_0;
+ }
+ 
++/*
++ * Whether the opt-in dual-DCP (VFTG peer) bring-up paths may run: the
++ * dcp-peer-*-v27.inc files hard-code firmware 27.0's method tags (A406,
++ * A408, A413, A423, A428, A484) and its swap record. From 27.2 on, most of
++ * those tags do not exist and A484 is another method; an unknown tag
++ * panics the DCP.
++ */
++static inline bool dcp_peer_firmware_v27(const struct apple_dcp *dcp)
++{
++	return dcp->fw_compat == DCP_FIRMWARE_V_27_0 && dcp->v27_build->peer;
++}
++
+ /*
+  * Whether @pa, a physical address the DCP firmware placed a buffer at, can be
+  * DRAM. On Apple SoCs every device register window lies below DRAM, so an
+diff --git a/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc b/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc
+index 33def11c7..ac69ba33a 100644
+--- a/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc
++++ b/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc
+@@ -46,7 +46,7 @@ static ssize_t peer_setup_test_store(struct device *dev,
+ 		guard(mutex)(&dcp_peer_lock);
+ 		if (!dcp->peer_owner || dcp->peer_owner->peer_reserved != dcp ||
+ 		    dcp->peer_unbinding || dcp->crashed || !dcp->active ||
+-		    dcp->fw_compat != DCP_FIRMWARE_V_27_0 ||
++		    !dcp_peer_firmware_v27(dcp) ||
+ 		    dcp->fixed_phy || dcp->nr_typec_routes ||
+ 		    (dcp->connector && dcp->connector->connected) ||
+ 		    dcp->ch_cmd.depth || dcp->ch_cb.depth || dcp->ch_async.depth ||
+diff --git a/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc b/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc
+index b1f99d6dd..953b32a41 100644
+--- a/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc
++++ b/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc
+@@ -2,7 +2,7 @@
+ /* Kept opt-in while paired DRM lifecycle is being validated on T6050. */
+ static bool peer_scanout;
+ module_param(peer_scanout, bool, 0444);
+-MODULE_PARM_DESC(peer_scanout, "Enable firmware27 paired DRM scanout bring-up");
++MODULE_PARM_DESC(peer_scanout, "Enable firmware 27.0 paired DRM scanout bring-up");
+ 
+ static bool dcp_peer_transport_idle(struct apple_dcp *dcp)
+ {
+@@ -17,7 +17,7 @@ int dcp_peer_modeset_v27(struct apple_dcp *dcp, u32 timing, u32 color, bool vrr)
+ 	int ret = -EOPNOTSUPP;
+ 
+ 	if (!peer_scanout || !peer_allocation_probe ||
+-	    dcp->fw_compat != DCP_FIRMWARE_V_27_0)
++	    !dcp_peer_firmware_v27(dcp))
+ 		return ret;
+ 	if (timing > U32_MAX - 10000 || color > U32_MAX - 10000)
+ 		return -EINVAL;
+diff --git a/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc b/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc
+index f6c8ced43..1c3964fec 100644
+--- a/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc
++++ b/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc
+@@ -183,8 +183,8 @@ static ssize_t peer_swap_test_store(struct device *dev,
+ 		    !peer->peer_tiling.modeset_complete || !dcp->crtc || !peer->crtc ||
+ 		    !dcp->crtc->base.state || !peer->crtc->base.state ||
+ 		    dcp->crtc->base.state->active || peer->crtc->base.state->active ||
+-		    dcp->fw_compat != DCP_FIRMWARE_V_27_0 ||
+-		    peer->fw_compat != DCP_FIRMWARE_V_27_0 ||
++		    !dcp_peer_firmware_v27(dcp) ||
++		    !dcp_peer_firmware_v27(peer) ||
+ 		    !device_trylock(peer->dev)) {
+ 			ret = -EBUSY;
+ 			goto out;
+@@ -224,8 +224,8 @@ static ssize_t peer_stop_test_store(struct device *dev,
+ 		    !dcp_peer_video_idle(peer) || !dcp->crtc || !peer->crtc ||
+ 		    !dcp->crtc->base.state || !peer->crtc->base.state ||
+ 		    dcp->crtc->base.state->active || peer->crtc->base.state->active ||
+-		    dcp->fw_compat != DCP_FIRMWARE_V_27_0 ||
+-		    peer->fw_compat != DCP_FIRMWARE_V_27_0 ||
++		    !dcp_peer_firmware_v27(dcp) ||
++		    !dcp_peer_firmware_v27(peer) ||
+ 		    !device_trylock(peer->dev)) {
+ 			ret = -EBUSY;
+ 			goto out;
+diff --git a/drivers/gpu/drm/apple/dcp-peer-v27.inc b/drivers/gpu/drm/apple/dcp-peer-v27.inc
+index 9bae0594b..34adc538c 100644
+--- a/drivers/gpu/drm/apple/dcp-peer-v27.inc
++++ b/drivers/gpu/drm/apple/dcp-peer-v27.inc
+@@ -5,7 +5,7 @@
+  */
+ static bool peer_allocation_probe;
+ module_param(peer_allocation_probe, bool, 0444);
+-MODULE_PARM_DESC(peer_allocation_probe, "Test firmware27 logical peer allocation (merge bring-up)");
++MODULE_PARM_DESC(peer_allocation_probe, "Test firmware 27.0 logical peer allocation (merge bring-up)");
+ 
+ bool dcp_peer_tiling_state_v27(struct apple_dcp *dcp, bool write,
+ 			      u32 event, u32 param, u32 *value)
+@@ -83,7 +83,7 @@ int dcp_peer_hints_v27(struct apple_dcp *dcp, struct dptx_port *port,
+ 	 * status has a field of its own, leaving the request hints unchanged.
+ 	 */
+ 	r->status = 0;
+-	if (!peer_allocation_probe)
++	if (!peer_allocation_probe || !dcp_peer_firmware_v27(dcp))
+ 		return 0;
+ 	if (!of_device_is_compatible(dcp->dev->of_node, "apple,t6050-dcpext") ||
+ 	    port->unit || !dcp->crtc)
+@@ -119,7 +119,7 @@ int dcp_peer_hints_v27(struct apple_dcp *dcp, struct dptx_port *port,
+ 			    !dcp_peer_index_allowed(dcp->index, p->index) ||
+ 			    p->dptx_die != dcp->dptx_die ||
+ 			    !p->crtc || p->crtc->base.dev != dcp->crtc->base.dev ||
+-			    p->fw_compat != DCP_FIRMWARE_V_27_0 ||
++			    !dcp_peer_firmware_v27(p) ||
+ 			    !p->dptxport[0].enabled ||
+ 			    p->dptxport[0].caps.width < port->caps.width ||
+ 			    p->dptxport[0].caps.total_rate < port->caps.total_rate ||
+diff --git a/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc b/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc
+index 24c985a91..26635567b 100644
+--- a/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc
++++ b/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc
+@@ -193,8 +193,8 @@ static ssize_t peer_video_test_store(struct device *dev,
+ 				 peer->crtc->base.state->active)) || peer->fixed_phy ||
+ 		    peer->nr_typec_routes || peer->peer_tiling.member ||
+ 		    dcp->peer_tiling.member ||
+-		    dcp->fw_compat != DCP_FIRMWARE_V_27_0 ||
+-		    peer->fw_compat != DCP_FIRMWARE_V_27_0 ||
++		    !dcp_peer_firmware_v27(dcp) ||
++		    !dcp_peer_firmware_v27(peer) ||
+ 		    (peer->connector && peer->connector->connected)) {
+ 			ret = -EBUSY;
+ 			goto unlock;
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.c b/drivers/gpu/drm/apple/iomfb_v27.c
+index bbcf62e6a..5f8d1d949 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.c
++++ b/drivers/gpu/drm/apple/iomfb_v27.c
+@@ -153,6 +153,7 @@ static const struct iomfb_v27_build iomfb_v27_builds[] = {
+ 	{
+ 		.compat = "27.0.0",
+ 		.methods = dcp_methods_27_0,
++		.peer = true,
+ 	},
+ 	{
+ 		.compat = "27.2.0",
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.h b/drivers/gpu/drm/apple/iomfb_v27.h
+index 065ef483a..cc300dd30 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.h
++++ b/drivers/gpu/drm/apple/iomfb_v27.h
+@@ -83,6 +83,11 @@ struct iomfb_v27_build {
+ 	/* The loader's apple,firmware-compat, as dcp_read_fw_version() prints it. */
+ 	const char *compat;
+ 	const struct dcp_method_entry *methods;
++	/*
++	 * The dual-DCP bring-up paths (dcp-peer-*-v27.inc), which hard-code
++	 * firmware 27.0's method tags, may run on this build.
++	 */
++	bool peer;
+ };
+ 
+ /* The firmware 27.x build of a compat string; NULL if the driver has no table for it. */
+-- 
+2.56.0
+

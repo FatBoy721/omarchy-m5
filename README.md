@@ -12,17 +12,25 @@ the Omarchy stub carries Apple's fixed firmware (macOS 27.3 beta 1 or later).
 A pinned [Aura](https://github.com/aurora-silicon/aura) Mach-O Stage 1 is also
 packaged as an alternative; it has not been tested on hardware.
 
+A separate, pinned [Aurora Linux](https://github.com/aurora-silicon/linux)
+kernel now drives the **internal display through DCP**, including a readable
+console, brightness control and display off/on. This is a kernel alternative,
+not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
+
 > **Reviewing this?** Start with **[`FOR-AURORA.md`](FOR-AURORA.md)** - the three
 > things worth your time, and what to skip.
 
 ## Status - verified on hardware
+
+Unless noted, this table describes the default `vendor/linux` kernel.
+The experimental Aurora/DCP path and its limits are described below.
 
 | Area | State |
 | --- | --- |
 | Boot chain | ✅ iBoot → m1n1 → Linux kernel, **all 15 cores** (stub firmware ≥ mBoot-20457.60) |
 | Root filesystem | ✅ Arch on the **internal SSD** (`nvme0n1p5`), dual-boot, macOS preserved |
 | Storage | ✅ NVMe (ANS2 + NVMMU + SARTv4) |
-| Console / display | ✅ framebuffer (simplefb / simpledrm), reported as `eDP-1`; Hyprland 0.57.1 on llvmpipe (no GPU) |
+| Console / display | ✅ simpledrm fallback (`eDP-1`); experimental Aurora DCP (`eDP-2`) with brightness and display off/on. Patched Hyprland 0.57.1 works on DCP at 3024x1890 / 120 Hz, software-rendered (no GPU) |
 | Input | ✅ built-in keyboard **and** trackpad (DockChannel MTP + `tpmtfw`) |
 | Keyboard backlight | ✅ `fpwm0` + pwm-leds (`/sys/class/leds/kbd_backlight`) |
 | CPU frequency | ✅ all three clusters on schedutil; P cores measured 1307 MHz before, about 4.22 GHz after |
@@ -31,7 +39,7 @@ packaged as an alternative; it has not been tested on hardware.
 | Networking | ✅ USB-C gadget (CDC EEM) - host reaches the Mac over the cable |
 | m1n1 on upstream `main` | ✅ USB enumeration unblocked on T6050 (`patches/m1n1/0005`) |
 | **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
-| Sleep (s2idle) | ✅ `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping now stop during sleep. The panel stays lit (no DCP driver) |
+| Sleep (s2idle) | ✅ On the default kernel, `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping stop during sleep. The default simpledrm path leaves the panel lit |
 | Battery / charger | ⏳ not yet |
 | Wi-Fi / Bluetooth (N1) | ⏳ not yet; the J714c port matches our ADT but needs a pre-Linux PCIe link trainer |
 | GPU | ⏳ not started |
@@ -63,6 +71,39 @@ does not explain the failure: the fix is in mBoot, with m1n1 unchanged.
 [`docs/smp-t6050-findings.md`](docs/smp-t6050-findings.md) keeps the
 measurements of the broken firmware, with that history labeled.
 
+## Internal DCP display (experimental Aurora kernel)
+
+`make kernel-aurora` builds Linux 7.3 from pinned Aurora commit
+`5b0f106acdd71de11400464adfeb8c87a83b20b0` plus
+[`patches/linux-aurora/`](patches/linux-aurora/). The default `make kernel`
+and its artifacts stay separate. Package it with
+`KERNEL_FLAVOR=aurora scripts/mktether.sh`; see the
+[build and fallback instructions](docs/bringup.md#aurora-kernel-with-internal-dcp-experimental).
+
+Verified on J714s with stub firmware **mBoot-20457.60.65.0.1**:
+all 15 CPUs, internal SSD root, USB networking, trackpad motion and clicks,
+DCP framebuffer console, brightness changes and display off/on.
+The console needed both fbdev damage
+submission and ARGB pixels: this firmware treats the fourth XRGB byte as
+alpha, so otherwise valid console text was invisible.
+
+SMC power samples on this DCP boot averaged **9.09 W at brightness
+setting 300**, versus **5.55 W with the display blanked**, with keyboard
+backlight still at 200/255 (15 samples each). These are awake measurements,
+not sleep power; the earlier simpledrm brightness was not controlled.
+
+This does **not** provide GPU acceleration. A basic software-rendered
+Hyprland desktop and native Wayland terminals are now verified on DCP at
+3024x1890, 120 Hz, using the
+[alpha-only scanout fix](patches/hyprland/0001-output-support-alpha-only-scanout.patch).
+Unpatched Hyprland 0.57.1 assumes XRGB during mode tests and crashes on this
+alpha-only primary plane; the fix selects an advertised format and permits
+ARGB/ABGR. The user config and packaged compositor are unchanged; the tested
+build is a local override described in the
+[runbook](docs/bringup.md#aurora-kernel-with-internal-dcp-experimental).
+Lid suspend/resume still needs qualification on DCP. Keep the default kernel
+as the tested fallback; do not infer sleep or GPU support from the desktop.
+
 ## Aura Mach-O Stage 1 (optional, untested on hardware)
 
 `make aura-test` packages a pinned Aura v1.0.0b4 Mach-O Stage 1 with our
@@ -76,7 +117,8 @@ for preflight, approval, testing and rollback.
   indexes it (current state, SMP RE, build guide, Phase-0 research).
 - `dt/` - the T6050 device trees, authored from **this machine's real ADT**
   (`scripts/adt2pmgr.py`), not guessed.
-- `patches/m1n1/`, `patches/linux/` - the bootloader and kernel changes.
+- `patches/m1n1/`, `patches/linux/` - the default bootloader and kernel changes;
+  `patches/linux-aurora/` - the separate pinned Aurora/DCP port.
 - `scripts/` - the dev harness (build / install / tether) and
   `scripts/probes/` (the hardware RE tooling).
 - `configs/` - kernel configs · `tools/` - tiny on-device C helpers ·

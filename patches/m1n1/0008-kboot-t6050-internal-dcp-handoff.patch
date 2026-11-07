@@ -1,0 +1,475 @@
+From: omarchy-m5
+Subject: [PATCH] kboot: T6050 firmware versions and internal DCP handoff
+
+Add the macOS 27.0 (mBoot-20457.1.29), 27.2 (mBoot-20457.41.3) and
+27.3 beta 1 (mBoot-20457.60.65.0.1) firmware versions. Their DCP
+firmware-compat is the running version itself: each 27.x build has
+its own IOMFB method table, and the kernel refuses a build it has no
+table for.
+
+On T6050, when the DT has an apple,t6050-dcp node, hand the running
+internal DCP over instead of taking the generic display path (which
+would also lock dart-disp0). Read-only checks, in this order: the OS
+firmware is a known 27.x build; the DT nodes are wired as expected
+(alias dcp, mailbox, dart-dcp SID 23, piodma on dart-disp0 SID 16,
+disp0 on dart-disp0 SID 0, a framebuffer memory-region, DT reg bases
+equal to the ADT's); /arm-io/dcp/iop-dcp-nub has pre-loaded=1 and
+running=1; the DCP's PMGR gate (ADT clock-gates, DISP_CPU_V) and its
+parents read active; the ASC CPU_CONTROL RUN bit is set; dart-dcp and
+dart-disp0 are locked (PROTECT) with the TTBRs of SIDs 23 and 0/16 on
+the ADT's l1-tt-<sid> tables. If all pass, fill the framebuffer
+reservation from /vram (no-map), set apple,firmware-version and
+apple,firmware-compat, and enable the nodes. Otherwise set them
+disabled so simpledrm keeps the panel. No DCP, DART or PMGR register
+is written. A DT without the node takes the generic path as before.
+
+---
+diff --git i/src/firmware.c w/src/firmware.c
+index e844317..e81a104 100644
+--- i/src/firmware.c
++++ w/src/firmware.c
+@@ -201,6 +201,9 @@ const struct fw_version_info fw_versions[NUM_FW_VERSIONS] = {
+     [V26_3B2]    = {V26_3B2,    "26.3 beta2",  {26, 2, 98, 2}, 4, "iBoot-13822.80.406"},
+     [V26_3]      = {V26_3,      "26.3",        {26, 3, 0},     3, "iBoot-13822.81.10"},
+     [V26_4]      = {V26_4,      "26.4",        {26, 4, 0},     3, "mBoot-18000.101.7"},
++    [V27_0]      = {V27_0,      "27.0",        {27, 0, 0},     3, "mBoot-20457.1.29"},
++    [V27_2]      = {V27_2,      "27.2",        {27, 2, 0},     3, "mBoot-20457.41.3"},
++    [V27_3B1]    = {V27_3B1,    "27.3 beta",   {27, 2, 98, 1}, 4, "mBoot-20457.60.65.0.1"},
+     // clang-format on
+ };
+ 
+diff --git i/src/firmware.h w/src/firmware.h
+index 503b659..f4b56cf 100644
+--- i/src/firmware.h
++++ w/src/firmware.h
+@@ -184,6 +184,9 @@ enum fw_version {
+     V26_3B2,
+     V26_3,
+     V26_4,
++    V27_0,
++    V27_2,
++    V27_3B1,
+     NUM_FW_VERSIONS,
+ };
+ 
+diff --git i/src/kboot.c w/src/kboot.c
+index 6f68d21..12e940f 100644
+--- i/src/kboot.c
++++ w/src/kboot.c
+@@ -1546,6 +1546,16 @@ static int dt_set_dcp_firmware(const char *alias)
+         case V14_7:
+             compat = &fw_versions[V14_7];
+             break;
++        case V27_0:
++        case V27_2:
++        case V27_3B1:
++            /*
++             * No shared ABI across 27.x builds: the IOMFB method table differs per build
++             * (27.0 tags sent to a 27.3 beta 1 DCP panic it). The kernel picks its table
++             * by this exact version and refuses to bind to a build it has none for.
++             */
++            compat = &os_firmware;
++            break;
+         default:
+             compat = &os_firmware;
+             break;
+@@ -1962,8 +1972,399 @@ static struct disp_mapping disp_reserved_regions_t602x[] = {
+     {"region-id-157", "region157", true, true, false},
+ };
+ 
++/*
++ * T6050 (M5 Pro/Max) internal display. iBoot leaves the DCP running on its own firmware, with
++ * dart-dcp and dart-disp0 locked on tables of its own, and Linux adopts that session as it is.
++ * The DT describes it with nodes that start disabled. Enable them only when the hardware is in
++ * that state, and otherwise make sure they stay disabled so simpledrm keeps the panel. This only
++ * reads DCP, DART and PMGR registers; it never writes one.
++ */
++#define T6050_ASC_CPU_CONTROL       0x44
++#define T6050_ASC_CPU_CONTROL_RUN   BIT(4)
++#define T6050_DART_PROTECT          0x200
++#define T6050_DART_PROTECT_TTBR_TCR BIT(0)
++#define T6050_DART_TTBR(sid)        (0x1400 + 4 * (sid))
++#define T6050_DART_TTBR_VALID       BIT(0)
++#define T6050_DART_TTBR_ADDR        GENMASK(29, 2)
++#define T6050_DART_TTBR_SHIFT       14
++#define T6050_PMGR_PS_ACTUAL        GENMASK(7, 4)
++#define T6050_PMGR_PS_ACTIVE        0xf
++#define T6050_PMGR_FLAG_VIRTUAL     0x10
++
++/* An /arm-io/pmgr "devices" entry, in the layout pmgr.c reads (u16 ids, ps-groups). */
++struct t6050_pmgr_device {
++    u8 flags;
++    u16 unk1;
++    u8 id1;
++    u16 parent[2];
++    u8 unk3[2];
++    u8 addr_offset;
++    u8 psreg_idx;
++    u8 unk4[4];
++    u32 group_and_offset;
++    u8 unk5[6];
++    u16 id2;
++    u8 unk6[4];
++    const char name[0x10];
++} PACKED;
++
++struct t6050_dcp_nodes {
++    u32 mbox;
++    u32 dart_dcp;
++    u32 dart_disp;
++    u32 fb;
++};
++
++static int t6050_dcp_node(void)
++{
++    return fdt_node_offset_by_compatible(dt, -1, "apple,t6050-dcp");
++}
++
++static int t6050_fdt_reg_base(int node, u64 *base)
++{
++    int len;
++    const fdt32_t *reg = fdt_getprop(dt, node, "reg", &len);
++    int parent = fdt_parent_offset(dt, node);
++
++    if (!reg || len < 8 || parent < 0 || fdt_address_cells(dt, parent) != 2)
++        return -1;
++
++    *base = ((u64)fdt32_ld(&reg[0]) << 32) | fdt32_ld(&reg[1]);
++    return 0;
++}
++
++static int t6050_fdt_iommu(int node, u32 *phandle, u32 *sid)
++{
++    int len;
++    const fdt32_t *iommus = fdt_getprop(dt, node, "iommus", &len);
++
++    if (!iommus || len < 8)
++        return -1;
++
++    *phandle = fdt32_ld(&iommus[0]);
++    *sid = fdt32_ld(&iommus[1]);
++    return 0;
++}
++
++/* The first u32 of an ADT property of any length (ADT_GETPROP copies all of it). */
++static bool t6050_adt_u32(int node, const char *name, u32 *val)
++{
++    u32 len;
++    const void *prop = adt_getprop(adt, node, name, &len);
++
++    if (!prop || len < sizeof(*val))
++        return false;
++
++    memcpy(val, prop, sizeof(*val));
++    return true;
++}
++
++/* Whether the PS registers behind PMGR device @id (and its parents) all read active. */
++static bool t6050_pmgr_powered(u16 id, int depth)
++{
++    int path[8];
++    int node = adt_path_offset_trace(adt, "/arm-io/pmgr", path);
++    u32 groups_len, devices_len;
++
++    if (node < 0 || depth > 8)
++        return false;
++
++    const u32 *groups = adt_getprop(adt, node, "ps-groups", &groups_len);
++    const struct t6050_pmgr_device *devices = adt_getprop(adt, node, "devices", &devices_len);
++    if (!groups || !devices) {
++        printf("DCP handoff: no ps-groups/devices in /arm-io/pmgr\n");
++        return false;
++    }
++
++    for (u32 i = 0; i < devices_len / sizeof(*devices); i++) {
++        const struct t6050_pmgr_device *device = &devices[i];
++
++        if (device->id2 != id)
++            continue;
++
++        if (!(device->flags & T6050_PMGR_FLAG_VIRTUAL)) {
++            u32 group = device->group_and_offset >> 24;
++            u64 base;
++
++            if ((group + 1) * 12 > groups_len ||
++                adt_get_reg(adt, path, "reg", groups[group * 3], &base, NULL) < 0) {
++                printf("DCP handoff: no PS register for %s\n", device->name);
++                return false;
++            }
++
++            u64 addr = base + groups[group * 3 + 1] + (device->group_and_offset & 0xffffff);
++            u32 ps = read32(addr);
++            printf("DCP handoff: %s PS @ 0x%lx = 0x%08x\n", device->name, addr, ps);
++            if (FIELD_GET(T6050_PMGR_PS_ACTUAL, ps) != T6050_PMGR_PS_ACTIVE) {
++                printf("DCP handoff: %s is not powered\n", device->name);
++                return false;
++            }
++        }
++
++        for (int j = 0; j < 2; j++)
++            if (device->parent[j] && !t6050_pmgr_powered(device->parent[j], depth + 1))
++                return false;
++
++        return true;
++    }
++
++    printf("DCP handoff: PMGR device %u not found\n", id);
++    return false;
++}
++
++/*
++ * Whether DART @adt_path (FDT node @phandle) is locked, with the TTBR of each stream in @sids
++ * pointing at the table the ADT names for it (l1-tt-<sid>).
++ */
++static bool t6050_dart_inherited(const char *adt_path, u32 phandle, const u32 *sids, int count)
++{
++    int path[8];
++    int node = adt_path_offset_trace(adt, adt_path, path);
++    int fdt_node = fdt_node_offset_by_phandle(dt, phandle);
++    u64 base, fdt_base;
++
++    if (node < 0 || !adt_is_compatible(adt, node, "dart,t8110") ||
++        adt_get_reg(adt, path, "reg", 0, &base, NULL) < 0) {
++        printf("DCP handoff: %s is not a T8110 DART\n", adt_path);
++        return false;
++    }
++
++    if (fdt_node < 0 || t6050_fdt_reg_base(fdt_node, &fdt_base) < 0 || fdt_base != base) {
++        printf("DCP handoff: the DT does not describe %s at 0x%lx\n", adt_path, base);
++        return false;
++    }
++
++    u32 protect = read32(base + T6050_DART_PROTECT);
++    printf("DCP handoff: %s PROTECT @ 0x%lx = 0x%08x\n", adt_path, base + T6050_DART_PROTECT,
++           protect);
++    if (!(protect & T6050_DART_PROTECT_TTBR_TCR)) {
++        printf("DCP handoff: %s is not locked\n", adt_path);
++        return false;
++    }
++
++    for (int i = 0; i < count; i++) {
++        char prop[16];
++        u32 len;
++        u64 table;
++
++        snprintf(prop, sizeof(prop), "l1-tt-%u", sids[i]);
++        const void *tt = adt_getprop(adt, node, prop, &len);
++        if (!tt || len < sizeof(table)) {
++            printf("DCP handoff: %s has no %s\n", adt_path, prop);
++            return false;
++        }
++        memcpy(&table, tt, sizeof(table));
++
++        u32 ttbr = read32(base + T6050_DART_TTBR(sids[i]));
++        u64 phys = FIELD_GET(T6050_DART_TTBR_ADDR, ttbr) << T6050_DART_TTBR_SHIFT;
++        printf("DCP handoff: %s SID %u TTBR @ 0x%lx = 0x%08x (table 0x%lx, ADT 0x%lx)\n",
++               adt_path, sids[i], base + T6050_DART_TTBR(sids[i]), ttbr, phys, table);
++        if (!(ttbr & T6050_DART_TTBR_VALID) || phys != table) {
++            printf("DCP handoff: %s SID %u is not on the ADT's table\n", adt_path, sids[i]);
++            return false;
++        }
++    }
++
++    return true;
++}
++
++/* Resolve the DT side; fails (returns false) if anything is missing or wired unexpectedly. */
++static bool t6050_dcp_find_nodes(struct t6050_dcp_nodes *n)
++{
++    int dcp = t6050_dcp_node();
++    u32 sid, phandle;
++    int len;
++
++    const fdt32_t *mboxes = fdt_getprop(dt, dcp, "mboxes", &len);
++    if (mboxes && len >= 4)
++        n->mbox = fdt32_ld(&mboxes[0]);
++
++    if (!t6050_fdt_iommu(dcp, &phandle, &sid) && sid == 23)
++        n->dart_dcp = phandle;
++
++    int piodma = fdt_subnode_offset(dt, dcp, "piodma");
++    if (piodma >= 0 && !t6050_fdt_iommu(piodma, &phandle, &sid) && sid == 16)
++        n->dart_disp = phandle;
++
++    int index = fdt_stringlist_search(dt, dcp, "memory-region-names", "framebuffer");
++    const fdt32_t *regions = fdt_getprop(dt, dcp, "memory-region", &len);
++    if (index >= 0 && regions && len >= 4 * (index + 1))
++        n->fb = fdt32_ld(&regions[index]);
++
++    if (!n->mbox || !n->dart_dcp || !n->dart_disp || !n->fb) {
++        printf("DCP handoff: the DCP node lacks its mailbox, DARTs (SIDs 23/16) or "
++               "framebuffer region\n");
++        return false;
++    }
++
++    const char *path = fdt_get_alias(dt, "dcp");
++    if (!path || fdt_path_offset(dt, path) != dcp) {
++        printf("DCP handoff: alias 'dcp' does not name the DCP node\n");
++        return false;
++    }
++
++    int display = fdt_path_offset(dt, "disp0");
++    regions = display >= 0 ? fdt_getprop(dt, display, "memory-region", &len) : NULL;
++    if (display < 0 || t6050_fdt_iommu(display, &phandle, &sid) || phandle != n->dart_disp ||
++        sid != 0 || !regions || len < 4 || fdt32_ld(&regions[0]) != n->fb) {
++        printf("DCP handoff: 'disp0' is not the display subsystem on dart-disp0 SID 0\n");
++        return false;
++    }
++
++    return true;
++}
++
++static int t6050_dcp_set_status(const struct t6050_dcp_nodes *n, const char *status)
++{
++    const u32 phandles[] = {n->mbox, n->dart_dcp, n->dart_disp, n->fb};
++    int node;
++
++    for (size_t i = 0; i < ARRAY_SIZE(phandles); i++) {
++        if (!phandles[i])
++            continue;
++        node = fdt_node_offset_by_phandle(dt, phandles[i]);
++        if (node >= 0 && fdt_setprop_string(dt, node, "status", status))
++            bail("FDT: couldn't set status of DCP phandle %u\n", phandles[i]);
++    }
++
++    node = fdt_path_offset(dt, "disp0");
++    if (node >= 0 && !fdt_node_check_compatible(dt, node, "apple,display-subsystem") &&
++        fdt_setprop_string(dt, node, "status", status))
++        bail("FDT: couldn't set status of disp0\n");
++
++    node = t6050_dcp_node();
++    if (node >= 0 && fdt_setprop_string(dt, node, "status", status))
++        bail("FDT: couldn't set status of the DCP\n");
++
++    printf("DCP handoff: display nodes %s\n", status);
++    return 0;
++}
++
++static bool t6050_dcp_running(void)
++{
++    int path[8];
++    int node = adt_path_offset_trace(adt, "/arm-io/dcp", path);
++    int nub = adt_path_offset(adt, "/arm-io/dcp/iop-dcp-nub");
++    u32 preloaded = 0, running = 0, gate = 0;
++    u64 base, fdt_base;
++
++    switch (os_firmware.version) {
++        case V27_0:
++        case V27_2:
++        case V27_3B1:
++            break;
++        default:
++            printf("DCP handoff: OS firmware %s (%s) is not a known 27.x build\n",
++                   os_firmware.string, os_firmware.iboot);
++            return false;
++    }
++
++    if (node < 0 || nub < 0 || adt_get_reg(adt, path, "reg", 0, &base, NULL) < 0) {
++        printf("DCP handoff: /arm-io/dcp/iop-dcp-nub not found\n");
++        return false;
++    }
++
++    t6050_adt_u32(nub, "pre-loaded", &preloaded);
++    t6050_adt_u32(nub, "running", &running);
++    if (preloaded != 1 || running != 1) {
++        printf("DCP handoff: firmware pre-loaded=%u running=%u\n", preloaded, running);
++        return false;
++    }
++
++    if (t6050_fdt_reg_base(t6050_dcp_node(), &fdt_base) < 0 || fdt_base != base) {
++        printf("DCP handoff: the DT does not describe the DCP at 0x%lx\n", base);
++        return false;
++    }
++
++    /* DISP_CPU_V on J714s: virtual, under DISP_FE and DISP_CPU */
++    if (!t6050_adt_u32(node, "clock-gates", &gate) || !gate || !t6050_pmgr_powered(gate, 0))
++        return false;
++
++    u32 control = read32(base + T6050_ASC_CPU_CONTROL);
++    printf("DCP handoff: ASC CPU_CONTROL @ 0x%lx = 0x%08x\n", base + T6050_ASC_CPU_CONTROL,
++           control);
++    if (!(control & T6050_ASC_CPU_CONTROL_RUN)) {
++        printf("DCP handoff: the DCP CPU is not running\n");
++        return false;
++    }
++
++    return true;
++}
++
++static int t6050_dcp_publish(const struct t6050_dcp_nodes *n, u64 vram_base, u64 vram_size)
++{
++    u64 reg[2] = {cpu_to_fdt64(vram_base), cpu_to_fdt64(vram_size)};
++    char name[32];
++    int fb;
++
++    fb = fdt_node_offset_by_phandle(dt, n->fb);
++    if (fb < 0 || fdt_setprop(dt, fb, "reg", reg, sizeof(reg)))
++        bail("FDT: couldn't set the DCP framebuffer region\n");
++    fb = fdt_node_offset_by_phandle(dt, n->fb);
++    if (fb < 0 || fdt_setprop_string(dt, fb, "compatible", "framebuffer"))
++        bail("FDT: couldn't set the DCP framebuffer compatible\n");
++    fb = fdt_node_offset_by_phandle(dt, n->fb);
++    if (fb < 0 || fdt_setprop_empty(dt, fb, "no-map"))
++        bail("FDT: couldn't set the DCP framebuffer no-map\n");
++
++    if (dt_set_dcp_firmware("dcp"))
++        return -1;
++
++    if (t6050_dcp_set_status(n, "okay"))
++        return -1;
++
++    snprintf(name, sizeof(name), "framebuffer@%lx", vram_base);
++    fb = fdt_node_offset_by_phandle(dt, n->fb);
++    if (fb < 0 || fdt_set_name(dt, fb, name))
++        bail("FDT: couldn't rename the DCP framebuffer region\n");
++
++    printf("DCP handoff: firmware %s (%s), framebuffer 0x%lx+0x%lx; DCP enabled\n",
++           os_firmware.string, os_firmware.iboot, vram_base, vram_size);
++    return 0;
++}
++
++/* Returns 1 if the DT has no T6050 DCP node, so that the generic path runs as before. */
++static int dt_set_t6050_dcp(void)
++{
++    struct t6050_dcp_nodes nodes = {0};
++    static const u32 dcp_sids[] = {23};
++    static const u32 disp_sids[] = {0, 16};
++    int path[8];
++    u64 vram_base = 0, vram_size = 0;
++
++    if (t6050_dcp_node() < 0)
++        return 1;
++
++    if (!t6050_dcp_find_nodes(&nodes) || !t6050_dcp_running() ||
++        !t6050_dart_inherited("/arm-io/dart-dcp", nodes.dart_dcp, dcp_sids,
++                              ARRAY_SIZE(dcp_sids)) ||
++        !t6050_dart_inherited("/arm-io/dart-disp0", nodes.dart_disp, disp_sids,
++                              ARRAY_SIZE(disp_sids))) {
++        printf("DCP handoff: leaving the internal display to simpledrm\n");
++        return t6050_dcp_set_status(&nodes, "disabled");
++    }
++
++    if (adt_path_offset_trace(adt, "/vram", path) < 0 ||
++        adt_get_reg(adt, path, "reg", 0, &vram_base, &vram_size) < 0 || !vram_size) {
++        printf("DCP handoff: no /vram in the ADT; leaving the internal display to simpledrm\n");
++        return t6050_dcp_set_status(&nodes, "disabled");
++    }
++
++    return t6050_dcp_publish(&nodes, vram_base, vram_size);
++}
++
+ static int dt_set_display(void)
+ {
++    /*
++     * T6050 with DCP nodes: hand the running DCP over without touching its DARTs. Without
++     * them, fall through to the generic path exactly as before.
++     */
++    if (!fdt_node_check_compatible(dt, 0, "apple,t6050")) {
++        int ret = dt_set_t6050_dcp();
++        if (ret <= 0)
++            return ret;
++    }
++
+     /* lock dart-disp0 to prevent old software from resetting it */
+     dart_lock_adt("/arm-io/dart-disp0", 0);
+     const char compat_piodma_alias[] = "disp0_piodma";

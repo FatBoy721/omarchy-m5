@@ -1,0 +1,366 @@
+From d74a0aa1eb0bed5eab529c3735a9213631ce00f1 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Fri, 6 Nov 2026 22:16:18 -0600
+Subject: [PATCH 13/13] drm/apple: dcp: Add firmware 27.3 beta 1
+
+Firmware 27.3 beta 1 (macOS 26C5035r, stub mBoot-20457.60.65.0.1; DCP
+roottask 1223.60.2~298, SDK 27.3 / 26C5035e, RTKit 3514.60.8), which
+m1n1 reports as apple,firmware-compat 27.2.98.1, differs from 27.2 in
+two places that matter to the driver:
+
+- One IOMobileFramebufferAP method was inserted at A521, so every 27.2
+  tag from A521 to A542 moves up by one: set_display_refresh_properties
+  A526, flush_supports_power A529, abort_swaps_dcp A530,
+  register_dfb_surface A534, set_power_state A535 and the pipe
+  queries/set A536, A538 and A540. All other tags are those of 27.2.
+
+- swap_submit (A458) rejects a request shorter than 0x1144 bytes (27.2:
+  0xff4), and the rejection panics the DCP. The swap record grew from
+  0x6e0 to 0x830 bytes: swap_id..bg_color moved from 0x98 to 0xd8, the
+  brightness fields from 0x354/0x35e to 0x3b4/0x3be, and the surfaces
+  and the tail after them from 0x6e0 to 0x830 (surf_iova 0x10e0,
+  swap_null 0x113a).
+
+Add the 27.3 method table and struct dcp_swap_submit_req_v27_3, with
+every field the driver writes asserted at its offset, and select both
+for 27.2.98.1. The 27.3 record shares the swap_submit staging buffer
+with the 27.0 one; 27.0 and 27.2 keep their exact layout and size. The
+0x40 bytes inserted before swap_id are somewhere in 27.0's debug_info
+and event fields; the driver writes none of those, so the record leaves
+the whole range zero, as it does on 27.0.
+
+The tags and offsets come from static analysis of the 27.3 DCP firmware
+(its link_rpc_lookup tag switch, each handler's size checks, and the
+swap record accesses of swap_submit_dcp), checked against the 27.0 and
+27.2 t605xdcp images, where the same method gives PR #894's tables.
+They have not been exercised on hardware. The D callbacks are unchanged
+from 27.0 and 27.2, including the D113 analytics event this driver
+already answers with its dictionary.
+
+The dual-DCP bring-up paths stay off on this build: they carry 27.0's
+tags and swap record.
+---
+ drivers/gpu/drm/apple/dcp-internal.h |   6 +-
+ drivers/gpu/drm/apple/iomfb_v27.c    | 122 +++++++++++++++++++++++---
+ drivers/gpu/drm/apple/iomfb_v27.h    | 123 +++++++++++++++++++++++++++
+ 3 files changed, 239 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/gpu/drm/apple/dcp-internal.h b/drivers/gpu/drm/apple/dcp-internal.h
+index 12926a2bd..f491e8414 100644
+--- a/drivers/gpu/drm/apple/dcp-internal.h
++++ b/drivers/gpu/drm/apple/dcp-internal.h
+@@ -536,7 +536,11 @@ struct apple_dcp {
+ 	struct list_head iomfb_boolean_properties;
+ 	u32 iomfb_boolean_property_count;
+ 	u32 external_pipes_v27, external_displays_v27, external_suppression_v27;
+-	struct dcp_swap_submit_req_v27 present_v27;
++	/* The swap_submit record, in v27_build->swap_layout. */
++	union {
++		struct dcp_swap_submit_req_v27 present_v27;
++		struct dcp_swap_submit_req_v27_3 present_v27_3;
++	};
+ 	/* Both paired wire records belong to the primary endpoint lock. */
+ 	struct dcp_swap_submit_req_v27 peer_present_v27;
+ 
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.c b/drivers/gpu/drm/apple/iomfb_v27.c
+index db548a23e..27cb37fbc 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.c
++++ b/drivers/gpu/drm/apple/iomfb_v27.c
+@@ -13,17 +13,15 @@
+ #include "dcp-internal.h"
+ 
+ /*
+- * Serialize @request, with the backlight iomfb_apply_backlight_h17p() wrote
+- * to dcp->present_h17p, into this firmware build's swap_submit record.
+- * Returns the record; *size is its length, the A458 request size.
++ * Both swap_submit layouts take the same fields from the H17P request: the
++ * timestamps and unk_38, swap_id through bg_color, the surfaces and the tail
++ * from surf_iova on, plus the backlight iomfb_apply_backlight_h17p() wrote
++ * to the H17P record. Everything else is sent as zero.
+  */
+-const void *iomfb_serialize_present_v27(struct apple_dcp *dcp,
+-					const struct dcp_swap_submit_req_h17p *request,
+-					u32 *size)
++static void iomfb_serialize_present_27_0(struct dcp_swap_submit_req_v27 *wire,
++					 const struct dcp_swap_submit_req_h17p *request,
++					 const u8 *backlight)
+ {
+-	struct dcp_swap_submit_req_v27 *wire = &dcp->present_v27;
+-	const u8 *backlight = dcp->present_h17p.swap;
+-
+ 	memset(wire, 0, sizeof(*wire));
+ 	memcpy(wire->swap.timestamp, request->swap.timestamp,
+ 	       sizeof(wire->swap.timestamp));
+@@ -38,8 +36,49 @@ const void *iomfb_serialize_present_v27(struct apple_dcp *dcp,
+ 	memcpy(wire->surf_iova, request->surf_iova,
+ 	       sizeof(*request) -
+ 	       offsetof(struct dcp_swap_submit_req_h17p, surf_iova));
+-	*size = sizeof(*wire);
+-	return wire;
++}
++
++static void iomfb_serialize_present_27_3(struct dcp_swap_submit_req_v27_3 *wire,
++					 const struct dcp_swap_submit_req_h17p *request,
++					 const u8 *backlight)
++{
++	memset(wire, 0, sizeof(*wire));
++	memcpy(wire->swap.timestamp, request->swap.timestamp,
++	       sizeof(wire->swap.timestamp));
++	wire->swap.unk_38 = request->swap.unk_38;
++	/* The common geometry runs from swap_id through bg_color. */
++	memcpy(&wire->swap.swap_id, &request->swap.swap_id,
++	       offsetof(struct dcp_swap_v27_3, reserved_198) -
++	       offsetof(struct dcp_swap_v27_3, swap_id));
++	wire->swap.brightness_update = backlight[0x354] & 1;
++	wire->swap.brightness_nits = get_unaligned_le64(backlight + 0x35e);
++	memcpy(wire->surf, request->surf, sizeof(wire->surf));
++	memcpy(wire->surf_iova, request->surf_iova,
++	       sizeof(*request) -
++	       offsetof(struct dcp_swap_submit_req_h17p, surf_iova));
++}
++
++/*
++ * Serialize @request into this firmware build's swap_submit record.
++ * Returns the record; *size is its length, the A458 request size.
++ */
++const void *iomfb_serialize_present_v27(struct apple_dcp *dcp,
++					const struct dcp_swap_submit_req_h17p *request,
++					u32 *size)
++{
++	const u8 *backlight = dcp->present_h17p.swap;
++
++	switch (dcp->v27_build->swap_layout) {
++	case IOMFB_V27_SWAP_27_3:
++		iomfb_serialize_present_27_3(&dcp->present_v27_3, request, backlight);
++		*size = sizeof(dcp->present_v27_3);
++		return &dcp->present_v27_3;
++	case IOMFB_V27_SWAP_27_0:
++	default:
++		iomfb_serialize_present_27_0(&dcp->present_v27, request, backlight);
++		*size = sizeof(dcp->present_v27);
++		return &dcp->present_v27;
++	}
+ }
+ 
+ struct dcp_h17p_hotplug_request {
+@@ -161,16 +200,77 @@ static const struct dcp_method_entry dcp_methods_27_2[dcpep_num_methods] = {
+ 	IOMFB_METHOD("A533", dcpep_register_dfb_surface),
+ };
+ 
++/*
++ * Firmware 27.3 beta 1 (macOS 26C5035r, stub mBoot-20457.60.65.0.1; DCP
++ * 1223.60.2~298, RTKit 3514.60.8) inserted one IOMobileFramebufferAP
++ * method at A521, next to io_fence_notify A520, so every 27.2 tag from
++ * A521 to A542 moves up by one. A000-A137, A350-A401, A450-A520 and A551
++ * are unchanged. Derived from the firmware's tag lookup and checked
++ * against the 27.0 and 27.2 images, not yet called on hardware.
++ * swap_submit A458 keeps its tag but takes the 27.3 swap record.
++ */
++static const struct dcp_method_entry dcp_methods_27_3[dcpep_num_methods] = {
++	IOMFB_METHOD("A000", dcpep_late_init_signal),
++	IOMFB_METHOD("A027", dcpep_setup_video_limits),
++	IOMFB_METHOD("A136", iomfbep_a131_pmu_service_matched),
++	IOMFB_METHOD("A137", iomfbep_a132_backlight_service_matched),
++	IOMFB_METHOD("A390", dcpep_set_create_dfb),
++	IOMFB_METHOD("A391", iomfbep_a358_vi_set_temperature_hint),
++	IOMFB_METHOD("A451", dcpep_start_signal),
++	IOMFB_METHOD("A456", dcpep_swap_start),
++	IOMFB_METHOD("A458", dcpep_swap_submit),
++	IOMFB_METHOD("A461", dcpep_set_display_device),
++	IOMFB_METHOD("A462", dcpep_is_main_display),
++	IOMFB_METHOD("A463", dcpep_set_digital_out_mode),
++	IOMFB_METHOD("A473", iomfbep_set_matrix),
++	IOMFB_METHOD("A477", iomfbep_get_color_remap_mode),
++	IOMFB_METHOD("A500", dcpep_set_parameter_dcp),
++	IOMFB_METHOD("A504", dcpep_create_default_fb),
++	IOMFB_METHOD("A037", dcpep_get_dfb_compression_info),
++	IOMFB_METHOD("A036", dcpep_get_dfb_info),
++	IOMFB_METHOD("A103", dcpep_get_dfb_layout),
++	IOMFB_METHOD("A503", dcpep_get_dfb_state),
++	IOMFB_METHOD("A104", dcpep_set_dfb_dimensions),
++	IOMFB_METHOD("A105", dcpep_commit_dfb_info),
++	IOMFB_METHOD("A035", dcpep_dfb_query),
++	IOMFB_METHOD("A385", dcpep_dfb_ready_query),
++	IOMFB_METHOD("A353", dcpep_pipe_query_353),
++	IOMFB_METHOD("A352", dcpep_pipe_set_352),
++	IOMFB_METHOD("A465", dcpep_pipe_cfg_415),
++	IOMFB_METHOD("A033", dcpep_pipe_cfg_031),
++	IOMFB_METHOD("A464", dcpep_pipe_cfg_414),
++	IOMFB_METHOD("A540", dcpep_pipe_query_478),			/* 27.2: A539 */
++	IOMFB_METHOD("A536", dcpep_pipe_query_474),			/* 27.2: A535 */
++	IOMFB_METHOD("A538", dcpep_pipe_set_476),			/* 27.2: A537 */
++	IOMFB_METHOD("A478", iomfbep_set_brightness_correction),
++	IOMFB_METHOD("A508", dcpep_enable_disable_video_power_savings),
++	IOMFB_METHOD("A516", dcpep_first_client_open),
++	IOMFB_METHOD("A517", iomfbep_last_client_close),
++	IOMFB_METHOD("A526", dcpep_set_display_refresh_properties),	/* 27.2: A525 */
++	IOMFB_METHOD("A529", dcpep_flush_supports_power),		/* 27.2: A528 */
++	IOMFB_METHOD("A530", iomfbep_abort_swaps_dcp),			/* 27.2: A529 */
++	IOMFB_METHOD("A535", dcpep_set_power_state),			/* 27.2: A534 */
++	IOMFB_METHOD("A534", dcpep_register_dfb_surface),		/* 27.2: A533 */
++};
++
+ /* The firmware 27.x builds, by the loader's apple,firmware-compat. */
+ static const struct iomfb_v27_build iomfb_v27_builds[] = {
+ 	{
+ 		.compat = "27.0.0",
+ 		.methods = dcp_methods_27_0,
++		.swap_layout = IOMFB_V27_SWAP_27_0,
+ 		.peer = true,
+ 	},
+ 	{
+ 		.compat = "27.2.0",
+ 		.methods = dcp_methods_27_2,
++		.swap_layout = IOMFB_V27_SWAP_27_0,
++	},
++	{
++		/* 27.3 beta 1: m1n1 reports a beta as 27.2.98.<n>. */
++		.compat = "27.2.98.1",
++		.methods = dcp_methods_27_3,
++		.swap_layout = IOMFB_V27_SWAP_27_3,
+ 	},
+ };
+ 
+diff --git a/drivers/gpu/drm/apple/iomfb_v27.h b/drivers/gpu/drm/apple/iomfb_v27.h
+index 53ccc2843..54f31f57f 100644
+--- a/drivers/gpu/drm/apple/iomfb_v27.h
++++ b/drivers/gpu/drm/apple/iomfb_v27.h
+@@ -77,12 +77,135 @@ static_assert(offsetof(struct dcp_swap_submit_req_v27, surf_iova) == 0xf90);
+ static_assert(offsetof(struct dcp_swap_submit_req_v27, swap_null) == 0xfea);
+ static_assert(offsetof(struct dcp_swap_v27, brightness_update) == 0x354);
+ static_assert(offsetof(struct dcp_swap_v27, brightness_nits) == 0x35e);
++static_assert(offsetof(struct dcp_swap_v27, swap_id) == 0x98);
++static_assert(offsetof(struct dcp_swap_v27, surf_ids) == 0x9c);
++static_assert(offsetof(struct dcp_swap_v27, src_rect) == 0xac);
++static_assert(offsetof(struct dcp_swap_v27, surf_flags) == 0xec);
++static_assert(offsetof(struct dcp_swap_v27, surf_unk) == 0xfc);
++static_assert(offsetof(struct dcp_swap_v27, dst_rect) == 0x10c);
++static_assert(offsetof(struct dcp_swap_v27, swap_enabled) == 0x14c);
++static_assert(offsetof(struct dcp_swap_v27, swap_completed) == 0x150);
++static_assert(offsetof(struct dcp_swap_v27, bg_color) == 0x154);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unk_u64_a) == 0xfb0);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unkbool) == 0xfd0);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unkdouble) == 0xfd1);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unkU64) == 0xfd9);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unkbool2) == 0xfe1);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, clear) == 0xfe2);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unkU32Ptr) == 0xfe6);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, surf_null) == 0xfeb);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unkoutbool_null) == 0xfef);
++static_assert(offsetof(struct dcp_swap_submit_req_v27, unknown_output_null) == 0xff1);
++
++/*
++ * Firmware 27.3 (beta 1, DCP 1223.60.2~298) grew the swap record from 0x6e0
++ * to 0x830 bytes: 0x40 bytes before swap_id, 0x20 between bg_color and the
++ * brightness fields, and 0xf0 after them. The swap_submit (A458) request
++ * grew from 0xff4 to 0x1144 bytes; the firmware rejects a shorter one, and
++ * a rejected call panics the DCP. The surfaces and the tail after them are
++ * unchanged, only moved.
++ */
++struct dcp_swap_v27_3 {
++	u64 timestamp[7];
++	u64 unk_38;
++	/*
++	 * 27.0's debug_info, event_wait, event_signal_on_glass and
++	 * event_signal, with 0x40 bytes inserted somewhere in them. The
++	 * driver writes none of these; they are sent as zero.
++	 */
++	u8 reserved_40[0x98];
++
++	u32 swap_id;
++
++	u32 surf_ids[SWAP_SURFACES];
++	struct dcp_rect src_rect[SWAP_SURFACES];
++	u32 surf_flags[SWAP_SURFACES];
++	u32 surf_unk[SWAP_SURFACES];
++	struct dcp_rect dst_rect[SWAP_SURFACES];
++	u32 swap_enabled;
++	u32 swap_completed;
++
++	u32 bg_color;
++	u8 reserved_198[0x21c];
++
++	u8 brightness_update;
++	u8 reserved_3b5[9];
++	u64 brightness_nits;
++	u8 reserved_3c6[0x46a];
++} __packed;
++
++struct dcp_swap_submit_req_v27_3 {
++	struct dcp_swap_v27_3 swap;
++	struct dcp_surface_v27 surf[SWAP_SURFACES];
++	u64 surf_iova[SWAP_SURFACES];
++	u64 unk_u64_a[SWAP_SURFACES];
++
++	u8 unkbool;
++	u64 unkdouble;
++	u64 unkU64;
++	u8 unkbool2;
++	u32 clear;
++	u32 unkU32Ptr;
++	u8 swap_null;
++	u8 surf_null[SWAP_SURFACES];
++	u8 unkoutbool_null;
++	u8 unknown_pointer_null;
++	u8 unknown_output_null;
++	u8 padding[2];
++} __packed;
++
++static_assert(sizeof(struct dcp_swap_v27_3) == 0x830);
++static_assert(offsetof(struct dcp_swap_v27_3, unk_38) == 0x38);
++static_assert(offsetof(struct dcp_swap_v27_3, swap_id) == 0xd8);
++static_assert(offsetof(struct dcp_swap_v27_3, surf_ids) == 0xdc);
++static_assert(offsetof(struct dcp_swap_v27_3, src_rect) == 0xec);
++static_assert(offsetof(struct dcp_swap_v27_3, surf_flags) == 0x12c);
++static_assert(offsetof(struct dcp_swap_v27_3, surf_unk) == 0x13c);
++static_assert(offsetof(struct dcp_swap_v27_3, dst_rect) == 0x14c);
++static_assert(offsetof(struct dcp_swap_v27_3, swap_enabled) == 0x18c);
++static_assert(offsetof(struct dcp_swap_v27_3, swap_completed) == 0x190);
++static_assert(offsetof(struct dcp_swap_v27_3, bg_color) == 0x194);
++static_assert(offsetof(struct dcp_swap_v27_3, brightness_update) == 0x3b4);
++static_assert(offsetof(struct dcp_swap_v27_3, brightness_nits) == 0x3be);
++static_assert(sizeof(struct dcp_swap_submit_req_v27_3) == 0x1144);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, surf) == 0x830);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, surf_iova) == 0x10e0);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unk_u64_a) == 0x1100);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unkbool) == 0x1120);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unkdouble) == 0x1121);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unkU64) == 0x1129);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unkbool2) == 0x1131);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, clear) == 0x1132);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unkU32Ptr) == 0x1136);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, swap_null) == 0x113a);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, surf_null) == 0x113b);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unkoutbool_null) == 0x113f);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unknown_pointer_null) == 0x1140);
++static_assert(offsetof(struct dcp_swap_submit_req_v27_3, unknown_output_null) == 0x1141);
++/* The serializer copies swap_id..bg_color and the tail as one block each. */
++static_assert(offsetof(struct dcp_swap_v27_3, reserved_198) -
++	      offsetof(struct dcp_swap_v27_3, swap_id) ==
++	      offsetof(struct dcp_swap_v27, reserved_158) -
++	      offsetof(struct dcp_swap_v27, swap_id));
++static_assert(sizeof(struct dcp_swap_submit_req_v27_3) -
++	      offsetof(struct dcp_swap_submit_req_v27_3, surf_iova) ==
++	      sizeof(struct dcp_swap_submit_req_v27) -
++	      offsetof(struct dcp_swap_submit_req_v27, surf_iova));
++
++/* The swap_submit record layouts of the firmware 27.x builds. */
++enum iomfb_v27_swap_layout {
++	/* 27.0 and 27.2: struct dcp_swap_submit_req_v27, 0xff4 bytes */
++	IOMFB_V27_SWAP_27_0,
++	/* 27.3 beta 1: struct dcp_swap_submit_req_v27_3, 0x1144 bytes */
++	IOMFB_V27_SWAP_27_3,
++};
+ 
+ /* What differs between the firmware 27.x builds the driver knows. */
+ struct iomfb_v27_build {
+ 	/* The loader's apple,firmware-compat, as dcp_read_fw_version() prints it. */
+ 	const char *compat;
+ 	const struct dcp_method_entry *methods;
++	enum iomfb_v27_swap_layout swap_layout;
+ 	/*
+ 	 * The dual-DCP bring-up paths (dcp-peer-*-v27.inc), which hard-code
+ 	 * firmware 27.0's method tags, may run on this build.
+-- 
+2.56.0
+

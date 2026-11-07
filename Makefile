@@ -1,5 +1,5 @@
 # omarchy-m5 dev harness
-.PHONY: setup fetch m1n1 aura aura-kernel aura-test kernel dtbs initramfs payload tether clean-vendor
+.PHONY: setup fetch m1n1 aura aura-kernel aura-test kernel kernel-aurora dtbs initramfs payload tether clean-vendor
 AURA_ROLLBACK ?= build/m1n1-enrolled-stage1.bin
 
 setup:          ## install host deps (brew llvm, rust target, ...)
@@ -22,6 +22,9 @@ aura-test: aura aura-kernel ## prepare RAM-only J714s tether + recovery artifact
 
 kernel:         ## overlay DTs + build kernel (KCONFIG=asahi_defconfig to override)
 	scripts/build-kernel.sh
+
+kernel-aurora:  ## build the pinned Aurora J714s kernel with built-in DCP (no installation)
+	scripts/build-kernel-aurora.sh
 
 dtbs:           ## overlay DTs + build device trees only (fast syntax check)
 	scripts/build-kernel.sh dtbs
