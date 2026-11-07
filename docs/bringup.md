@@ -194,7 +194,7 @@ be rebuilt from 27.3 beta 1 or later:
 Verified on this J714s on 2026-11-06: before, `mBoot-18000.120.36` and 14/14
 `Failed!`; after, 14/14 `Started.` with the unchanged installed m1n1
 (v1.6.1-28-g4184923f). The tether bundle then boots Linux with
-`idle=nop arm64.nowfxt` and no `maxcpus`.
+`arm64.nowfxt` and no `maxcpus` (`idle=nop` was needed until patch 0012).
 
 After starting secondaries from the proxy (probes), reset the Mac
 (`hv/wdt-arm.py 5`) before chainloading: a chainloaded m1n1 expects them off.
@@ -431,11 +431,26 @@ and fails if the chain doesn't parse, so a bad `cat` never reaches the
 ceremony. Use this for milestone boots; it costs a ceremony per kernel, so
 it is not an iteration loop.
 
-Kernel cmdline: `idle=nop arm64.nowfxt`. M5 secondaries lose state in WFI and
-in WFIT/WFET; a kernel that ignores `arm64.nowfxt` (built without patch 0009)
-panics in `__delay` on CPU1 with zeroed registers. Check with
-`zcat Image.gz | grep -a arm64.nowfxt`. Add `maxcpus=1` only on old stub
-firmware.
+Kernel cmdline: `arm64.nowfxt kvm-arm.wfi_trap_policy=trap`. On this SoC WFI
+loses x0-x30 and FP/SIMD on every core except the boot CPU; SP, PC and system
+registers survive, and CYC_OVRD, which selects clock-gate-only WFI on M1-M3,
+reads 0 on every core and is locked on M4 and later
+([probe log](research/probe-logs/t6050-wfi-state-2026-11-07-j714s.log)).
+Patch 0012 saves that state around WFI (dmesg: "Apple: preserving registers
+across WFI") and patch 0013 registers cpuidle on T6050 with WFI in both
+states, so `idle=nop` is no longer needed. WFIT/WFET bypass that save path:
+keep `arm64.nowfxt` (patch 0009); a kernel that ignores it panics in
+`__delay` on CPU1 with zeroed registers (check with
+`zcat Image.gz | grep -a arm64.nowfxt`). `kvm-arm.wfi_trap_policy=trap`
+keeps a KVM guest's WFI off the bare core. `tools/wfi-check.c` checks every
+CPU (FP/SIMD and callee-saved registers across 1 ms sleeps;
+`aarch64-linux-gnu-gcc -O2 -static -pthread`): on 2026-11-07 it passed
+250,000 sleeps per CPU on all 15. Add `maxcpus=1` only on old stub firmware.
+
+m1n1 reserves the coprocessors' `__OS_LOG` buffers that iBoot leaves inside
+the RAM handed to Linux (DCP, DCPEXT0-3, MTP, AOP, AUSS; m1n1 patch 0007): the
+firmware keeps writing its log there, and on one boot they sat in the CMA
+area. They move between boots; `dmesg | grep oslog@` lists them.
 
 Console: `console=tty0` on m1n1's framebuffer handed over as simplefb is
 the only console needing no cable. dockchannel-UART (m1n1 secondary
@@ -451,11 +466,15 @@ logind does not power off). Verified on this J714s on 2026-11-06: a 13-minute
 sleep, lid closed then opened, back in about 1 s with all 15 CPUs, NVMe,
 keyboard/trackpad and the USB gadget.
 
-Not low-power yet: with `idle=nop` every core spins instead of entering WFI,
-and nothing turns the panel off, so the system draws about what it does awake
-(about 16 W on the SMC's Total System Power). Because timekeeping keeps
-running, a long sleep also trips systemd's service watchdogs (journald is
-restarted on wake).
+Cores idle in WFI since patch 0012: 5.6 W in total and 1.6 W for the SoC
+("Heatpipe Power"), against 15.3 W and 9.7 W with `idle=nop` (SMC sensors,
+same kernel, idle at the console with the panel and keyboard backlight on).
+Nothing turns the panel off yet (that needs the DCP). Patch 0013 registers
+cpuidle, so s2idle freezes the tick and timekeeping: on 2026-11-07, after a
+lid sleep of about 23 s, `CLOCK_BOOTTIME - CLOCK_MONOTONIC` was 23.5 s
+(`suspend_stats` success 1, fail 0; all 15 CPUs back). With `idle=nop`
+timekeeping kept running and a long sleep tripped systemd's service watchdogs
+(journald was restarted on wake).
 
 Patch 0011 is required: the unused debug UART is runtime suspended with its
 power domain (UART0) off, and its system-resume callback wrote the registers

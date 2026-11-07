@@ -26,11 +26,12 @@ packaged as an alternative; it has not been tested on hardware.
 | Input | ✅ built-in keyboard **and** trackpad (DockChannel MTP + `tpmtfw`) |
 | Keyboard backlight | ✅ `fpwm0` + pwm-leds (`/sys/class/leds/kbd_backlight`) |
 | CPU frequency | ✅ all three clusters on schedutil; P cores measured 1307 MHz before, about 4.22 GHz after |
+| CPU idle | ✅ WFI on all 15 cores, no `idle=nop` (patches 0012 + 0013): idle draws 5.6 W in total (SoC 1.6 W) against 15.3 W with `idle=nop` |
 | SMC | ✅ hwmon (both fans, temperatures, power rails); lid opens wake the Mac from sleep; RTC registers |
 | Networking | ✅ USB-C gadget (CDC EEM) - host reaches the Mac over the cable |
 | m1n1 on upstream `main` | ✅ USB enumeration unblocked on T6050 (`patches/m1n1/0005`) |
 | **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
-| Sleep (s2idle) | ✅ functional: `systemctl suspend` sleeps and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). Not low-power yet: cores spin (`idle=nop`) and the panel stays lit; the system draws about 16 W awake |
+| Sleep (s2idle) | ✅ `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping now stop during sleep. The panel stays lit (no DCP driver) |
 | Battery / charger | ⏳ not yet |
 | Wi-Fi / Bluetooth (N1) | ⏳ not yet; the J714c port matches our ADT but needs a pre-Linux PCIe link trainer |
 | GPU | ⏳ not started |
@@ -53,11 +54,12 @@ bundle, so after updating macOS the stub has to be rebuilt:
 With `mBoot-20457.60.65.0.1` the unchanged installed m1n1 starts 14/14
 secondaries.
 
-Linux also needs patch 0009 with `idle=nop arm64.nowfxt` (secondaries lose
-state in WFI/WFIT; a kernel without the override panics in `__delay` on CPU1)
-and patch 0010 (the ANS firmware can take about 3 s to answer RTKit on an
-all-core boot). The October SPTM attribution does not explain the failure: the
-fix is in mBoot, with m1n1 unchanged.
+Linux also needs patch 0009 with `arm64.nowfxt` (cores lose state in WFIT; a
+kernel without the override panics in `__delay` on CPU1), patch 0012 (WFI
+loses x0-x30 and FP/SIMD on every core except the boot CPU, so the idle path
+saves them; `idle=nop` is gone) and patch 0010 (the ANS firmware can take
+about 3 s to answer RTKit on an all-core boot). The October SPTM attribution
+does not explain the failure: the fix is in mBoot, with m1n1 unchanged.
 [`docs/smp-t6050-findings.md`](docs/smp-t6050-findings.md) keeps the
 measurements of the broken firmware, with that history labeled.
 

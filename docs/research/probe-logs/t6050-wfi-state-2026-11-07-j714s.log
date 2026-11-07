@@ -1,0 +1,33 @@
+T6050 (J714s, Mac17,9) WFI register-state probe, m1n1 proxy at EL2
+Firmware: mBoot-20457.60.65.0.1 (stub rebuilt from macOS 27.3 beta 1); m1n1 v1.6.1-28-g4184923f-dirty
+Method: per-CPU mrs via smp_call_sync (secondaries run with the MMU off). WFI test: load
+patterns into x0-x15, x17-x30, arm the EL2 physical timer for 5 ms, mask DAIF, WFI, then
+dump the registers (x16 is the post-wake base, recovered PC-relatively). No sysreg writes
+other than the timer; the watchdog was armed as a safety net.
+
+UTC 2026-11-07T03:17:48.218699+00:00 m1n1 base 0x1000612c000
+watchdog armed (170 s, petted between steps) @ 0x28836c000
+cpu0 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040000', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+alive secondaries: [1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16]
+cpu1 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040001', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu2 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040002', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu3 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040003', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu4 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040004', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu6 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040100', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu7 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040101', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu8 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040102', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu9 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040103', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu10 {'MIDR_EL1': '0x611f0641', 'MPIDR_EL1': '0x80040104', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x188010b000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu12 {'MIDR_EL1': '0x611f0651', 'MPIDR_EL1': '0x80010200', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x1880109000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu13 {'MIDR_EL1': '0x611f0651', 'MPIDR_EL1': '0x80010201', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x1880109000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu14 {'MIDR_EL1': '0x611f0651', 'MPIDR_EL1': '0x80010202', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x1880109000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu15 {'MIDR_EL1': '0x611f0651', 'MPIDR_EL1': '0x80010203', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x1880109000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+cpu16 {'MIDR_EL1': '0x611f0651', 'MPIDR_EL1': '0x80010204', 'CurrentEL': '0x8', 'CNTFRQ_EL0': '0x3b9aca00', 'CYC_OVRD': '0x0', 'ACC_OVRD': '0x1880109000040012', 'ACC_CFG': '0xd', 'AIDR_EL1': '0x12bd170699696'}
+WFI {'cpu': 1, 'ret': '0x600d', 'exceptions': 0, 'rescued_by_ipi': False, 'slept_us': 5005.9, 'lost_regs': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 'lost_zeroed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 'lost_other': {}, 'sp_kept': True, 'tpidr_el2': 1, 'isr_el1': '0x40', 'timer_ctl_after': '0x5'}
+WFI {'cpu': 6, 'ret': '0x600d', 'exceptions': 0, 'rescued_by_ipi': False, 'slept_us': 5005.2, 'lost_regs': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 'lost_zeroed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 'lost_other': {}, 'sp_kept': True, 'tpidr_el2': 6, 'isr_el1': '0x40', 'timer_ctl_after': '0x5'}
+WFI {'cpu': 12, 'ret': '0x600d', 'exceptions': 0, 'rescued_by_ipi': False, 'slept_us': 5007.0, 'lost_regs': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 'lost_zeroed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], 'lost_other': {}, 'sp_kept': True, 'tpidr_el2': 12, 'isr_el1': '0x40', 'timer_ctl_after': '0x5'}
+WFI {'cpu': 0, 'ret': '0x600d', 'host_s': 0.007, 'slept_us': 5000.1, 'lost_regs': [], 'sp_kept': True, 'isr_el1': '0x40', 'timer_ctl_after': '0x5'}
+live DCP segments match offline ADT: True
+live firmware-version: mBoot-20457.60.65.0.1
+__TEXT: 0x9ac000 bytes in 0.4 s -> dcp__TEXT-mBoot-20457.60.65.0.1.bin
+__DATA: 0xb08000 bytes in 0.4 s -> dcp__DATA-mBoot-20457.60.65.0.1.bin
