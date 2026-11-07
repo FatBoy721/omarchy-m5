@@ -1,0 +1,180 @@
+Targeted T6050 cold/start/after probe
+UTC: 2026-11-04T06:11:58.526888+00:00
+Transport: /dev/m1n1 -> /dev/ttyACM0
+Client: vendor/m1n1/proxyclient (local build tag: 4184923-dirty)
+No chainload, kernel load, bootloader installation, or disk writes requested.
+Standard m1n1.setup initialization follows, including its PMU panic-counter reset.
+TTY> Initialized dockchannel UART at 0x288e28000
+TTY> Device info:
+TTY>   Model: Mac17,9
+TTY>   Target: J714s
+TTY>   Board-ID: 0x8
+TTY>   Chip-ID: 0x6050
+TTY> 
+TTY> CPU init (MIDR: 0x611f0641 smp_id:0x0)...
+TTY>   CPU part: 0x64 rev: 0x11
+TTY>   CPU: M5 Pro Sotra (M core)
+TTY> 
+TTY> boot_args at 0x10004ae4000
+TTY>   revision:     3
+TTY>   version:      2
+TTY>   virt_base:    0xfae4000
+TTY>   phys_base:    0x10003ae4000
+TTY>   mem_size:     0xbc701c000
+TTY>   top_of_kdata: 0x10004af4000
+TTY>   video:
+TTY>     base:       0x10bd3110000
+TTY>     display:    0x1
+TTY>     stride:     0x2f40
+TTY>     width:      3024
+TTY>     height:     1964
+TTY>     depth:      30bpp
+TTY>     density:    1
+TTY>   machine_type: 0
+TTY>   devtree:      0x101d0000
+TTY>   devtree_size: 0xb4000
+TTY>   cmdline:      
+TTY>   boot_flags:   0x0
+TTY>   mem_size_act: 0xc00000000
+TTY> 
+TTY> 
+TTY> 
+TTY> m1n1 v1.6.1-28-g4184923f-dirty
+TTY> Copyright The Asahi Linux Contributors
+TTY> Licensed under the MIT license
+TTY> 
+TTY> Running in EL2
+TTY> 
+TTY> OS FW version: unknown (mBoot-18000.120.36)
+TTY> System FW version: unknown (mBoot-18000.120.36)
+TTY> Heap base: 0x10004af4000
+TTY> MCC: Unsupported version:mcc,t6050
+TTY> MMU: Initializing...
+TTY> MMU: RAM base: 0x10000000000
+TTY> MMU: Top of normal RAM: 0x10bcab00000
+TTY> MMU: Adding Device-nGnRE mapping at 0xbc0000000 (0x20000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0xb80000000 (0x40000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1cb0000000 (0x1c000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x800000000 (0x200000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0xa00000000 (0x80000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1c50000000 (0x4000)
+TTY> MMU: Adding Device-nGnRE mapping at 0xc00000000 (0x200000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0xe00000000 (0x80000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1c60000000 (0x4000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1000000000 (0x200000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1200000000 (0x80000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1c70000000 (0x4000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1400000000 (0x200000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1600000000 (0x80000000)
+TTY> MMU: Adding Device-nGnRE mapping at 0x1c80000000 (0x4000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffed0000 (0x20000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffe20000 (0x10000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffe00000 (0x20000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffd90000 (0x10000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffd70000 (0x20000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffd00000 (0x10000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffce0000 (0x20000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffc70000 (0x10000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffc50000 (0x20000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bffbe0000 (0x10000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bfffa8000 (0x4000)
+TTY> MMU: Adding Normal-NC mapping at 0x10bfff20000 (0x4000)
+TTY> MMU: SCTLR_EL1: 30000180 -> 30901085
+TTY> MMU: running with MMU and caches enabled!
+TTY> AIC: Version 3 @ 0x280400000
+TTY> AIC: AIC3 with 1/4 dies, 3104/4096 IRQs, reg_size:40004, config:10000, extintrcfg_stride:04a00, intmaskset_stride:04a00, intmaskclear_stride:04a00
+TTY> AIC: Configuring 1 external interrupts
+TTY> Primary WDT register @ 0x28836c000
+TTY> Primary WDT disabled
+TTY> Secondary WDT register @ 0x288330008
+TTY> Secondary WDT disabled
+TTY> pmgr: Cleaning up device states...
+TTY> pmgr: initialized, 661 devices on 1 dies found.
+TTY> display: Display is internal
+TTY> display: Display is already initialized (3024x1964)
+TTY> fb init: 3024x1964 (30) [s=3024] @0x10bd3110000
+TTY> fb console: max rows 57, max cols 78
+TTY> fb: display logo
+TTY> cpufreq: Chip 0x6050 is unsupported
+TTY> Initialization complete.
+TTY> Checking for payloads...
+TTY> Devicetree compatible value: apple,j714s
+TTY> Unknown payload at 0x100043f4000 (magic: 5b41464b)
+TTY> No valid payload found
+TTY> dart: dart /arm-io/dart-usb0 at 0x2a2f80000 is a t8110
+TTY> USB0: initialized at 0x10004af8090
+TTY> dart: dart /arm-io/dart-usb1 at 0x2aaf80000 is a t8110
+TTY> USB1: initialized at 0x10004af8560
+TTY> dart: dart /arm-io/dart-usb2 at 0x382f80000 is a t8110
+TTY> USB2: initialized at 0x10004af8a60
+TTY> Running proxy...
+TTY> Heap limit: 0x1000f0fc000 (128 MiB)
+m1n1 base: 0x100042e4000
+Fetching ADT (0x000B4000 bytes)...
+
+Target identity (selected non-identifying ADT properties):
+Traceback (most recent call last):
+  File "<cell>", line 20, in <module>
+  File "/home/bay/Work/omarchy-m5/vendor/m1n1/proxyclient/m1n1/proxyutils.py", line 449, in __getitem__
+    return self._adt[item]
+           ~~~~~~~~~^^^^^^
+  File "/home/bay/Work/omarchy-m5/vendor/m1n1/proxyclient/m1n1/adt.py", line 575, in __getitem__
+    raise KeyError(f"Child node '{item}' not found")
+KeyError: "Child node '' not found"
+
+Continuing metadata inspection without reconnecting or repeating setup.
+root model: 'Mac17,9'
+root compatible: ListContainer(['J714sAP', 'Mac17,9', 'AppleARM'])
+/chosen/target-type: None
+/chosen/board-id: 0x8
+/chosen/chip-id: 0x6050
+/chosen/firmware-version: b'mBoot-18000.120.36\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+/chosen/system-firmware-version: 'mBoot-18000.120.36'
+ADT CPU nodes: cpu0, cpu1, cpu2, cpu3, cpu4, cpu6, cpu7, cpu8, cpu9, cpu10, cpu12, cpu13, cpu14, cpu15, cpu16
+ADT boot CPU: cpu0
+Preflight complete; no secondary startup attempted yet.
+
+=== Supplied probe body (setup already imported once) ===
+cold pmgr ['0x3fffe', '0x3fffe', '0x0', '0x0', '0x0']
+cold cpu0 0x210050000 rvbar 0x100100042e4001 +0x100 0x80802aef201102
+cold cpu1 0x210150000 rvbar 0x100100042e4001 +0x100 0x118040000000d800
+cold cpu6 0x211050000 rvbar 0x1100100042e4001 +0x100 0x8040000000d800
+cold cpu12 0x212050000 rvbar 0x2100100042e4001 +0x100 0x8040000000d800
+TTY> Starting secondary CPUs...
+TTY> Starting CPU 1 (0:0:1)... Failed!
+TTY> Starting CPU 2 (0:0:2)... Failed!
+TTY> Starting CPU 3 (0:0:3)... Failed!
+TTY> Starting CPU 4 (0:0:4)... Failed!
+TTY> Starting CPU 6 (0:1:0)... Failed!
+TTY> Starting CPU 7 (0:1:1)... Failed!
+TTY> Starting CPU 8 (0:1:2)... Failed!
+TTY> Starting CPU 9 (0:1:3)... Failed!
+TTY> Starting CPU 10 (0:1:4)... Failed!
+TTY> Starting CPU 12 (0:2:0)... Failed!
+TTY> Starting CPU 13 (0:2:1)... Failed!
+TTY> Starting CPU 14 (0:2:2)... Failed!
+TTY> Starting CPU 15 (0:2:3)... Failed!
+TTY> Starting CPU 16 (0:2:4)... Failed!
+after pmgr ['0x3e000', '0x3e000', '0x0', '0x0', '0x0']
+after cpu0 0x210050000 rvbar 0x100100042e4001 +0x100 0x80802aef201102
+after cpu1 0x210150000 rvbar 0x100100042e4001 +0x100 0x118080caef20d102
+after cpu6 0x211050000 rvbar 0x1100100042e4001 +0x100 0x80804aef205102
+after cpu12 0x212050000 rvbar 0x2100100042e4001 +0x100 0x80804aef205102
+Post-probe proxy NOP: successful
+Host serial connection closed; no reboot or additional target writes requested.
+UTC completed: 2026-11-04T06:12:57.064025+00:00
+
+=== Offline comparison of the captured output; no further hardware accesses ===
+Supplied probe completed: True
++0x100 comparisons against edimoldovan: 8; mismatches: []
+Failed secondary CPU IDs (14): [1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16]
+Captured topology: 5 cores in each of clusters 0, 1, and 2; cpu5/cpu11/cpu17 absent.
+4*cluster+core release-bit union for this topology: 0x1ffe
+Cold mask & ~release-bit union: 0x3fffe & ~0x1ffe = 0x3e000
+Observed after PMGR masks: 0x3e000, 0x3e000
+RVBAR unchanged on all four sampled cores; cpu0 and cpu1 RVBAR identical.
+All sampled RVBAR addresses decode to the resident m1n1 base: 0x100042e4000
+No secondaries started; the post-probe NOP succeeded and the host serial connection is closed.
+Caveat: resident loader and firmware differ from edimoldovan's newer reference.
+Preflight-only host error: root ADT indexing syntax was corrected without repeating setup or starting CPUs.
+No exploratory MMIO writes, PMP accesses, chainload, installation, or disk writes were performed.

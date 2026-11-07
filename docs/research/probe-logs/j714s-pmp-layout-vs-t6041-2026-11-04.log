@@ -1,0 +1,20 @@
+Offline PMP report-layout comparison: J714s/T6050 and public T6040/T6041 support
+J714s source: cached runtime ADT from docs/research/probe-logs/t6050-cpu-impl-0100-2026-11-04-j714s.log
+Public reference: https://github.com/aurora-silicon/linux/pull/374
+Reference file: drivers/pmdomain/apple/pmp-report.c, apple_pmp_offsets_t6041
+No new hardware reads, serial connection, PMP start, or register writes.
+
+J714s PTD range entries: 29
+Field                  J714s byte offset  T6041 byte offset  Match
+PMP-STATUS read         0x000010           0x000010           True
+SOC-DEV-PS-REQ read     0x001e00           0x001e00           True
+SOC-DEV-PS-ACK read     0x001e80           0x001e80           True
+FAST-DIE-CE read        0x002580           0x002580           True
+SOC-DEV-PS-REQ write    0x010f00           0x010f00           True
+
+ADT records are decoded as 32-byte <IIII16s entries.
+Read offset = entry offset * 16; write offset = 0x10000 + entry offset * 8.
+The comparison establishes these offsets only, not the meaning of every field,
+MMIO access permissions or widths, matching firmware protocols, or PMP startup.
+The public M4 startup code still writes ASC CPU_CONTROL; T6050 ASC access remains
+a reported obstacle in https://github.com/omacom/linux-aurora/issues/293.

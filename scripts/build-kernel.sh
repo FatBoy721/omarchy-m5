@@ -10,11 +10,12 @@
 #   scripts/build-kernel.sh dtbs      # DTBs only (fast syntax check)
 #   scripts/build-kernel.sh menuconfig
 #   KCONFIG=asahi_defconfig scripts/build-kernel.sh
+#   LINUX=build/linux-test scripts/build-kernel.sh  # isolated source/build tree
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-LINUX=vendor/linux
+LINUX="${LINUX:-vendor/linux}"
 DTS_DIR="$LINUX/arch/arm64/boot/dts/apple"
 # defconfig alone leaves DRM=m and DRM_SIMPLEDRM unset, which yields a
 # kernel that boots but shows nothing on the panel. Fragments are merged

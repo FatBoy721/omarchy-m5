@@ -12,10 +12,24 @@ ownership are synthesized directly in the archive.
 The generated /init mounts the pseudo-filesystems, prints the boot banner we
 care about for the first milestone (console alive, single core), and execs a
 shell on /dev/console so a dead kernel is distinguishable from a dead shell.
+
+Use --diagnostic for a RAM-only Mach-O/Aura trial image:
+
+  scripts/mkinitramfs.py --diagnostic --out build/aura-test/initramfs.cpio.gz
+
+This mode reports device-tree identity, kernel/CPU/EL state and advancing
+uptime, then opens an interactive console shell. It ignores m5.root, does not
+touch the framebuffer or start USB gadgets, and includes neither provisioning
+helpers nor a rootfs image. Run smp-check explicitly from that shell for a
+small deterministic computation pinned to each online CPU (not a stress test).
+Diagnostic mode uses Alpine v3.21 and a pinned util-linux taskset executable
+(Alpine's BusyBox does not include taskset).
+--diagnostic and --rootfs-image are mutually exclusive.
 """
 
 import argparse
 import gzip
+import hashlib
 import io
 import os
 import stat
@@ -24,6 +38,8 @@ import tarfile
 import urllib.request
 
 CDN = "https://dl-cdn.alpinelinux.org/alpine"
+TASKSET_APK = f"{CDN}/v3.21/main/aarch64/util-linux-misc-2.40.4-r1.apk"
+TASKSET_SHA256 = "4e852c3a14fedde2490f84de0eac0064be51e4593753610db5875baf6db48746"
 
 INIT = r"""#!/bin/sh
 # omarchy-m5 bring-up init.
@@ -96,6 +112,115 @@ exec $BB sh
 """
 
 
+DIAGNOSTIC_INIT = r"""#!/bin/sh
+# RAM-only bring-up: no block mounts, root handoff, framebuffer writes or gadgets.
+BB=/bin/busybox
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+$BB mkdir -p /proc /sys /dev /tmp /run
+$BB mount -t proc proc /proc
+$BB mount -t sysfs sysfs /sys
+$BB mount -t devtmpfs devtmpfs /dev 2>/dev/null
+$BB mount -t tmpfs tmpfs /tmp
+$BB mount -t tmpfs tmpfs /run
+$BB mkdir -p /dev/pts
+$BB mount -t devpts devpts /dev/pts
+exec </dev/console >/dev/console 2>&1
+
+echo
+echo "omarchy-m5: RAM-only diagnostic userspace"
+echo "No block filesystems mounted; m5.root is ignored."
+printf 'machine: '
+if [ -r /proc/device-tree/model ]; then
+    $BB tr '\000' '\n' </proc/device-tree/model
+else
+    echo "(device-tree model unavailable)"
+fi
+echo "compatible:"
+if [ -r /proc/device-tree/compatible ]; then
+    $BB tr '\000' '\n' </proc/device-tree/compatible
+else
+    echo "(device-tree compatible unavailable)"
+fi
+echo "kernel: $($BB uname -a)"
+echo "cmdline: $($BB cat /proc/cmdline)"
+echo "CPU online: $($BB cat /sys/devices/system/cpu/online)"
+echo "CPU possible: $($BB cat /sys/devices/system/cpu/possible)"
+echo "Kernel-reported EL handoff (not a userspace EL measurement):"
+if ! $BB dmesg | $BB grep -E 'CPU: All CPU\(s\) started at EL[12]|CPU: CPUs started in inconsistent modes'; then
+    echo "(no EL handoff message available)"
+fi
+echo "Uptime samples (seconds since boot, aggregate idle seconds):"
+i=0
+while [ "$i" -lt 3 ]; do
+    $BB cat /proc/uptime
+    i=$((i + 1))
+    [ "$i" -eq 3 ] || $BB sleep 1
+done
+echo
+echo "Run smp-check explicitly to check each online CPU."
+# Use the real active tty: Alpine's BusyBox has setsid -c but no cttyhack.
+# tty0 is the virtual-console alias; resolve it before acquiring the terminal.
+console=$($BB cat /sys/class/tty/console/active)
+console=${console##* }
+if [ "$console" = tty0 ]; then
+    console=$($BB cat /sys/class/tty/tty0/active)
+fi
+while :; do
+    $BB setsid -c $BB sh -i <"/dev/$console" >"/dev/$console" 2>&1
+    echo "Console shell exited; restarting."
+    $BB sleep 1
+done
+"""
+
+
+SMP_CHECK = r"""#!/bin/sh
+# Explicit, sequential affinity/computation check; not a stress test.
+BB=/bin/busybox
+
+online=$("$BB" cat /sys/devices/system/cpu/online) || exit 1
+if [ -z "$online" ]; then
+    echo "FAIL: no online CPU list" >&2
+    exit 1
+fi
+echo "Checking online CPU snapshot: $online"
+old_ifs=$IFS
+IFS=,
+set -- $online
+IFS=$old_ifs
+failed=0
+for range do
+    case "$range" in
+        *-*) cpu=${range%-*}; last=${range#*-} ;;
+        *) cpu=$range; last=$range ;;
+    esac
+    while [ "$cpu" -le "$last" ]; do
+        # Sum 1..10000: expected 50005000, with no overflow even on 32-bit.
+        if result=$(/usr/bin/taskset -c "$cpu" "$BB" sh -c '
+            i=1
+            sum=0
+            while [ "$i" -le 10000 ]; do
+                sum=$((sum + i))
+                i=$((i + 1))
+            done
+            printf "%s\n" "$sum"
+        '); then
+            if [ "$result" = 50005000 ]; then
+                echo "CPU $cpu: PASS (sum=$result)"
+            else
+                echo "CPU $cpu: FAIL (expected 50005000, got $result)" >&2
+                failed=1
+            fi
+        else
+            echo "CPU $cpu: FAIL (affinity or computation failed)" >&2
+            failed=1
+        fi
+        cpu=$((cpu + 1))
+    done
+done
+exit "$failed"
+"""
+
+
 class CpioWriter:
     """newc (SVR4, no CRC) cpio writer."""
 
@@ -154,11 +279,30 @@ def fetch(url, cache_dir):
     return path
 
 
+def pack_taskset(cpio, cache_dir):
+    # Only taskset, not this package's disk-management tools. Its sole DT_NEEDED
+    # is libc.musl-aarch64.so.1, already supplied by the Alpine minirootfs.
+    path = fetch(TASKSET_APK, cache_dir)
+    with open(path, "rb") as stream:
+        data = stream.read()
+    if hashlib.sha256(data).hexdigest() != TASKSET_SHA256:
+        raise ValueError(f"taskset package checksum mismatch: {path}")
+    # APK v2 concatenates signature, control and data tar/gzip streams.
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz", ignore_zeros=True) as tf:
+        member = tf.getmember("usr/bin/taskset")
+        cpio.parents(member.name)
+        cpio.entry(member.name, stat.S_IFREG | 0o755, tf.extractfile(member).read())
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--version", default="3.21.3", help="Alpine release")
     ap.add_argument("--out", default="build/initramfs.cpio.gz")
     ap.add_argument("--cache", default="build/cache")
+    ap.add_argument("--diagnostic", action="store_true",
+                    help="RAM-only console diagnostics and explicit smp-check; "
+                         "no root handoff, provisioning, framebuffer writes or USB "
+                         "gadget startup; incompatible with --rootfs-image")
     ap.add_argument("--firmware", default="build/firmware",
                     help="tree packed under lib/firmware/ if it exists "
                          "(apple/tpmtfw-j714s.bin: scripts/extract-tpmtfw.py)")
@@ -167,8 +311,12 @@ def main():
                          "for provision-rootfs, in a second, uncompressed cpio segment "
                          "(the kernel unpacks concatenated archives; IMG is already gzip)")
     args = ap.parse_args()
+    if args.diagnostic and args.rootfs_image is not None:
+        ap.error("--diagnostic cannot be combined with --rootfs-image")
 
     branch = "v" + ".".join(args.version.split(".")[:2])
+    if args.diagnostic and branch != "v3.21":
+        ap.error("--diagnostic requires Alpine v3.21 for its pinned taskset package")
     url = (f"{CDN}/{branch}/releases/aarch64/"
            f"alpine-minirootfs-{args.version}-aarch64.tar.gz")
 
@@ -219,12 +367,18 @@ def main():
                 cpio.entry(name, stat.S_IFREG | 0o644, open(src, "rb").read())
                 print(f"    firmware: /{name}")
 
-    here = os.path.dirname(__file__)
-    cpio.entry("init", stat.S_IFREG | 0o755, INIT.encode())
-    cpio.entry("usr/sbin/usb-gadget-net", stat.S_IFREG | 0o755,
-               open(os.path.join(here, "usb-gadget-net.sh"), "rb").read())
-    cpio.entry("usr/sbin/provision-rootfs", stat.S_IFREG | 0o755,
-               open(os.path.join(here, "provision-rootfs.sh"), "rb").read())
+    if args.diagnostic:
+        pack_taskset(cpio, args.cache)
+        cpio.entry("init", stat.S_IFREG | 0o755, DIAGNOSTIC_INIT.encode())
+        cpio.parents("usr/sbin/smp-check")
+        cpio.entry("usr/sbin/smp-check", stat.S_IFREG | 0o755, SMP_CHECK.encode())
+    else:
+        here = os.path.dirname(__file__)
+        cpio.entry("init", stat.S_IFREG | 0o755, INIT.encode())
+        cpio.entry("usr/sbin/usb-gadget-net", stat.S_IFREG | 0o755,
+                   open(os.path.join(here, "usb-gadget-net.sh"), "rb").read())
+        cpio.entry("usr/sbin/provision-rootfs", stat.S_IFREG | 0o755,
+                   open(os.path.join(here, "provision-rootfs.sh"), "rb").read())
     cpio.close()
 
     raw = buf.getvalue()
