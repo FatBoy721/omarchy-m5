@@ -158,6 +158,213 @@ native 3024x1964 with DARTs initialized. `nvram boot-volume` points at the
 stub VGID, so an unattended power-on lands in m1n1, **not** macOS; get
 macOS back with power-hold → picker → Macintosh HD (still Full Security).
 
+## Stub firmware refresh (all cores)
+
+The stage-2 firmware (iBoot/mBoot) that loads m1n1 comes from the Omarchy
+stub's own Preboot restore bundle, which `prep-stub.sh` cloned from macOS at
+install time. Updating macOS replaces LLB (`/chosen/system-firmware-version`)
+but not that bundle (`/chosen/firmware-version`, m1n1's "OS FW version").
+Apple's fix for "only a single core is available ... custom raw boot object"
+on M5 Pro/Max/Ultra shipped in macOS 27.3 beta 1 (26C5035r), so the stub must
+be rebuilt from 27.3 beta 1 or later:
+
+1. Update macOS (the main volume) to 27.3 beta 1 or later. Back up first:
+   firmware cannot be rolled back.
+2. In macOS, from a checkout (only `scripts/` is needed):
+
+   ```sh
+   sudo scripts/refresh-stub-firmware.sh check
+   sudo scripts/refresh-stub-firmware.sh recreate --yes
+   ```
+
+   `recreate` backs up the stub's restore bundle(s), boot folder and current
+   `boot.bin` to `~/omarchy-stub-backup-<VGID>`, deletes only the stub's four
+   APFS volumes, then reruns `prep-stub.sh` (resume mode: no resize, no new
+   partitions) and `finish-install.sh` with the same m1n1. macOS, the EFI
+   partition and the Linux root are untouched. Refreshing in place fails at
+   `bless` with bootpolicy error 11 ("AP boot mode"), hence the recreate
+   (found by rolotrealanis98/m5pro-linux).
+3. Shut down, hold power until "Loading startup options", pick Omarchy.
+   step2 runs `bputil -nc` and `kmutil`; expect the admin password prompt more
+   than once. The new stub is blessed as the default startup disk.
+4. On the host, m1n1's banner shows `OS FW version: ... (mBoot-20457.60.65.0.1)`
+   or later, and `p.smp_start_secondaries()` prints `Started.` for all 14
+   secondaries.
+
+Verified on this J714s on 2026-11-06: before, `mBoot-18000.120.36` and 14/14
+`Failed!`; after, 14/14 `Started.` with the unchanged installed m1n1
+(v1.6.1-28-g4184923f). The tether bundle then boots Linux with
+`idle=nop arm64.nowfxt` and no `maxcpus`.
+
+After starting secondaries from the proxy (probes), reset the Mac
+(`hv/wdt-arm.py 5`) before chainloading: a chainloaded m1n1 expects them off.
+A watchdog reset lands on the default startup disk.
+
+## Aura Mach-O diagnostic trial (J714s)
+
+This is an alternative to the installed raw Stage 1, not an installer rerun.
+It integrates Aura **v1.0.0b4**, commit
+`8b15096337e97f934438e1e7f3e96182440351dc`, including
+[the Mach-O boot object](https://github.com/aurora-silicon/aura/pull/29) and
+[the all-chip monitor probe](https://github.com/aurora-silicon/aura/pull/62).
+Upstream's documented Mach-O hardware result is T8140, not our J714s.
+Neither M5 Pro SMP nor PMP/GPU operation is claimed by this integration.
+SMP no longer depends on it (see [Stub firmware refresh](#stub-firmware-refresh-all-cores));
+it remains an untested alternative Stage 1.
+
+### Build without changing the working boot artifacts
+
+From the configured host checkout, with the existing kernel build and a saved
+copy of the **enrolled** raw Stage 1 at `build/m1n1-enrolled-stage1.bin`:
+
+```sh
+make aura-test
+python3 scripts/prepare-aura-test.py --verify build/aura-test
+```
+
+For a different verified backup path, use
+`make aura-test AURA_ROLLBACK=/path/to/known-good-stage1.bin`.
+Preparing the bundle directly requires an explicit `--rollback` argument.
+On this J714s, reading the active Preboot custom IMG4 payload established that
+the enrolled raw image matches the Mac's installer resource, but differs from
+our newer local `build/m1n1-stage1.bin`. The original local build is preserved;
+the recovered enrolled payload is the rollback source. Do not infer enrollment
+from an artifact's filename.
+
+Use Python 3.11+ and the existing LLVM/Rust build dependencies. `vendor/aura`
+is separate from `vendor/m1n1`; a different revision or tracked edits are
+refused rather than overwritten. The kernel builds in a temporary copy of
+`vendor/linux`, with the same DT/config except its local-version suffix and
+`CONFIG_OMARCHY_FB_MARKERS` disabled. Fixed physical framebuffer addresses are
+not carried across the boot-object change. Initial display output now depends
+on the normal simplefb/simpledrm handoff, not the old colored markers.
+
+Outputs are in `build/aura-test/`, also packaged as `build/aura-test.tar.gz`:
+
+- `boot/aura-boot.macho`: the **enrollable** Mach-O boot object, not `aura.macho`.
+- `boot/aura-stage1.bin`: its exact raw partner. The factory Stage 1 config is
+  deliberately unfilled: no ESP target or automatic disk boot. `CHAINLOADING=1`
+  enables Aura Stage 1 support; `RELEASE`, `ESP_STAGE2` and NV2 build flags are off.
+- `boot/Image.gz`, `boot/t6050-j714s.dtb`, `kernel.config`: isolated kernel artifacts.
+- `boot/initramfs.cpio.gz`: RAM-only diagnostics, console shell and explicit
+  `smp-check`. It ignores `m5.root`, does not mount block filesystems, write
+  `/dev/mem`, start USB gadgets or include provisioning helpers. Task affinity
+  uses the pinned Alpine util-linux `taskset`, not a missing BusyBox applet.
+- `rollback/m1n1-stage1.bin`: a copy of the saved local raw image. **Identify it
+  as the known-good installed Stage 1 before relying on it for recovery.**
+- `SHA256SUMS`, `manifest.json`, the matching Aura proxyclient and tether commands.
+
+The verifier compares the complete deterministic upstream Mach-O encoding,
+including the entry/vector addresses and zero padding, with the paired raw
+image. It also refuses a filled Stage 1 config or unexpected build flags.
+It does not replace Apple's native inspection.
+
+### Native preflight, approval and rollback
+
+Copy the bundle to existing storage accessible from the Mac's Recovery; keep
+the rollback image there too. Do not format storage for this. In normal macOS,
+from the unpacked bundle directory, run the read-only checks:
+
+```sh
+shasum -a 256 -c SHA256SUMS
+kmutil inspect -B "$PWD/boot/aura-boot.macho" --show-mach-boot-properties
+diskutil apfs list
+```
+
+Require **`kcbz : 0`**. Identify the actual **Omarchy System volume and its
+volume-group UUID**, not a guessed disk number and never Macintosh HD. Record
+the current firmware version and establish that the saved raw image is the
+working fallback. Checksum equality alone does not establish that provenance.
+
+Enter the target's paired one-true Recovery and verify it with
+`bputil -d -v "$VGID"` (`: Paired` and `one true recoveryOS`). Set `TARGET` to
+that verified mounted System volume and `BUNDLE` to the absolute bundle path
+as visible in Recovery. If pairing or volume identity is unclear, stop.
+**Obtain explicit approval for that exact target and image before enrolling.**
+
+Only after those checks and approval:
+
+```sh
+kmutil configure-boot -c "$BUNDLE/boot/aura-boot.macho" -v "$TARGET"
+```
+
+There is **no `--raw` or entry-point argument** for this image. Do not run
+`prep-stub.sh`, `finish-install.sh`, `bputil -nc`, partitioning, or a security
+reset for this already-installed trial. Enrolling this Stage 1 is the persistent
+change; the later Linux payload and diagnostic userspace are loaded into RAM.
+Chainloading Aura behind the old raw Stage 1 does not test this iBoot path.
+
+If the candidate hangs or loses USB, shut down and use the power-hold startup
+picker to return to macOS/Recovery. From the **same verified paired Recovery
+and target**, the approved rollback command is:
+
+```sh
+kmutil configure-boot -c "$BUNDLE/rollback/m1n1-stage1.bin" \
+  --raw --entry-point 2048 --lowest-virtual-address 0 -v "$TARGET"
+```
+
+`finish-install.sh --undo` is not a boot-object rollback.
+
+### Tethered test after a cold boot of the enrolled image
+
+On the host, in `build/aura-test` (use the actual enumerated serial device):
+
+```sh
+python3 -m venv ../aura-client-venv
+../aura-client-venv/bin/pip install -r requirements.txt
+export PYTHON="$PWD/../aura-client-venv/bin/python"
+export AURADEVICE=/dev/ttyACM0
+set -o pipefail
+./probe-smp.sh --start 2>&1 | tee aura-smp.log
+```
+
+The probe checks the J714s identity, reads only selected metadata and requests
+secondary startup once. It does not scan MMIO or access PMP. Standard
+`aura.setup` does reset the PMU panic counter. This machine has **15 CPUs**:
+ADT IDs `0-4,6-10,12-16`; absent IDs 5, 11 and 17 are the binning, not failed CPUs.
+The boot CPU is counted from ADT state because Aura's secondary liveness flag
+does not represent it. If starts fail, preserve the log and stop the SMP trial.
+
+First test Linux with:
+
+```sh
+./boot-linux.sh --single
+```
+
+`maxcpus=1` limits Linux, **not** Aura: upstream `linux.py` still attempts
+secondary startup before preparing the DT. The command uses `idle=nop` and
+`arm64.nowfxt` for our existing kernel; `idle=poll` is not its arm64 option.
+No SSD root argument, TSO override or NV2 request is passed.
+
+After a successful first boot, cold-boot Aura again for:
+
+```sh
+./boot-linux.sh --smp
+```
+
+On the Mac's diagnostic console run `smp-check`. Capture Aura's start results,
+any monitor/heap-probe messages, Linux's `CPU: All CPU(s) started at EL1` or EL2
+message, online CPU count, advancing uptime and each per-CPU PASS/FAIL result.
+With no live secondary, the monitor probe cannot establish confinement and
+does not select the EL1 path. That is a prerequisite to observe, not evidence
+that the new Stage 1 has already solved secondary startup.
+
+Host validation: the candidate builds; its embedded kernel config matches the
+packaged config; original raw-loader/kernel artifacts remain byte-identical.
+Corrupt/mismatched Mach-O pairs and non-factory Stage 1 config were rejected.
+The diagnostic image booted under QEMU with a separate generic arm64 kernel;
+its console and CPU checks passed with online sets `0-2` and `0,2`, and only
+RAM/pseudo filesystems were mounted despite an `m5.root` argument. This validates
+the diagnostic userspace, **not the M5 Pro boot path**.
+
+Native preflight on this J714s (macOS 26.5 / 25F71, firmware 18000.120.36)
+also passed: the transferred bundle's checksums match, and Apple's `kmutil
+inspect` accepts the candidate and reports `kcbz : 0`. The rollback payload was
+recovered from the active Preboot custom IMG4, not guessed from a local build.
+Preboot was mounted read-only for that check and unmounted afterward. No boot
+policy was changed. Enrollment and Linux boot through the candidate remain
+pending; normal macOS inspection is not a hardware boot test.
+
 ## Dev loop
 
 Two loops. The tethered one is the real one; the standalone one exists
@@ -195,9 +402,13 @@ Note the upstream tools take **positional** arguments
 the bundle wrap that. Iterations are memory-only - the installed boot
 object is never rewritten, and a bad boot just needs a power-cycle.
 
-Expect `Starting CPU n … Failed!` for every secondary: SMP is broken on
-T6050 and m1n1 gives each core 100 ms before moving on (~1.4 s total,
-not fatal). That is why the cmdline pins `maxcpus=1`.
+With the stub on mBoot 20457.60 or later, every secondary prints `Started.`
+and Linux brings up all 15 CPUs. On older stub firmware each prints `Failed!`
+after 100 ms (about 1.4 s total, not fatal); boot with `maxcpus=1` then.
+
+If the host cannot reach `10.55.0.2` over IPv4 (a Tailscale exit node on the
+host routes `10.55.0.0/24` into its own table), the gadget's link-local
+address works: `ssh bay@fe80::4d:35ff:fe00:2%<host gadget interface>`.
 
 If proxyclient doesn't enumerate, try the other USB-C ports - the gadget
 binds to one specific dwc3 port.
@@ -220,9 +431,11 @@ and fails if the chain doesn't parse, so a bad `cat` never reaches the
 ceremony. Use this for milestone boots; it costs a ceremony per kernel, so
 it is not an iteration loop.
 
-Kernel cmdline for first boots: `maxcpus=1` (SMP is broken - secondaries
-never execute the reset vector), plus the M4+ WFI workaround (`idle=` param
-from linux-next, or m1n1 PR #672's auto-disable).
+Kernel cmdline: `idle=nop arm64.nowfxt`. M5 secondaries lose state in WFI and
+in WFIT/WFET; a kernel that ignores `arm64.nowfxt` (built without patch 0009)
+panics in `__delay` on CPU1 with zeroed registers. Check with
+`zcat Image.gz | grep -a arm64.nowfxt`. Add `maxcpus=1` only on old stub
+firmware.
 
 Console: `console=tty0` on m1n1's framebuffer handed over as simplefb is
 the only console needing no cable. dockchannel-UART (m1n1 secondary

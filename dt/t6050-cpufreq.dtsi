@@ -184,6 +184,125 @@
 		};
 	};
 
+	p_opp: opp-table-p {
+		compatible = "operating-points-v2";
+
+		opp02 {
+			opp-hz = /bits/ 64 <1308000000>;
+			opp-level = <2>;
+			opp-microvolt = <760000>;
+			clock-latency-ns = <8000>;
+		};
+		opp03 {
+			opp-hz = /bits/ 64 <1620000000>;
+			opp-level = <3>;
+			opp-microvolt = <785000>;
+			clock-latency-ns = <8000>;
+		};
+		opp04 {
+			opp-hz = /bits/ 64 <1980000000>;
+			opp-level = <4>;
+			opp-microvolt = <820000>;
+			clock-latency-ns = <8000>;
+		};
+		opp05 {
+			opp-hz = /bits/ 64 <2292000000>;
+			opp-level = <5>;
+			opp-microvolt = <855000>;
+			clock-latency-ns = <8000>;
+		};
+		opp06 {
+			opp-hz = /bits/ 64 <2580000000>;
+			opp-level = <6>;
+			opp-microvolt = <885000>;
+			clock-latency-ns = <8000>;
+		};
+		opp07 {
+			opp-hz = /bits/ 64 <2880000000>;
+			opp-level = <7>;
+			opp-microvolt = <920000>;
+			clock-latency-ns = <8000>;
+		};
+		opp08 {
+			opp-hz = /bits/ 64 <3180000000>;
+			opp-level = <8>;
+			opp-microvolt = <950000>;
+			clock-latency-ns = <8000>;
+		};
+		opp09 {
+			opp-hz = /bits/ 64 <3432000000>;
+			opp-level = <9>;
+			opp-microvolt = <980000>;
+			clock-latency-ns = <8000>;
+		};
+		opp10 {
+			opp-hz = /bits/ 64 <3648000000>;
+			opp-level = <10>;
+			opp-microvolt = <1010000>;
+			clock-latency-ns = <8000>;
+		};
+		opp11 {
+			opp-hz = /bits/ 64 <3828000000>;
+			opp-level = <11>;
+			opp-microvolt = <1030000>;
+			clock-latency-ns = <8000>;
+		};
+		opp12 {
+			opp-hz = /bits/ 64 <3984000000>;
+			opp-level = <12>;
+			opp-microvolt = <1050000>;
+			clock-latency-ns = <8000>;
+		};
+		opp13 {
+			opp-hz = /bits/ 64 <4104000000>;
+			opp-level = <13>;
+			opp-microvolt = <1065000>;
+			clock-latency-ns = <8000>;
+		};
+		opp14 {
+			opp-hz = /bits/ 64 <4188000000>;
+			opp-level = <14>;
+			opp-microvolt = <1075000>;
+			clock-latency-ns = <8000>;
+		};
+		opp15 {
+			opp-hz = /bits/ 64 <4236000000>;
+			opp-level = <15>;
+			opp-microvolt = <1075000>;
+			clock-latency-ns = <8000>;
+		};
+		opp16 {
+			opp-hz = /bits/ 64 <4284000000>;
+			opp-level = <16>;
+			opp-microvolt = <1075000>;
+			clock-latency-ns = <8000>;
+		};
+		opp17 {
+			opp-hz = /bits/ 64 <4308000000>;
+			opp-level = <17>;
+			opp-microvolt = <1075000>;
+			clock-latency-ns = <8000>;
+		};
+		opp18 {
+			opp-hz = /bits/ 64 <4332000000>;
+			opp-level = <18>;
+			opp-microvolt = <1075000>;
+			clock-latency-ns = <8000>;
+		};
+		opp19 {
+			opp-hz = /bits/ 64 <4428000000>;
+			opp-level = <19>;
+			opp-microvolt = <1075000>;
+			clock-latency-ns = <8000>;
+		};
+		opp20 {
+			opp-hz = /bits/ 64 <4512000000>;
+			opp-level = <20>;
+			opp-microvolt = <1120000>;
+			clock-latency-ns = <8000>;
+		};
+	};
+
 };
 
 &soc {
@@ -198,6 +317,13 @@
 		compatible = "apple,t6050-cluster-cpufreq", "apple,t8112-cluster-cpufreq",
 			     "apple,cluster-cpufreq";
 		reg = <0x2 0x11e20000 0x0 0x1000>;
+		#performance-domain-cells = <0>;
+	};
+
+	cpufreq_p: performance-controller@212e20000 {
+		compatible = "apple,t6050-cluster-cpufreq", "apple,t8112-cluster-cpufreq",
+			     "apple,cluster-cpufreq";
+		reg = <0x2 0x12e20000 0x0 0x1000>;
 		#performance-domain-cells = <0>;
 	};
 
@@ -261,4 +387,34 @@
 &cpu_m1_5 {
 	operating-points-v2 = <&m1_opp>;
 	performance-domains = <&cpufreq_m1>;
+};
+
+&cpu_p0 {
+	operating-points-v2 = <&p_opp>;
+	performance-domains = <&cpufreq_p>;
+};
+
+&cpu_p1 {
+	operating-points-v2 = <&p_opp>;
+	performance-domains = <&cpufreq_p>;
+};
+
+&cpu_p2 {
+	operating-points-v2 = <&p_opp>;
+	performance-domains = <&cpufreq_p>;
+};
+
+&cpu_p3 {
+	operating-points-v2 = <&p_opp>;
+	performance-domains = <&cpufreq_p>;
+};
+
+&cpu_p4 {
+	operating-points-v2 = <&p_opp>;
+	performance-domains = <&cpufreq_p>;
+};
+
+&cpu_p5 {
+	operating-points-v2 = <&p_opp>;
+	performance-domains = <&cpufreq_p>;
 };

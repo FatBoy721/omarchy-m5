@@ -11,6 +11,7 @@
 
 #include "t6050.dtsi"
 #include "t6050-jxxx.dtsi"
+#include <dt-bindings/leds/common.h>
 
 / {
 	compatible = "apple,j714s", "apple,t6050", "apple,arm-platform";
@@ -21,6 +22,30 @@
 		 * from /arm-io/dockchannel-mtp/mtp-transport/keyboard kblang-calibration */
 		keyboard = &keyboard;
 	};
+
+	/* ADT /arm-io/pwm0/kbd-backlight: default-hz 25000 -> 40000 ns period. */
+	led-controller {
+		compatible = "pwm-leds";
+
+		led-0 {
+			pwms = <&fpwm0 0 40000>;
+			label = "kbd_backlight";
+			function = LED_FUNCTION_KBD_BACKLIGHT;
+			color = <LED_COLOR_ID_WHITE>;
+			max-brightness = <255>;
+			default-state = "keep";
+		};
+	};
+};
+
+&fpwm0 {
+	status = "okay";
+};
+
+/* Built-in panel: simpledrm reports it as eDP-1 (Omarchy's lid handling
+ * treats every other connector type as an external monitor). */
+&framebuffer0 {
+	apple,internal-panel;
 };
 
 /* J714s is a binned SKU: 5 cores per cluster, cpu5/cpu11/cpu17 fused off */
@@ -82,3 +107,15 @@
 #include "hwmon-common.dtsi"
 #include "hwmon-fan-dual.dtsi"
 #include "hwmon-laptop.dtsi"
+
+/* The T6050 SMC spells the fan mode keys F0md/F1md; the F0Md/F1Md in
+ * hwmon-fan*.dtsi do not exist, and without them no fan is registered. */
+&smc_hwmon {
+	fan-F0Ac {
+		apple,fan-mode = "F0md";
+	};
+
+	fan-F1Ac {
+		apple,fan-mode = "F1md";
+	};
+};

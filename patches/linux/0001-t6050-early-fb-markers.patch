@@ -319,7 +319,7 @@ index 0fa2403c6..8f8a4cbde 100644
  
  	/* Parse the ACPI tables for possible boot-time configuration */
 diff --git a/drivers/gpu/drm/sysfb/simpledrm.c b/drivers/gpu/drm/sysfb/simpledrm.c
-index 3358db467..6097fac1b 100644
+index 3358db467..e9ea08b62 100644
 --- a/drivers/gpu/drm/sysfb/simpledrm.c
 +++ b/drivers/gpu/drm/sysfb/simpledrm.c
 @@ -22,6 +22,9 @@
@@ -332,7 +332,20 @@ index 3358db467..6097fac1b 100644
  #include <drm/drm_gem_framebuffer_helper.h>
  #include <drm/drm_gem_shmem_helper.h>
  #include <drm/drm_managed.h>
-@@ -879,6 +882,11 @@ static int simpledrm_probe(struct platform_device *pdev)
+@@ -797,8 +800,11 @@ static struct simpledrm_device *simpledrm_device_create(struct drm_driver *drv,
+ 	/* Connector */
+ 
+ 	connector = &sdev->connector;
++	/* omarchy-m5 (from edimoldovan/linux-aurora 9dee12b1266c): a built-in
++	 * Apple laptop panel handed over before DCP is reported as eDP. */
+ 	ret = drm_connector_init(dev, connector, &simpledrm_connector_funcs,
+-				 DRM_MODE_CONNECTOR_Unknown);
++				 of_property_read_bool(dev->dev->of_node, "apple,internal-panel") ?
++				 DRM_MODE_CONNECTOR_eDP : DRM_MODE_CONNECTOR_Unknown);
+ 	if (ret)
+ 		return ERR_PTR(ret);
+ 	drm_connector_helper_add(connector, &simpledrm_connector_helper_funcs);
+@@ -879,6 +885,11 @@ static int simpledrm_probe(struct platform_device *pdev)
  
  	drm_client_setup(dev, sdev->sysfb.fb_format);
  

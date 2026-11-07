@@ -4,15 +4,17 @@ Where everything is. **New here? Read [`../FOR-AURORA.md`](../FOR-AURORA.md)
 first** - the curated front door (the three things worth your time, and what to
 skip). This index is the fuller map.
 
-## SMP / iBoot-reset RE (the headline)
+## SMP (resolved 2026-11-06)
 
-- **[`smp-t6050-findings.md`](smp-t6050-findings.md)** - the one doc to read.
-  Start with §"Strategic reframe" (on current macOS the blocker is **SPTM**, and
-  the hypervisor-trace method is a dead end on T6050) and §"What SPTM does with a
-  secondary CPU" (the disassembly-confirmed `sptm_register_cpu` mechanism). Then
-  the hardware measurements and the theories disproven on hardware (locked RVBAR,
-  iBoot WFI sled, CTRR/CTXR execute-regions). The lower half is the hv-trace
-  autopsy - optional.
+- Fixed by Apple's mBoot in macOS 27.3 beta 1: rebuild the stub
+  ([`bringup.md` -> Stub firmware refresh](bringup.md#stub-firmware-refresh-all-cores));
+  the kernel needs patches 0009 and 0010. Summary in the root
+  [`README.md`](../README.md#smp-fixed-by-apples-firmware).
+- **[`smp-t6050-findings.md`](smp-t6050-findings.md)** - the pre-fix
+  investigation: hardware measurements of the failed starts and the theories
+  disproven on hardware (locked RVBAR, iBoot WFI sled, CTRR/CTXR
+  execute-regions). Its SPTM attribution does not explain the failure; the
+  hv-trace autopsy in the lower half is optional.
 - Supporting evidence: [`../scripts/probes/`](../scripts/probes/) (probe
   scripts), [`../patches/m1n1/`](../patches/m1n1/) (bootloader changes), and
   [`research/probe-logs/`](research/probe-logs/) (raw captures).

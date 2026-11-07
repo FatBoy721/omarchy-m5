@@ -4,12 +4,13 @@ Bringing [Omarchy](https://omarchy.org) - Arch Linux ARM + Hyprland - to the
 **M5 Pro MacBook Pro**: Apple **T6050 "Sotra"**, Mac17,9 / J714s, dual-booted
 beside macOS, Asahi-style.
 
-This is frontier bring-up. No public installer supports the M5, and **no kernel
-device tree existed for any M5** before this repo. Everything here builds on
+This is frontier J714s bring-up, built on
 [m1n1](https://github.com/AsahiLinux/m1n1) and
-[linux-asahi](https://github.com/AsahiLinux/linux), driven from a **tethered dev
-loop**: a Linux ThinkPad drives m1n1 on the Mac over USB-C, so kernel/DT/RE
-iterations never touch the Mac's boot policy.
+[linux-asahi](https://github.com/AsahiLinux/linux). A Linux ThinkPad drives the
+Mac over USB-C. The installed raw m1n1 boots Linux on **all 15 cores** now that
+the Omarchy stub carries Apple's fixed firmware (macOS 27.3 beta 1 or later).
+A pinned [Aura](https://github.com/aurora-silicon/aura) Mach-O Stage 1 is also
+packaged as an alternative; it has not been tested on hardware.
 
 > **Reviewing this?** Start with **[`FOR-AURORA.md`](FOR-AURORA.md)** - the three
 > things worth your time, and what to skip.
@@ -18,47 +19,54 @@ iterations never touch the Mac's boot policy.
 
 | Area | State |
 | --- | --- |
-| Boot chain | ✅ iBoot → m1n1 → Linux kernel, single-core |
+| Boot chain | ✅ iBoot → m1n1 → Linux kernel, **all 15 cores** (stub firmware ≥ mBoot-20457.60) |
 | Root filesystem | ✅ Arch on the **internal SSD** (`nvme0n1p5`), dual-boot, macOS preserved |
 | Storage | ✅ NVMe (ANS2 + NVMMU + SARTv4) |
-| Console | ✅ framebuffer (simplefb / simpledrm) |
+| Console / display | ✅ framebuffer (simplefb / simpledrm), reported as `eDP-1`; Hyprland 0.57.1 on llvmpipe (no GPU) |
 | Input | ✅ built-in keyboard **and** trackpad (DockChannel MTP + `tpmtfw`) |
+| Keyboard backlight | ✅ `fpwm0` + pwm-leds (`/sys/class/leds/kbd_backlight`) |
+| CPU frequency | ✅ all three clusters on schedutil; P cores measured 1307 MHz before, about 4.22 GHz after |
+| SMC | ✅ hwmon (both fans, temperatures, power rails); lid/power-button input and RTC register (not exercised by hand) |
 | Networking | ✅ USB-C gadget (CDC EEM) - host reaches the Mac over the cable |
 | m1n1 on upstream `main` | ✅ USB enumeration unblocked on T6050 (`patches/m1n1/0005`) |
-| **SMP - secondary CPUs** | ❌ **the open blocker** - cores power up but execute nothing; deep RE done (below) |
-| Wayland / GPU, Wi-Fi/BT (N1) | ⏳ not started |
+| **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
+| Sleep (s2idle) | ⏳ `pm_test=freezer` passes; driver resume hangs at `pm_test=devices` (being narrowed down) |
+| Battery / charger | ⏳ not yet |
+| Wi-Fi / Bluetooth (N1) | ⏳ not yet; the J714c port matches our ADT but needs a pre-Linux PCIe link trainer |
+| GPU | ⏳ not started |
 
-Today the machine boots Arch to a **single-core userspace shell**; the kernel is
-staged over the USB tether (`boot-m5.sh`) and roots on the SSD. `maxcpus=1` is
-the current floor because of the SMP blocker - which is the main open problem.
+Today the machine boots Arch from the internal SSD on **all 15 cores**; the
+kernel is staged over the USB tether (`boot-m5.sh`). Apple fixed the
+single-core raw-boot-object bug in macOS 27.3 beta 1, but the fix only reaches
+Linux once the Omarchy stub is rebuilt from that macOS: the stub supplies its
+own stage-2 firmware.
 
-## The SMP / iBoot-reset investigation - start here
+## SMP: fixed by Apple's firmware
 
-This is the deepest open problem. On T6050 the secondary cores **power on**
-(PMGR `0x100 → 0x1f0`) but never run a single instruction we can observe - same
-symptom m1n1 upstream reports on M5 (PR #610).
+On stub firmware cloned from macOS 26.5, every secondary failed to start
+([probe log](docs/research/probe-logs/t6050-cpu-impl-0100-2026-11-04-j714s.log)).
+Apple fixed "only a single core is available when you boot Linux ... from a
+custom raw boot object" on M5 Pro/Max/Ultra in macOS 27.3 beta 1 (26C5035r).
+The stage-2 firmware that loads m1n1 comes from the Omarchy stub's own restore
+bundle, so after updating macOS the stub has to be rebuilt:
+[`docs/bringup.md` -> Stub firmware refresh](docs/bringup.md#stub-firmware-refresh-all-cores).
+With `mBoot-20457.60.65.0.1` the unchanged installed m1n1 starts 14/14
+secondaries.
 
-**The 2026-10-10 conclusion: the blocker is SPTM.** On current macOS, Apple's
-Secure Page Table Monitor runs at GL2 (above EL2) and is boot-active on T6050.
-It owns the page tables and mediates secondary-CPU bring-up, so (a) the reset
-entry is SPTM's, not m1n1's - which is why released secondaries execute nothing
-m1n1 can see - and (b) the classic "boot macOS under m1n1 and trace it" method
-is **architecturally dead** here. The real path is the **XNU-shim** (Sven Peter,
-CCC 2025). Read, in order:
+Linux also needs patch 0009 with `idle=nop arm64.nowfxt` (secondaries lose
+state in WFI/WFIT; a kernel without the override panics in `__delay` on CPU1)
+and patch 0010 (the ANS firmware can take about 3 s to answer RTKit on an
+all-core boot). The October SPTM attribution does not explain the failure: the
+fix is in mBoot, with m1n1 unchanged.
+[`docs/smp-t6050-findings.md`](docs/smp-t6050-findings.md) keeps the
+measurements of the broken firmware, with that history labeled.
 
-1. **[`docs/smp-t6050-findings.md`](docs/smp-t6050-findings.md)** - start with
-   §"Strategic reframe" (the SPTM conclusion + prior art), then the hardware
-   measurements and the theories **disproven on hardware** (locked RVBAR, iBoot
-   WFI sled, CTRR/CTXR execute-regions).
-2. **[`scripts/probes/`](scripts/probes/)** - the probe scripts behind every
-   claim (`smp-*.py`, `wdt-arm.py`), and **[`patches/m1n1/`](patches/m1n1/)** -
-   the bootloader changes (USB on T6050, `AVNCR_EL2`→GL2, watchdog, chainload).
+## Aura Mach-O Stage 1 (optional, untested on hardware)
 
-If you're from **[Aurora Silicon](https://github.com/aurora-silicon)** / omarchy-mac
-or **[antiapplefox/m5-linux](https://github.com/antiapplefox/m5-linux)** (the SPTM
-static-RE track): our contribution is the **live-hardware** side - real T6050
-MIDR/PMGR, ADT-derived DTs, and on-metal m1n1 fixes - complementary to the
-static SPTM shim work, not a duplicate of it.
+`make aura-test` packages a pinned Aura v1.0.0b4 Mach-O Stage 1 with our
+kernel/DT and a RAM-only diagnostic image. SMP no longer depends on it. See
+[`docs/bringup.md` -> Aura Mach-O diagnostic trial](docs/bringup.md#aura-mach-o-diagnostic-trial-j714s)
+for preflight, approval, testing and rollback.
 
 ## Repo map
 
@@ -80,9 +88,11 @@ See **[`docs/bringup.md`](docs/bringup.md)**. Short version:
 make setup fetch m1n1 dtbs kernel   # toolchain, vendor clones, m1n1, DTBs, kernel
 ```
 
-The one-time on-device install (partitioning + `kmutil`) is in
-`docs/bringup.md` → *"One-time on-device step"*; after that the loop is
-memory-only over USB.
+The original on-device install (partitioning + `kmutil`) is in
+`docs/bringup.md` -> *"One-time on-device step"*. After a macOS update, rebuild
+only the stub (`scripts/refresh-stub-firmware.sh`); do not repeat the
+installation. Kernel uploads are memory-only, but the normal tether workflow
+subsequently boots the SSD root filesystem.
 
 ## Credits & upstreams
 
@@ -95,5 +105,10 @@ own Mac.
   [Asahi feature support](https://asahilinux.org/docs/platform/feature-support/)
 - [omarchy-mac](https://github.com/omacom/omarchy-mac) ·
   [Aurora Silicon](https://github.com/aurora-silicon)
+- [rolotrealanis98/m5pro-linux](https://github.com/rolotrealanis98/m5pro-linux) -
+  found that the 27.3 beta 1 SMP fix needs a rebuilt stub, and the RTKit timeout.
+- [edimoldovan/linux-aurora](https://github.com/edimoldovan/linux-aurora) - J714c
+  platform work ported here (P-cluster DVFS, eDP connector, keyboard backlight,
+  T6050 fan keys).
 - [antiapplefox/m5-linux](https://github.com/antiapplefox/m5-linux) - the SPTM
-  static-RE / XNU-shim track this builds on for the SMP work.
+  static-RE / XNU-shim track behind the earlier SMP investigation.

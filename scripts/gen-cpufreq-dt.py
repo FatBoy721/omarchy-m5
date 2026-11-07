@@ -13,17 +13,22 @@
 # (kHz, mV); 16 is left out. The status register at +0x20050 uses the T8112
 # layout, so the stock driver's apple,t8112-cluster-cpufreq path fits.
 #
-# Only the M clusters are emitted: the P cluster's offset is unverified (it
-# has never run). Its CPUs get no OPP table, which leaves them unmanaged.
+# The P cluster (2026-11-06, first run with all cores) uses the same rule by
+# analogy: p-state N = entry N-2, top entry left out. Its mapping is NOT
+# measured yet; check it with tools/cpuhz.c before trusting P-core numbers.
 import sys
 import os
 sys.path.insert(0, os.environ.get('M1N1_PROXYCLIENT', os.path.expanduser('~/tether/proxyclient')))
 from m1n1 import adt
 dt = adt.load_adt(open(sys.argv[1], 'rb').read())
 
-PSTATE_OFFSET = 2      # p-state N = table entry N - 2 (measured, see above)
-MAX_PSTATE = 15        # 16 is refused by the hardware
-DT_PREFIX = {0: 'm0', 1: 'm1'}   # ADT cluster-id -> dt/t6050.dtsi cpu label prefix
+PSTATE_OFFSET = 2      # p-state N = table entry N - 2 (measured on M, see above)
+# ADT cluster-id -> (OPP/domain name, dt/t6050.dtsi cpu label for core c)
+DT_CLUSTERS = {
+    0: ('m0', lambda c: f'cpu_m0_{c}'),
+    1: ('m1', lambda c: f'cpu_m1_{c}'),
+    2: ('p', lambda c: f'cpu_p{c}'),
+}
 
 pmgr = dt['/arm-io/pmgr']._properties
 # pmgr acc-clusters: (cluster << 8) | voltage-states index, per cluster
@@ -51,16 +56,17 @@ w(" */")
 w("")
 w("/ {")
 for cl, (ctype, base) in sorted(clusters.items()):
-    if cl not in DT_PREFIX:
+    if cl not in DT_CLUSTERS:
         continue
-    assert ctype == 'M', (cl, ctype)
     states = list(pmgr[f'voltage-states{acc[cl]}-sram'])
     pairs = list(zip(states[0::2], states[1::2]))
-    name = DT_PREFIX[cl]
+    # Highest p-state: the top table entry is left out (refused on M).
+    max_pstate = len(pairs) + PSTATE_OFFSET - 2
+    name = DT_CLUSTERS[cl][0]
     w(f"\t{name}_opp: opp-table-{name} {{")
     w('\t\tcompatible = "operating-points-v2";')
     w("")
-    for level in range(PSTATE_OFFSET, MAX_PSTATE + 1):
+    for level in range(PSTATE_OFFSET, max_pstate + 1):
         khz, mv = pairs[level - PSTATE_OFFSET]
         w(f"\t\topp{level:02d} {{")
         w(f"\t\t\topp-hz = /bits/ 64 <{khz * 1000}>;")
@@ -74,9 +80,9 @@ w("};")
 w("")
 w("&soc {")
 for cl, (ctype, base) in sorted(clusters.items()):
-    if cl not in DT_PREFIX:
+    if cl not in DT_CLUSTERS:
         continue
-    name = DT_PREFIX[cl]
+    name = DT_CLUSTERS[cl][0]
     perf = base + 0x20000
     w(f"\tcpufreq_{name}: performance-controller@{perf:x} {{")
     w('\t\tcompatible = "apple,t6050-cluster-cpufreq", "apple,t8112-cluster-cpufreq",')
@@ -87,12 +93,12 @@ for cl, (ctype, base) in sorted(clusters.items()):
     w("")
 w("};")
 for cl in sorted(clusters):
-    if cl not in DT_PREFIX:
+    if cl not in DT_CLUSTERS:
         continue
-    name = DT_PREFIX[cl]
+    name, label = DT_CLUSTERS[cl]
     for core in range(6):
         w("")
-        w(f"&cpu_{name}_{core} {{")
+        w(f"&{label(core)} {{")
         w(f"\toperating-points-v2 = <&{name}_opp>;")
         w(f"\tperformance-domains = <&cpufreq_{name}>;")
         w("};")

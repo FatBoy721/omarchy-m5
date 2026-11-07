@@ -58,7 +58,10 @@ cp build/m1n1-chain.bin      "$STAGE/boot/"
 # (patch 0004 makes sync_state honour it). See mkpayload.sh for the rest.
 # m5.root: switch_root to Arch on disk0s5 (scripts/provision-rootfs.sh); /init
 # stays in the initramfs shell if it does not mount.
-BOOTARGS="maxcpus=1 earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 m5.root=/dev/nvme0n1p5"
+# idle=nop arm64.nowfxt: secondary cores lose state in WFI/WFIT on M5
+# (patch 0009). All 15 cores start once the stub runs mBoot >= 20457.60
+# (macOS 27.3 beta 1); on older stub firmware add maxcpus=1.
+BOOTARGS="earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 idle=nop arm64.nowfxt m5.root=/dev/nvme0n1p5"
 
 cat > "$STAGE/boot-linux.sh" <<EOF
 #!/bin/sh

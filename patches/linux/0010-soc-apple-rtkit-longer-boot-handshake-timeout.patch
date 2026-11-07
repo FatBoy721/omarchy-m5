@@ -1,0 +1,35 @@
+Subject: [PATCH] soc: apple: rtkit: wait 10 s for the boot handshake
+
+On J714s/T6050 with all 15 cores online, nvme-apple logged
+"ANS did not boot" / "Reset failure status: -62" about 1.07 s after
+RTKit init, leaving the root disk missing. A manual rebind failed the
+same way. ANS firmware sometimes needs ~3 s to answer. Workaround from
+rolotrealanis98/m5pro-linux patch 0016; applies to every RTKit coprocessor.
+
+---
+diff --git i/drivers/soc/apple/rtkit.c w/drivers/soc/apple/rtkit.c
+index a863ae166..7459d9c70 100644
+--- i/drivers/soc/apple/rtkit.c
++++ w/drivers/soc/apple/rtkit.c
+@@ -720,12 +720,20 @@ struct apple_rtkit *apple_rtkit_init(struct device *dev, void *cookie,
+ }
+ EXPORT_SYMBOL_GPL(apple_rtkit_init);
+ 
++/*
++ * omarchy-m5: T6050's ANS firmware sometimes needs ~3 s to answer the RTKit
++ * handshake on an all-core boot, so 1 s leaves the root disk missing.
++ * Workaround from rolotrealanis98/m5pro-linux; it applies to every RTKit
++ * coprocessor, not just ANS.
++ */
++#define APPLE_RTKIT_HANDSHAKE_TIMEOUT_MS 10000
++
+ static int apple_rtkit_wait_for_completion(struct completion *c)
+ {
+ 	long t;
+ 
+ 	t = wait_for_completion_interruptible_timeout(c,
+-						      msecs_to_jiffies(1000));
++			msecs_to_jiffies(APPLE_RTKIT_HANDSHAKE_TIMEOUT_MS));
+ 	if (t < 0)
+ 		return t;
+ 	else if (t == 0)

@@ -1,5 +1,14 @@
 # T6050 (M5 Pro, J714s) secondary CPUs: what we measured
 
+> **Resolved 2026-11-06.** The failure measured below was Apple's mBoot bug
+> ("only a single core is available when you boot Linux ... from a custom raw
+> boot object" on M5 Pro/Max/Ultra), fixed in macOS 27.3 beta 1. With the stub
+> rebuilt from that release (`mBoot-20457.60.65.0.1`), the same installed m1n1
+> starts 14/14 secondaries; see the
+> [stub firmware refresh](bringup.md#stub-firmware-refresh-all-cores). The
+> measurements below record the broken firmware. The October SPTM attribution
+> does not explain it.
+
 Status as of 2026-10-09. MacBook Pro 14" M5 Pro, Mac17,9 / J714sAP, 15-core
 bin, macOS 26.5 (25F71) boot objects (mBoot-18000.120.36), raw m1n1 installed
 as the custom boot object. Linux runs single-core. Probe scripts are in
@@ -12,54 +21,26 @@ A released secondary powers up but executes **nothing** we can observe. That
 covers its locked RVBAR and iBoot's WFI sled. The test does not depend on
 cache coherency.
 
-## ⚠️ Strategic reframe (2026-10-10): the blocker is SPTM, and the hv-trace is a dead end
+## Historical SPTM interpretation (2026-10-10; superseded)
 
-New information changes the conclusion of everything below. On macOS 26.5 the
-**Secure Page Table Monitor (SPTM) is a boot-active, signed component on T6050**
-(and on M2/M3/M4/A18 Pro/M5 - every current Apple-Silicon Mac chip *except* the
-original M1 t8103). SPTM runs at **GL2, above EL2**, and owns the page tables.
+The original interpretation attributed the raw-boot failure to active SPTM and
+proposed an XNU shim. We did not establish that SPTM was active in that boot or
+that a stuck secondary reached its entry point. Do not treat that interpretation
+as a hardware result or as a prerequisite for Linux.
 
-Consequences, from independent static RE of the SPTM/iBoot blobs (see Prior art):
+The public Aura Mach-O path intentionally omits `__TEXT_BOOT_EXEC` so `kmutil`
+records `kcbz = 0`. Its monitor decides the OS exception level from an execution
+probe on an already-live secondary. Whether enrollment changes the initial
+secondary-start outcome on our T6050 is a hardware question, not resolved by
+this source review. See [Aura's boot-object documentation](https://github.com/aurora-silicon/aura/blob/v1.0.0b4/docs/macho-boot-object.md)
+and the corrections in [issue #293](https://github.com/omacom/linux-aurora/issues/293).
 
-- **The "boot macOS as a guest under m1n1 and trace its MMIO" method cannot work
-  on T6050.** SPTM intercepts the guest's page-table operations; a hypervisor can
-  no longer transparently observe macOS. Our own attempt died at the Apple
-  `AVNCR_EL2`/GXF wall (autopsied in the lower half of this doc) - that was a *symptom* of this
-  deeper architectural block, not a mere porting gap. **This leg is abandoned.**
-- **The secondary-CPU reset entry is SPTM-mediated.** On SPTM silicon the reset
-  vector lands in SPTM's bootstrap (e.g. `0xfffffff0270af000` on T8132), which
-  runs *under iBoot, before m1n1*; SPTM then installs guarded (GL2) vectors and a
-  runtime dispatcher. **Multi-die (Pro/Max) per-die secondary-CPU GL2 bring-up is
-  explicitly SPTM's job.** This is the most likely reason a released T6050
-  secondary **powers up but executes nothing we can observe** (everything below):
-  the core comes up in SPTM's guarded domain, and m1n1 - which is not registered
-  with SPTM as a dispatch domain - cannot direct it.
-- **The path forward is the XNU-shim, not the hypervisor.** Proposed by Sven
-  Peter (CCC Dec 2025): a minimal m1n1 stub that satisfies SPTM's boot protocol
-  (register a valid dispatch table, masquerade as the XNU domain, drive SPTM's
-  state machine from bootstrap into running), then hands off to Linux. Secondary
-  bring-up would then go through SPTM's per-die protocol, not the raw
-  PMGR+RVBAR dance that worked pre-SPTM on M1-M3.
+The following static SPTM analysis is retained as historical work on the Apple
+boot path, with credit to [antiapplefox/m5-linux](https://github.com/antiapplefox/m5-linux)
+and Sven Peter's shim framing. It does not establish the cause of our raw-boot
+SMP failure.
 
-**Prior art (do not re-derive): [`antiapplefox/m5-linux`](https://github.com/antiapplefox/m5-linux)**
-has closed much of the SPTM static RE end-to-end from the 25F71 IPSW - the
-`genter` dispatch internals, `dispatch_state_machine`, the
-`sptm_register_dispatch_table` contract, a 148-entry `(subsys, idx)` call map,
-and m1n1 scaffolding patches (chip IDs / MIDR / `features_m4` stubs / an
-xnu-shim boot-handoff stub). It is static-only and aligns with Aurora Silicon's
-M5 track. Credit also to **Sven Peter / Asahi Linux** for the method and the
-shim framing.
-
-**What this repo uniquely adds (complementary, not duplicate):** live T6050
-hardware. m5-linux explicitly *lacks* hardware (it lists M5 MIDR part IDs as
-"unknown - need `mrs midr_el1` on real metal"). We have the running machine: the
-real MIDR/MPIDR, the PMGR `CPU_START` layout and the `configMiscCores` release
-sequence (below), the ADT-derived device trees (`dt/`), and the on-hardware m1n1
-USB fix for T6050 (`patches/m1n1/0005`). The measurements below remain valid and
-useful **as the hardware-side ground truth** the shim work will need to validate
-against - they are just no longer a route to a *hypervisor* trace.
-
-### What SPTM does with a secondary CPU (RE'd from the T6050 SPTM binary, 2026-10-10)
+### SPTM binary analysis (historical; not a raw-boot diagnosis)
 
 This is the one piece the m5-linux static RE does **not** cover - it focused on
 the primary boot handoff and peripherals, not secondary-CPU bring-up - so it is
@@ -77,18 +58,12 @@ used; `~/guest/sptm.macho`), cross-referenced with their `(subsys, idx)` map:
   `VIOLATION_SART_CPU_RACE`, and `assert 'cluster_id <= MAX_CPU_CLUSTER_PHY_ID'`.
   There is also an `ignore-secondary` concept (an ADT/boot property SPTM reads,
   not present in our Linux DT).
-- **Why this matches our hardware symptom exactly.** When we release a secondary
-  the old (pre-SPTM) way - PMGR `CPU_START` write, secondary resets toward
-  m1n1's locked RVBAR - on T6050 the core instead enters **SPTM's** reset path
-  in its guarded domain. With no prior `sptm_register_cpu` for it and no XNU
-  dispatch domain registered, SPTM has nowhere valid to send it, so it never
-  runs anything m1n1 can observe. That is the concrete form of "powers up,
-  executes nothing" documented below.
-- **Consequence for any fix.** Bringing up SMP on T6050 is not a reset-vector
-  tweak; the boot object must be SPTM-aware - register as the XNU domain, then
-  drive `sptm_register_cpu` (idx `0x12`) per core with a valid physical/cluster
-  ID before (or as part of) releasing it. This is the SMP-specific slice of the
-  XNU-shim and the natural thing to split with the m5-linux / Aurora track.
+- **The original causal inference was not established.** These routines show
+  how SPTM handles CPUs when that path runs. We did not observe our stuck raw-boot
+  secondaries reaching it.
+- **Do not infer a Linux prerequisite from the handler alone.** In particular,
+  this does not show that Aura must call `sptm_register_cpu`; its public Mach-O
+  path is designed to skip SPTM.
 
 **Disassembly-confirmed (not just strings).** The `sptm_register_cpu` handler in
 `sptm.t6050.release` is at vaddr `0xfffffff0270bc8a0` (found via xrefs to its
@@ -103,12 +78,10 @@ assert string `__TEXT.__cstring:0xfffffff0270062f5`; disassembled with
 5. all behind a cluster of assert/panic sites (`bl 0xfffffff0270fc830`,
    `0xfffffff0270fc870` with code `0x16`) - the `VIOLATION_*CPU*` failures.
 
-So registration is not a formality: SPTM *takes ownership of the core's register
-pages*. A bare PMGR release does none of this, which is the mechanism behind the
-hardware symptom below. Next RE step: the `sptm_cpu_init` handler
-(`xref @ 0xfffffff0270e0f78`) and the secondary **entry** vector, best anchored
-against live `mrs midr_el1` / cluster IDs from this machine - which we have and
-the static-only track does not.
+This describes ownership changes made by the routine when it executes. It does
+not establish that it ran in the installed raw-loader boot, or explain the
+measured failure to fetch a secondary's first instruction. Reset release,
+firmware state and boot-object differences must be distinguished experimentally.
 
 Everything from here down is the original hardware investigation, preserved.
 
