@@ -26,11 +26,11 @@ packaged as an alternative; it has not been tested on hardware.
 | Input | ✅ built-in keyboard **and** trackpad (DockChannel MTP + `tpmtfw`) |
 | Keyboard backlight | ✅ `fpwm0` + pwm-leds (`/sys/class/leds/kbd_backlight`) |
 | CPU frequency | ✅ all three clusters on schedutil; P cores measured 1307 MHz before, about 4.22 GHz after |
-| SMC | ✅ hwmon (both fans, temperatures, power rails); lid/power-button input and RTC register (not exercised by hand) |
+| SMC | ✅ hwmon (both fans, temperatures, power rails); lid opens wake the Mac from sleep; RTC registers |
 | Networking | ✅ USB-C gadget (CDC EEM) - host reaches the Mac over the cable |
 | m1n1 on upstream `main` | ✅ USB enumeration unblocked on T6050 (`patches/m1n1/0005`) |
 | **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
-| Sleep (s2idle) | ⏳ `pm_test=freezer` passes; driver resume hangs at `pm_test=devices` (being narrowed down) |
+| Sleep (s2idle) | ✅ functional: `systemctl suspend` sleeps and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). Not low-power yet: cores spin (`idle=nop`) and the panel stays lit; the system draws about 16 W awake |
 | Battery / charger | ⏳ not yet |
 | Wi-Fi / Bluetooth (N1) | ⏳ not yet; the J714c port matches our ADT but needs a pre-Linux PCIe link trainer |
 | GPU | ⏳ not started |

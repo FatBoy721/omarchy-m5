@@ -5,7 +5,8 @@ notes to find the signal.
 
 **What this is:** live bring-up of Linux on a *real* M5 Pro - T6050, Mac17,9 /
 J714s - dual-booted beside macOS. Arch boots from the internal SSD on all 15
-cores; sleep, battery, Wi-Fi/BT and the GPU are open.
+cores and sleeps/wakes on the lid; low-power idle, battery, Wi-Fi/BT and the
+GPU are open.
 
 ## The 3 things actually worth your time
 
@@ -48,7 +49,8 @@ packaged but untested on hardware, and SMP no longer depends on it.
 
 boot ✅ · **15/15 cores** ✅ · NVMe ✅ · framebuffer (`eDP-1`) ✅ ·
 keyboard+trackpad ✅ · keyboard backlight ✅ · fans/sensors ✅ · P-core DVFS ✅ ·
-USB-net ✅ · Hyprland on llvmpipe ✅ · sleep / battery / Wi-Fi (N1) / GPU open
+USB-net ✅ · Hyprland on llvmpipe ✅ · sleep (lid wake, not low-power yet) ✅ ·
+battery / Wi-Fi (N1) / GPU / low-power idle open
 
 Full table and repo map in [`README.md`](README.md). We'd rather compare notes
 than re-derive each other's halves - reach out.

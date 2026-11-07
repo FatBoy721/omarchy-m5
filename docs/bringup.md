@@ -441,6 +441,38 @@ Console: `console=tty0` on m1n1's framebuffer handed over as simplefb is
 the only console needing no cable. dockchannel-UART (m1n1 secondary
 channel) and serial0 (0x505200000, Samsung UART) both need the debug cable.
 
+## Sleep (s2idle)
+
+`systemctl suspend` (mem_sleep is `[s2idle]`) sleeps; opening the lid wakes
+it. The wake path is the SMC: its mailbox interrupts are `IRQF_NO_SUSPEND`,
+the RTKit worker is not freezable, and `macsmc-input` reports a hard wakeup
+on lid open or on the power button (it drops `KEY_POWER` while waking, so
+logind does not power off). Verified on this J714s on 2026-11-06: a 13-minute
+sleep, lid closed then opened, back in about 1 s with all 15 CPUs, NVMe,
+keyboard/trackpad and the USB gadget.
+
+Not low-power yet: with `idle=nop` every core spins instead of entering WFI,
+and nothing turns the panel off, so the system draws about what it does awake
+(about 16 W on the SMC's Total System Power). Because timekeeping keeps
+running, a long sleep also trips systemd's service watchdogs (journald is
+restarted on wake).
+
+Patch 0011 is required: the unused debug UART is runtime suspended with its
+power domain (UART0) off, and its system-resume callback wrote the registers
+anyway, an asynchronous SError. `pm_test=devices` hit it only from the second
+cycle in a boot, after genpd had powered the idle UART down.
+
+Testing without a real sleep: `echo devices > /sys/power/pm_test` (or
+`platform`, which adds the late/noirq phases where genpd powers domains off),
+then `echo freeze > /sys/power/state`; it resumes after 5 s. Set `pm_test`
+back to `none` afterwards. `CONFIG_DPM_WATCHDOG` (5 s warning, 15 s panic)
+names a resume callback that sleeps or loops; a callback that stalls the bus
+shows nothing. To read the true last line of such a hang, rebuild with
+`CONFIG_OMARCHY_FB_MARKERS=y` (base from m1n1's current `boot_args` video line)
+and boot with `earlycon=efifb keep_bootcon console=ttynull`: the efifb
+earlycon writes each line synchronously, while fbcon on simpledrm redraws from
+a deferred worker and stops updating when the SoC hangs.
+
 ## DT state (populated from the real J714s ADT)
 
 `dt/t6050-pmgr.dtsi` is generated, not hand-written:
