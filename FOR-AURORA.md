@@ -8,7 +8,8 @@ J714s - dual-booted beside macOS. Arch boots from the internal SSD on all 15
 cores, idles in WFI (no `idle=nop`) and sleeps/wakes on the lid. A separate
 Aurora kernel now drives the internal DCP panel, brightness and display
 off/on; a patched Hyprland also runs a software-rendered desktop on it.
-DCP sleep qualification, battery, Wi-Fi/BT and GPU work remain open.
+Aurora battery telemetry and charger hotplug are verified too. DCP sleep
+qualification, Wi-Fi/BT and GPU work remain open.
 
 ## The 3 things actually worth your time
 
@@ -59,8 +60,8 @@ boot ✅ · **15/15 cores** ✅ · WFI idle (5.6 W vs 15.3 W with `idle=nop`) �
 NVMe ✅ · framebuffer (`eDP-1`) ✅ · keyboard+trackpad ✅ · keyboard backlight ✅ ·
 fans/sensors ✅ · P-core DVFS ✅ · USB-net ✅ · Hyprland on llvmpipe ✅ ·
 sleep on the default kernel (lid wake, panel stays lit) ✅ ·
-Aurora DCP console / brightness / display off-on / patched Hyprland desktop verified ·
-DCP sleep, battery / Wi-Fi (N1) / GPU open
+Aurora DCP console / brightness / display off-on / patched Hyprland desktop / battery telemetry verified ·
+DCP sleep / Wi-Fi (N1) / GPU open
 
 Full table and repo map in [`README.md`](README.md). We'd rather compare notes
 than re-derive each other's halves - reach out.

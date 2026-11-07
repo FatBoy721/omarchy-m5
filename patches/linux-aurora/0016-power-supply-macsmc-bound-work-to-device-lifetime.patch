@@ -1,0 +1,96 @@
+From: omarchy-m5 <omarchy-m5@users.noreply.github.com>
+Subject: [PATCH] power: supply: macsmc: bound work to the device lifetime
+
+Initialize both work items once before publishing any producer. The
+critical work was initialized before probe and then reinitialized after
+registering the SMC notifier, which can race an already queued event.
+
+Unregister the notifier before synchronously draining work on removal.
+Serialize the debug parameter's device pointer with the parameter lock,
+so a concurrent parameter write cannot enqueue work on a detached device.
+Use explicit removal cleanup consistently: neither work item is published
+until probe has finished its fallible setup.
+
+No charging settings, battery interpretation or critical-battery safety
+checks are changed. This closes lifecycle hazards in the current driver;
+it does not attribute the older, uncaptured J714s boot panic to them.
+
+---
+diff --git a/drivers/power/supply/macsmc-power.c b/drivers/power/supply/macsmc-power.c
+index 1bc237036..ab5945841 100644
+--- a/drivers/power/supply/macsmc-power.c
++++ b/drivers/power/supply/macsmc-power.c
+@@ -11,7 +11,6 @@
+ 
+ #include <linux/ctype.h>
+ #include <linux/delay.h>
+-#include <linux/devm-helpers.h>
+ #include <linux/limits.h>
+ #include <linux/module.h>
+ #include <linux/mfd/macsmc.h>
+@@ -869,7 +868,7 @@ static void macsmc_dbg_work(struct work_struct *wrk)
+ 
+ 	macsmc_do_dbg(power);
+ 
+-	if (log_power)
++	if (READ_ONCE(log_power))
+ 		schedule_delayed_work(&power->dbg_log_work, POWER_LOG_INTERVAL);
+ }
+ 
+@@ -952,7 +951,7 @@ static int macsmc_power_event(struct notifier_block *nb, unsigned long event, vo
+ 		return NOTIFY_OK;
+ 	} else if ((event & 0xffff0000) == 0x72010000) {
+ 		/* Button event handled by macsmc-hid, but let's do a debug print */
+-		if (log_power)
++		if (READ_ONCE(log_power))
+ 			macsmc_do_dbg(power);
+ 		return NOTIFY_OK;
+ 	}
+@@ -991,9 +990,7 @@ static int macsmc_power_probe(struct platform_device *pdev)
+ 	dev_set_drvdata(dev, power);
+ 
+ 	INIT_WORK(&power->critical_work, macsmc_power_critical_work);
+-	ret = devm_work_autocancel(dev, &power->critical_work, macsmc_power_critical_work);
+-	if (ret)
+-		return ret;
++	INIT_DELAYED_WORK(&power->dbg_log_work, macsmc_dbg_work);
+ 
+ 	/*
+ 	 * Check for battery presence.
+@@ -1189,13 +1186,12 @@ static int macsmc_power_probe(struct platform_device *pdev)
+ 	power->nb.notifier_call = macsmc_power_event;
+ 	blocking_notifier_chain_register(&smc->event_handlers, &power->nb);
+ 
+-	INIT_WORK(&power->critical_work, macsmc_power_critical_work);
+-	INIT_DELAYED_WORK(&power->dbg_log_work, macsmc_dbg_work);
+-
++	kernel_param_lock(THIS_MODULE);
+ 	g_power = power;
+ 
+ 	if (log_power)
+ 		schedule_delayed_work(&power->dbg_log_work, 0);
++	kernel_param_unlock(THIS_MODULE);
+ 
+ 	return 0;
+ }
+@@ -1204,12 +1200,15 @@ static void macsmc_power_remove(struct platform_device *pdev)
+ {
+ 	struct macsmc_power *power = dev_get_drvdata(&pdev->dev);
+ 
+-	cancel_work(&power->critical_work);
+-	cancel_delayed_work(&power->dbg_log_work);
+-
+-	g_power = NULL;
+-
++	/* Stop both producers before draining work and releasing the device. */
+ 	blocking_notifier_chain_unregister(&power->smc->event_handlers, &power->nb);
++
++	kernel_param_lock(THIS_MODULE);
++	g_power = NULL;
++	cancel_delayed_work_sync(&power->dbg_log_work);
++	kernel_param_unlock(THIS_MODULE);
++
++	cancel_work_sync(&power->critical_work);
+ }
+ 
+ static const struct platform_device_id macsmc_power_id[] = {

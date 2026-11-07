@@ -568,6 +568,54 @@ Aquamarine still logs failures to create its auxiliary GPU renderer on
 this render-node-less device; those messages did not prevent software
 composition and DCP scanout and were not hidden.
 
+**Battery and charger telemetry:** the Aurora configuration now builds
+`CONFIG_MACSMC_POWER=y`; the build rejects a modular result because this
+boot path does not install kernel modules. `CONFIG_POWER_RESET_MACSMC`
+remains modular and unloaded so watchdog-based remote reboot still works.
+The default `vendor/linux` configuration still leaves battery support off.
+
+Patch 0016 initializes the critical and debug work items once, before any
+producer is published. Removal unregisters the SMC notifier, serializes the
+debug parameter's device pointer, and synchronously drains the work before
+device resources are freed. These are current-driver lifetime fixes, not
+proof of the cause of the uncaptured 2026-10-02 battery-driver panic.
+Firmware charging policy and critical-battery protection are unchanged.
+
+On 2026-11-07, the patched driver was first tested as a module against the
+exact running `7.3.0-g96c096aaed23 #6` kernel and configuration. It registered
+`macsmc-battery` and `macsmc-ac`; the initial sample reported 81%, 12.825 V,
++3.178 A, 28.7 C, 5082/6345 mAh and 51 cycles. Both removal/reload checks
+passed, including removal while the periodic debug work was active, with
+no Oops, panic or warning trace. The pre-existing `b2bd_*` PMGR power-state
+timeouts also appeared during module probes; this work does not fix them.
+
+A real charger disconnect changed the battery to `Discharging` with
+negative current/power, and reconnect restored `Charging` with positive
+current. The kernel emitted battery status and AC online change events.
+With the USB tether still attached, input fell to about 5 V rather than
+zero: `macsmc-ac/online=1` does not mean the battery is charging. Read
+`status` and signed `current_now`/`power_now` as well. Sysfs voltage/current/
+power/charge values use micro-units; battery `temp` is tenths of a degree C.
+No charge mode or charge threshold was written during these tests.
+
+The packaged built-in image was then boot-tested as
+`7.3.0-g1ad66d59b51b #7`: both power supplies registered automatically with
+no modules loaded, and the running configuration matched the build exactly.
+Battery telemetry survived the reboot alongside all 15 CPUs, SSD root,
+USB SSH, `appledrmfb` and MTP keyboard/trackpad initialization, with no
+Oops, panic or warning trace. The regular `start-hyprland` launcher restored
+the unchanged desktop configuration at 3024x1890 / 120 Hz / ARGB8888;
+a native Kitty capture showed the new kernel and battery state `Full`.
+SMC hwmon is now `hwmon2` on this image, because battery and AC hwmon
+registered first. Find it by `name=macsmc_hwmon`, not a hard-coded
+`hwmon0` path.
+
+For a battery-related boot regression, use the saved pre-battery Aurora
+bundle or the default kernel through the same tether sequence. The local
+pre-test archive is
+`build/tether-aurora-7.3.0-g96c096aaed23-before-battery.tar.gz`.
+`nomodeset` only disables the display driver, not the built-in battery driver.
+
 **Fallback:** append `nomodeset` to the full cmdline from `boot-linux.sh`
 using `BOOTARGS` to keep simpledrm on the Aurora kernel. To return to the
 original kernel, reboot/power-cycle to m1n1 and use the default

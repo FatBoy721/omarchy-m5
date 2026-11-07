@@ -40,7 +40,7 @@ The experimental Aurora/DCP path and its limits are described below.
 | m1n1 on upstream `main` | ✅ USB enumeration unblocked on T6050 (`patches/m1n1/0005`) |
 | **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
 | Sleep (s2idle) | ✅ On the default kernel, `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping stop during sleep. The default simpledrm path leaves the panel lit |
-| Battery / charger | ⏳ not yet |
+| Battery / charger | Verified on Aurora: battery telemetry, charging/discharging and charger notifications. Still disabled on the default fallback kernel |
 | Wi-Fi / Bluetooth (N1) | ⏳ not yet; the J714c port matches our ADT but needs a pre-Linux PCIe link trainer |
 | GPU | ⏳ not started |
 
