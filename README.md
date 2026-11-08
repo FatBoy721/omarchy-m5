@@ -11,7 +11,7 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 
 ## Current status (2026-11-08)
 
-**All 15 CPUs are online in native Omarchy.** The refreshed-stub/public m1n1 route boots Linux `7.2.11-j714s-cpu-local` (#3); strict USB SSH, SDDM/Hyprland and a rendered desktop are verified. The owner is trying the desktop. Graphics remain software-rendered; GPU acceleration has not been demonstrated.
+**All 15 CPUs have run online in native Omarchy.** The refreshed-stub/public m1n1 route boots Linux `7.2.11-j714s-cpu-local` (#3); strict USB SSH, SDDM/Hyprland and a rendered desktop are verified. That desktop used software rendering. Mesa has now built natively, but GPU acceleration has not been demonstrated.
 
 The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 loads a small ESP stage2, which loads the kernel, DTB and initrd as separate files. Macintosh HD was verified as the persistent default before this one-shot Linux boot. Earlier statements below about an unrefreshed stub or an unbootable one-core baseline are historical.
 
@@ -19,12 +19,14 @@ The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 l
 |---|---|
 | CPU / desktop | **15 online CPUs (`0-14`)**, strict SSH and rendered Omarchy desktop. The session passed the old 900-second deadline with all ten legacy M5 units masked |
 | USB access | Standard EEM-only `1d6b:0102`, class `02/0c/07`; native host binding and the scoped direct SSH route verified |
-| RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. No new memory stress qualification on this profile |
-| Storage | **1 TB Apple NVMe** enumerated; the **120 GB ext4 Linux root is mounted RW**. Current-profile throughput, sustained I/O and device health are not qualified |
-| GPU | Existing candidate kernel/DTB and pinned Mesa `043a4c5` inputs prepared; native Mesa build in progress. **GPU probe/rendering remains unverified** |
+| RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. A **2 GiB locked-memory test timed out at 180 seconds**: partial coverage, **not a full RAM pass** |
+| Storage | **1 TB Apple NVMe**, **120 GB ext4 root**. A new **1 GiB file write/fsync and separate direct CRC32C verification passed**, with stable whole-file SHA-256. Not a throughput or whole-device qualification |
+| GPU | Candidate kernel/DTB and stable initrd staged. Mesa **`043a4c5` built natively into a private staging tree**; eight AArch64 libraries and four compiled test programs checked. **GPU probe/rendering remains unverified** |
 | Input / other hardware | Earlier keyboard/trackpad results are historical; current completeness/latency is under owner trial. Wi-Fi/BT, battery/sensors, suspend and other peripherals are not newly qualified |
 
 The first split-payload boot did reach all 15 CPUs, but an old rootfs guard remained eligible and initiated the return around 900 seconds. The fix uses **per-boot `/run/systemd/system.control` masks**, which override the actual regular `/etc` unit files. The current profile keeps ordinary journals persistent and leaves the old guard/logger inactive. [Exact evidence, artifact hashes and handoff](STATUS-2026-11-08.md).
+
+The GPU package is now staged with the stable CPU rollback preserved. Normal Linux restart toward Macintosh HD was accepted; macOS reconnect and the fresh pre-GPU admission check are pending at this checkpoint. A pre-login/FileVault unlock screen is possible but unconfirmed. No GPU boot or rendering success is inferred from staging.
 
 ### Historical one-core baseline
 
