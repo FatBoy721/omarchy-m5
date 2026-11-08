@@ -1,6 +1,16 @@
 # Journey: every build and what it did on the Mac
 
-**Latest result:** FT17's controlled retry reaches power-off but does not restart the AFE boot attempt. The trackpad still does not work. The internal readiness pin reads low after failure, the exact board firmware file has been reproduced, and USB SSH remains available. FT14 verified real DAPF/MMIO mappings and owner-confirmed keyboard typing; FT13 verified bounded CPU clock changes and restored boot speed afterward. Trackpad and Wi-Fi remain unresolved. [FT-series findings and corrections](keyboard/STATUS-2026-11-05.md).
+**Latest result (2026-11-08): all 15 CPUs online in native Omarchy, strict USB SSH and a rendered SDDM/Hyprland desktop.** The owner is testing the software-rendered desktop past the old 900-second guard deadline. The refreshed-stub/public m1n1 split-payload path is now the CPU profile; GPU acceleration remains unverified. [Current status and artifact identity](STATUS-2026-11-08.md).
+
+## 2026-11-08 — 15-CPU desktop milestone
+
+- The owner completed the 26C5035r stub refresh/enrollment. A fixed public-source-derived stage1 now reads a small ESP stage2, which loads separate kernel/DTB/initrd files through the public storage path.
+- A monolithic candidate was rejected with `chainload: image span overlaps the live heap`; the guard was retained. A small split-payload loader then reached Linux with all 15 CPUs.
+- That first Linux boot still admitted a legacy rootfs guard at its 900-second deadline. Per-boot masks were moved to `/run/systemd/system.control`, and the actual systemd resolver confirmed they override the regular `/etc` units. The current ten legacy M5 units are masked/inactive; the desktop continued beyond that deadline.
+- Standard EEM-only USB, strict SSH, graphical startup and a rendered desktop were verified. The current profile reports 24 GiB physical RAM / 22.79 GiB Linux MemTotal and a 1 TB NVMe with the 120 GB ext4 root mounted RW. New-profile memory/I/O performance qualification is still pending.
+- GPU kernel/DTB and Mesa `043a4c5` inputs are prepared; the isolated native Mesa build is in progress. No native GPU probe/rendering result is claimed, and this CPU milestone introduces no GPU/DVFS test.
+
+## Earlier logbook
 
 All on 2026-11-04 (US Eastern) unless noted; times are commit times of the build. Hashes are SHA-256 of the boot object (`m5boot*.bin`) as installed with `kmutil`. Labels: **NATIVE** (on our J714s), **INVALID** (claimed, later found never installed), **VM**, **PENDING**. Photos and videos of the screen are summarized as text; none are published.
 

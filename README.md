@@ -9,51 +9,29 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 - **REPORTED** = someone else's claim.
 - **offline** = built and reviewed, not run.
 
-## Current status (as of 2026-11-07 21:32 America/New_York)
-> **Right now:**
-> - The main macOS update is **finished**: macOS **27.3 beta 1** (build 26C5035r) with system firmware 20457.60.65.0.1. Macintosh HD is the **verified** default.
-> - The Linux stub is unchanged: it still boots with its macOS 26.6.2 (25G83) manifest, with the **all-core prototype object (`4f318f1b`)** enrolled from the 2026-11-08 trial. Restoring the original loader is **pending**, so the tested Linux baseline below **can't be booted until that restore is done**. No Linux session is running.
-> - **GPU, offline only:** with the new 27.3 ADT, our software checks of the GPU SRAM/voltage table data and of the GPU hand-off pass. There is **no native GPU result**.
-> - **Next, in preparation:** a small public m1n1/ESP boot chain and a matching stub-refresh plan. Neither is installed, and recreating the stub is **not approved**.
->
-> Every result below was measured on **macOS 26.6.2**, with the stub at mBoot-18000.161.10.
+## Current status (2026-11-08)
 
-### Tested baseline (NATIVE, kernel 7.2.2 #32)
-| Area | State |
+**All 15 CPUs are online in native Omarchy.** The refreshed-stub/public m1n1 route boots Linux `7.2.11-j714s-cpu-local` (#3); strict USB SSH, SDDM/Hyprland and a rendered desktop are verified. The owner is trying the desktop. Graphics remain software-rendered; GPU acceleration has not been demonstrated.
+
+The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 loads a small ESP stage2, which loads the kernel, DTB and initrd as separate files. Macintosh HD was verified as the persistent default before this one-shot Linux boot. Earlier statements below about an unrefreshed stub or an unbootable one-core baseline are historical.
+
+| Area | Current evidence and limit |
 |---|---|
-| Boot | Our raw loader (m5boot) → kernel #32. One-shot boots; macOS is normally the default; a hardware watchdog returns to macOS on failure |
-| Desktop | Omarchy (SDDM → Hyprland), **software rendering only** |
-| Access | Root shell and SSH over USB-C |
-| Storage / memory | NVMe ext4 root and zram swap. Scoped memtest and I/O checks passed (not a guarantee) |
-| CPU | **One core** (frequency scaling works) |
-| Keyboard | **Owner-confirmed typing** on earlier kernels (FT9 / FT14 / FT18-r2); not re-tested on #32 |
-| Trackpad | **Owner-reported working** on the kernel #30 boot (2026-11-06); not re-tested since |
-| Wi-Fi / Bluetooth | **Not working.** The first activation attempt (build 3408) reset the machine; cause unknown. A staged diagnostic is prepared, not run |
-| GPU acceleration | **No** (see the GPU gate below) |
-| Battery / sensors / lid, suspend, USB host, camera, speakers, Touch ID | Not working or not verified |
+| CPU / desktop | **15 online CPUs (`0-14`)**, strict SSH and rendered Omarchy desktop. The session passed the old 900-second deadline with all ten legacy M5 units masked |
+| USB access | Standard EEM-only `1d6b:0102`, class `02/0c/07`; native host binding and the scoped direct SSH route verified |
+| RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. No new memory stress qualification on this profile |
+| Storage | **1 TB Apple NVMe** enumerated; the **120 GB ext4 Linux root is mounted RW**. Current-profile throughput, sustained I/O and device health are not qualified |
+| GPU | Existing candidate kernel/DTB and pinned Mesa `043a4c5` inputs prepared; native Mesa build in progress. **GPU probe/rendering remains unverified** |
+| Input / other hardware | Earlier keyboard/trackpad results are historical; current completeness/latency is under owner trial. Wi-Fi/BT, battery/sensors, suspend and other peripherals are not newly qualified |
 
-### Experimental all-core path (not the baseline)
-- **One extra core (NATIVE, macOS 26.6.2):**
-  - booted as an aura-wrapped Mach-O object, one secondary core ran our reset code at EL2 and **parked within 6 µs**;
-  - it was never handed to Linux;
-  - booted as a raw object instead, no core acknowledged.
-- **All 15 cores: not achieved.**
-  - The prototype combines public [aura `5211a863`](https://github.com/aurora-silicon/aura/commit/5211a863fc3f2c8eb56b5feae64cf05cc9a1dca6), [aurora-silicon/linux #985](https://github.com/aurora-silicon/linux/pull/985) and our unpublished T6050 patch.
-  - **One native attempt (2026-11-08):** aura's USB proxy device appeared, but **Linux was not reached**. Cause not determined.
-- **Input on this path is not assumed.** Keyboard and trackpad results above come from the baseline kernels, not the prototype; its 7.3 kernel has no module tree on our rootfs.
+The first split-payload boot did reach all 15 CPUs, but an old rootfs guard remained eligible and initiated the return around 900 seconds. The fix uses **per-boot `/run/systemd/system.control` masks**, which override the actual regular `/etc` unit files. The current profile keeps ordinary journals persistent and leaves the old guard/logger inactive. [Exact evidence, artifact hashes and handoff](STATUS-2026-11-08.md).
 
-### GPU gate
-Graphics are unaccelerated. Two things are missing:
-1. **A J714s GPU voltage table.**
-   - Our J714s ADT differs from the J716s table in [aurora-silicon/linux #1173](https://github.com/aurora-silicon/linux/pull/1173) in 13 of 14 states, and their table sits below this part's values at several states.
-   - Our ADT's SRAM entry is a constant `1385`, whose meaning is unknown.
-2. **G17S GPU firmware from macOS 27.x in the stub.**
-   - #1173's source supports 27.2 and 27.3 firmware, but its only hardware result is 27.3 beta 1 on a J716s (REPORTED).
-   - The main macOS is now 27.3 beta 1, but the stub still runs its 26.6.2 manifest. Getting 27.x GPU firmware into the stub needs a stub refresh, which is not approved.
+### Historical one-core baseline
 
-No promise of GPU acceleration is made here.
+The earlier m5boot/kexec path ran kernel #32 on one CPU with a software-rendered desktop and USB access. Its scoped RAM/I/O tests and older input reports belong to that build; they are not measurements of this new 15-CPU profile. The earlier aura prototype also failed to reach Linux. Both records remain in [the status history](STATUS-2026-11-08.md) and [JOURNEY.md](JOURNEY.md).
 
 ## Read more
+
 - **[STATUS-2026-11-08.md](STATUS-2026-11-08.md):** detailed status and chronology (CPU, GPU, Wi-Fi, RAM/storage), with limits and rollback.
 - **[SOURCES.md](SOURCES.md):** public sources we used (adopted / candidate / incompatible), licences, AI-instruction notes, and **tasks a helper can take on**.
 - [HISTORY.md](HISTORY.md): the previous front page (early milestones, the FT-series status table, the logbook, earlier source-audit notes).
@@ -61,18 +39,19 @@ No promise of GPU acceleration is made here.
 - [keyboard/STATUS-2026-11-05.md](keyboard/STATUS-2026-11-05.md): keyboard bring-up findings and corrections.
 - [PLATFORM-PORT.md](PLATFORM-PORT.md): the platform (SMC/battery/sensors) port.
 
-## How it boots, and cautions
-1. **Stub macOS.** A small APFS volume group next to macOS, created with betizzel's stub scripts ([betizzel/omarchy-m5](https://github.com/betizzel/omarchy-m5)).
-   - The stub alone is set to Permissive in its paired recoveryOS; **macOS itself stays at Full Security**.
-2. **m5boot** (`m5boot/`). Our raw ARM64 boot object: it reads iBoot's boot arguments and ADT, handles the watchdogs, builds a device tree and starts Linux.
-3. **Linux.** An Asahi 7.2 base + betizzel's T6050 patches + ours. An initramfs logs to the ESP and switches into the 120 GB Linux partition (label `omarchy`).
-4. **Omarchy rootfs.** Built from signed packages (Arch Linux ARM + Omarchy's channel).
+## Current boot path, and cautions
+
+1. **Refreshed stub macOS.** The owner completed the paired-Recovery enrollment on the 26C5035r stub. The main macOS security policy is separate.
+2. **Public-source-derived m1n1 stage1 → ESP stage2.** The enrolled stage1 remains fixed; the small stage2 uses the public `boot=` storage path to load separate kernel/DTB/initrd files. The oversized monolithic payload was rejected by the live-heap guard; that guard remains intact.
+3. **Linux and initrd.** The CPU profile starts all 15 CPUs, validates the existing 120 GB root, applies temporary legacy-unit masks and starts the scoped USB access service.
+4. **Existing Omarchy rootfs.** Normal systemd/SDDM/Hyprland runs on the ext4 root. The older `m5boot/` and kexec implementation remains published here as history.
 
 **Cautions:**
-- Every boot-policy, partition or Recovery step is an owner decision; Recovery visits are done by hand.
-- Changing the stub's boot object needs a stub-paired Recovery visit.
-- This repo ships **no binaries**: no boot objects, kernels, DTBs, initramfs, rootfs images or Apple firmware. Hashes are listed only to match results to builds.
-- It is an experimental bring-up, not an installer.
+- Boot-policy, partition and physical Recovery operations remain owner decisions.
+- Kernel/DTB/initrd changes can use the enrolled ESP path without a new enrollment while stage1 remains unchanged; changing the enrolled stage1 itself is a separate operation.
+- The current masks are per boot. No pre-Linux automatic recovery or universal watchdog fallback is promised; keep the owner power-button/macOS fallback available for experimental boots.
+- This repo ships **no binaries**: no boot objects, kernels, DTBs, initramfs, rootfs images or Apple firmware. The current local integration is not yet a complete public reproduction bundle.
+- This remains experimental bring-up, not an installer or a GPU-qualified daily driver.
 
 ## How we work, AI, and licensing
 - **Who does what:**

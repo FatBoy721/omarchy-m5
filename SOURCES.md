@@ -8,11 +8,14 @@ This lists the public work we read or reused, how we used it, and where it does 
 - **Candidate:** read and mapped, not in any build.
 - **Incompatible / blocked:** does not fit J714s on current firmware, with the reason.
 
-**Firmware during these results:** macOS 26.6.2 (25G83), stub stage-2 mBoot-18000.161.10. The main macOS has since been updated to 27.3 beta 1 (26C5035r). The stub keeps its 26.6.2 manifest and has not been recreated.
+**Current qualified route (2026-11-08):** the refreshed 26C5035r stub and public-source-derived m1n1/ESP storage chain now run all 15 CPUs and the software-rendered Omarchy desktop. The older 26.6.2 source notes below remain historical unless explicitly updated. Exact artifact identities and native limits are in [STATUS-2026-11-08.md](STATUS-2026-11-08.md).
 
-**Note (REPORTED, public):** every all-core SMP result reported so far on M5 Pro/Max (J714s, J716s, J714c) is on a **27.3 beta 1 stub**. On J714s with stage-2 18000.120.36, the secondaries were reported failing. Our route tests the current 26.6.2 firmware instead.
+- CPU integration: [TripleU613/linux-aurora](https://github.com/TripleU613/linux-aurora) at `87d61271369d9f3f5974df8663f5d0f1f77031fd` plus the local reviewed guards/config; native release `7.2.11-j714s-cpu-local`.
+- Loader: [omacom/m1n1](https://github.com/omacom/m1n1) at `02785a35e046901d5686ab9059b2c08b6256752a` plus the reviewed local USB safety/configuration changes; the enrolled stage1 and public `boot=` storage route are adopted natively. Original per-file licences/attribution and the recorded owner AI project exception remain applicable.
+- GPU: existing public-derived kernel/DTB plus J714s metadata checks are adopted **offline**, with the refreshed-stub firmware prerequisite now present. J714s GPU probe/rendering is still unverified.
+- Mesa: [rolotrealanis98/mesa](https://github.com/rolotrealanis98/mesa) at `043a4c58080c4951fea3797fe45fc6898ce77632`; pinned inputs are verified and an isolated native build is in progress, with no native J714s GPU result. The earlier voltage/firmware blockers describe the previous profile, not a current claim of success.
 
-**How sources were gathered:** public GitHub and the [omacom/linux-aurora#293](https://github.com/omacom/linux-aurora/issues/293) thread, read by our Claude research workers. A planned Antigravity scout could not run (CLI sign-in blocked). Rows added from that research are **candidate/reference only** until adoption is checked.
+**Earlier source map:** the rows below preserve how the 26.6.2/aura prototypes and other candidates were assessed. They do not override the current native CPU status above. Their source findings are not automatically hardware qualification.
 
 ## Source index
 | Source | What we take from it | Status on J714s | Licence / AI instructions (as recorded) |
@@ -40,7 +43,7 @@ This lists the public work we read or reused, how we used it, and where it does 
 ## Our own unpublished work (not available publicly yet)
 - The T6050-confined aura patch, plus the bundle builder and contract checks for the all-15 prototype.
 - The 7.3 CTXR kernel integration, DT and keyless initrd.
-- The GPU candidate (hard-disabled on J714s).
+- The newer GPU candidate with J714s metadata (built/source-checked; native GPU unverified).
 - The N1 Wi-Fi sequence (builds 3408/3410).
 - The loader SMP diagnostics and Mach-O wrapper (beyond aura's tool).
 - The operator scripts (install, restore, readback, first contact).
@@ -50,9 +53,9 @@ The older published snapshots are in `m5boot/` and `m5-omarchy/`, and `patches/`
 ## Contributor task map
 | # | Area | What would help | Needs hardware? | Public starting point |
 |---|---|---|---|---|
-| 1 | GPU | A decoded **J714s** GPU perf/voltage table from a 27.x ADT, or a source explaining the constant `perf-states-sram` value **1385** on 26.x J714s ADTs | No (ADT/source reading) | #1173 `g17/fw/m5/initdata.rs` (J716S tables), aura `src/kboot_gpu.c` SRAM rule |
+| 1 | GPU | Review the J714s metadata integration once exported, and the strict firmware/fuse-mask/rendering test plan; native J714s GPU success remains unverified | Source first; owner-controlled hardware later | #1173 and the pinned Mesa `043a4c5` native work; current gate in STATUS |
 | 2 | GPU | Any **27.2 G17S** hardware result on an M5 Pro (J714s or J716s) | Yes (someone's own machine) | #1173 "Hardware result" section |
-| 3 | CPU | Experience running **aura** (CTXR / confined EL2) on any T6050: whether iBoot arms CTXR_D over a large Mach-O object; secondary-start behaviour on stage-2 18000.x | Yes | aura `5211a863`, linux #985 |
+| 3 | CPU / RAM / storage | Reproducible export of the now-native 15-CPU route, then bounded current-profile stability/memory/I/O qualification; old one-core benchmarks are historical | Export: no; qualification: yes | Current artifact table and limits in STATUS |
 | 4 | Wi-Fi | A NATIVE log of the T6050 `pinctrl_ap` probe at runtime, or of the PCIe system power domain powering on, on any M5 | Yes | #937/#938, rolo's N1 docs |
 | 5 | Wi-Fi | The correct T6050 **cio3pllcore** tunable/offset (T8140-style layout vs aura `atc.py`) | No (source reading) | aura, edimoldovan m1n1 |
 | 6 | Debug | A **pstore/ramoops** setup known to work on M-series, so a crash within milliseconds leaves a trace | Maybe | Asahi/Aurora kernel trees |
