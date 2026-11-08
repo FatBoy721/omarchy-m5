@@ -14,7 +14,7 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 > - The owner is updating the **main macOS to 27.3**; the update is still in progress.
 > - **All Mac actions are on hold.**
 > - The Linux stub's loader is still the **all-core prototype object (`4f318f1b`)** from the 2026-11-08 trial. Restoring the original loader is **pending**, so the tested Linux baseline below **can't be booted until that restore is done**.
-> - The startup disk is still set to the stub; the owner will set it back to macOS.
+> - Startup disk: the owner reports Macintosh HD was selected and the Mac is back in macOS. This hasn't been independently verified yet; that waits for the update to finish.
 > - Whether the stub's own firmware changes with the macOS update is not proven.
 >
 > Every result below was measured on **macOS 26.6.2**, with the stub at mBoot-18000.161.10.
