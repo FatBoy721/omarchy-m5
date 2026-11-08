@@ -9,13 +9,12 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 - **REPORTED** = someone else's claim.
 - **offline** = built and reviewed, not run.
 
-## Current status (as of 2026-11-07 21:01 America/New_York)
+## Current status (as of 2026-11-07 21:32 America/New_York)
 > **Right now:**
-> - The owner is updating the **main macOS to 27.3**; the update is still in progress.
-> - **All Mac actions are on hold.**
-> - The Linux stub's loader is still the **all-core prototype object (`4f318f1b`)** from the 2026-11-08 trial. Restoring the original loader is **pending**, so the tested Linux baseline below **can't be booted until that restore is done**.
-> - Startup disk: the owner reports Macintosh HD was selected and the Mac is back in macOS. This hasn't been independently verified yet; that waits for the update to finish.
-> - Whether the stub's own firmware changes with the macOS update is not proven.
+> - The main macOS update is **finished**: macOS **27.3 beta 1** (build 26C5035r) with system firmware 20457.60.65.0.1. Macintosh HD is the **verified** default.
+> - The Linux stub is unchanged: it still boots with its macOS 26.6.2 (25G83) manifest, with the **all-core prototype object (`4f318f1b`)** enrolled from the 2026-11-08 trial. Restoring the original loader is **pending**, so the tested Linux baseline below **can't be booted until that restore is done**. No Linux session is running.
+> - **GPU, offline only:** with the new 27.3 ADT, our software checks of the GPU SRAM/voltage table data and of the GPU hand-off pass. There is **no native GPU result**.
+> - **Next, in preparation:** a small public m1n1/ESP boot chain and a matching stub-refresh plan. Neither is installed, and recreating the stub is **not approved**.
 >
 > Every result below was measured on **macOS 26.6.2**, with the stub at mBoot-18000.161.10.
 
@@ -50,7 +49,7 @@ Graphics are unaccelerated. Two things are missing:
    - Our ADT's SRAM entry is a constant `1385`, whose meaning is unknown.
 2. **G17S GPU firmware from macOS 27.x in the stub.**
    - #1173's source supports 27.2 and 27.3 firmware, but its only hardware result is 27.3 beta 1 on a J716s (REPORTED).
-   - Updating the main macOS doesn't by itself prove the stub changes.
+   - The main macOS is now 27.3 beta 1, but the stub still runs its 26.6.2 manifest. Getting 27.x GPU firmware into the stub needs a stub refresh, which is not approved.
 
 No promise of GPU acceleration is made here.
 
@@ -81,7 +80,7 @@ No promise of GPU acceleration is made here.
   - One AI operator session at a time touches the Mac.
   - Other AI sessions do source analysis and builds off-device.
 - **AI and upstream rules:**
-  - We follow each upstream's AI instructions; our AI sessions don't use upstream AsahiLinux/m1n1, whose instructions ask AI tools not to.
+  - We record each upstream's AI instructions. AsahiLinux/m1n1 (and omacom/m1n1 `main`) ask AI tools not to use them. Under an explicit owner project exception (2026-11-08), licensed public m1n1 sources may be read, compared and built locally, with every licence and attribution kept.
   - Code taken from forks or other projects keeps its source and per-file licence, and is not described as clean-room work.
   - Nothing here is submitted to Asahi Linux, per their LLM policy.
 - **Licences:**
