@@ -8,7 +8,7 @@ This lists the public work we read or reused, how we used it, and where it does 
 - **Candidate:** read and mapped, not in any build.
 - **Incompatible / blocked:** does not fit J714s on current firmware, with the reason.
 
-**Firmware here:** macOS 26.6.2 (25G83), stub stage-2 mBoot-18000.161.10. No beta, no stub recreation.
+**Firmware during these results:** macOS 26.6.2 (25G83), stub stage-2 mBoot-18000.161.10. No beta, no stub recreation. (A macOS 27 update of the main macOS started afterwards; see STATUS.)
 
 **Note (REPORTED, public):** every all-core SMP result reported so far on M5 Pro/Max (J714s, J716s, J714c) is on a **27.3 beta 1 stub**. On J714s with stage-2 18000.120.36, the secondaries were reported failing. Our route tests the current 26.6.2 firmware instead.
 

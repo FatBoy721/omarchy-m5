@@ -5,6 +5,8 @@
 Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator, no "works on my M2". This repo is the whole messy journey: every build, every native result, every failure, and every claim we had to walk back with our tail between our legs. It is not a product. It is a lab notebook with a commit history.
 
 ## TL;DR (2026-11-08)
+> **2026-11-07 20:57 America/New_York:** the main macOS is updating to macOS 27 (exact version not yet known). Mac tests are paused; the results below are from the previous macOS 26.6.2 state. Stub firmware change not proven.
+
 **Full current status and a helper handoff: [STATUS-2026-11-08.md](STATUS-2026-11-08.md). Public sources we use, and what fits: [SOURCES.md](SOURCES.md).**
 
 - **Daily baseline (NATIVE):** kernel 7.2.2 #32 (bootable again after the planned original-loader restore). Omarchy/Hyprland, SSH over USB-C, NVMe root, zram, watchdog return to macOS. **One CPU, software rendering, no Wi-Fi.**
