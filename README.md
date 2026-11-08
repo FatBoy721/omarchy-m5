@@ -7,9 +7,9 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 ## TL;DR (2026-11-08)
 **Full current status and a helper handoff: [STATUS-2026-11-08.md](STATUS-2026-11-08.md). Public sources we use, and what fits: [SOURCES.md](SOURCES.md).**
 
-- **Daily baseline (NATIVE):** kernel 7.2.2 #32. Omarchy/Hyprland, SSH over USB-C, NVMe root, zram, watchdog return to macOS. **One CPU, software rendering, no Wi-Fi.**
-- **CPU (NATIVE, 2026-11-08):** on current firmware (macOS 26.6.2) a second core fetched our reset code at EL2 and parked within 6 µs. It was booted as an aura-wrapped Mach-O object; the raw-object test stays negative. The original loader was restored and byte-proven.
-- **All-15-core prototype:** public aura + Linux #985 + our unpublished T6050 patch. It is built and reviewed offline. The owner approved one trial, which is in preparation; **there is no hardware result yet**.
+- **Daily baseline (NATIVE):** kernel 7.2.2 #32 (bootable again after the planned original-loader restore). Omarchy/Hyprland, SSH over USB-C, NVMe root, zram, watchdog return to macOS. **One CPU, software rendering, no Wi-Fi.**
+- **CPU (NATIVE, 2026-11-08):** on current firmware (macOS 26.6.2) a second core fetched our reset code at EL2 and parked within 6 µs. It was booted as an aura-wrapped Mach-O object; the raw-object test stays negative. After that 1-core diagnostic, the original loader was restored and byte-proven.
+- **All-15-core prototype:** public aura + Linux #985 + our unpublished T6050 patch. It is built and reviewed offline. One native trial on 2026-11-08 was **attempted, and Linux was not reached** (aura's USB proxy device appeared; no Linux, SSH or USB network; cause not determined). The original loader restore is planned.
 - **GPU:** blocked on J714s voltage tables and on 27.x firmware (not approved). **Wi-Fi:** the first activation failed (cause unknown); a staged diagnostic is prepared, not run.
 - **Help wanted:** see the task map in [SOURCES.md](SOURCES.md).
 
@@ -36,7 +36,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | Internal trackpad | **FT21: firmware reports the multi-touch interface READY** after a host AFE reset pulse sent in response to the firmware's own reset request, then a fresh image. Classified as a clickpad; admitted by the desktop after a userspace re-add. **Physical pointer/click/scroll still being confirmed.** **2026-11-06 update:** the owner reports the trackpad works on the kernel #30 boot (physical report; not re-tested since). Manual one-shot; [reproduce](patches/2026-11-06/ft21-reset-fresh/REPRODUCE.md) | NATIVE (READY; physical pending) |
 | Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`. **2026-11-08:** the first runtime activation (build 3408) reset the machine, cause unknown (guards returned it safely); a staged stage-1/2 diagnostic (3410) is prepared, not run | NATIVE (failing) |
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
-| SMP / accelerated GPU | **2026-11-08:** one secondary core starts and parks at EL2 in Mach-O mode (diagnostic, never given to Linux); an all-15 prototype is offline and in trial preparation. Daily kernel still one CPU and simpledrm; GPU blocked (J714s voltage table, 27.x firmware) | NATIVE (limited) |
+| SMP / accelerated GPU | **2026-11-08:** one secondary core starts and parks at EL2 in Mach-O mode (diagnostic, never given to Linux); an all-15 prototype had one trial on 2026-11-08: Linux not reached (cause not determined). Daily kernel still one CPU and simpledrm; GPU blocked (J714s voltage table, 27.x firmware) | NATIVE (limited) |
 | CPU clock control | FT13 bounded states 5/6/7 trial changes instruction throughput as expected; restored boot state 6, write gate closed. No desktop-speed improvement yet verified | NATIVE |
 | Battery / AC, sensors, lid, power button, RTC | NATIVE (failing): porting the J714c SMC work ([PLATFORM-PORT.md](PLATFORM-PORT.md)); the first battery readout hard-hung (watchdog reset to macOS); diagnosing the stalling SMC key | — |
 | Persistent unattended access, Touch ID, camera, speakers… | not verified complete | — |
