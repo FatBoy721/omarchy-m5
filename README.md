@@ -4,7 +4,16 @@
 
 Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator, no "works on my M2". This repo is the whole messy journey: every build, every native result, every failure, and every claim we had to walk back with our tail between our legs. It is not a product. It is a lab notebook with a commit history.
 
-## TL;DR (2026-11-06, FT19 update)
+## TL;DR (2026-11-08)
+**Full current status and a helper handoff: [STATUS-2026-11-08.md](STATUS-2026-11-08.md). Public sources we use, and what fits: [SOURCES.md](SOURCES.md).**
+
+- **Daily baseline (NATIVE):** kernel 7.2.2 #32. Omarchy/Hyprland, SSH over USB-C, NVMe root, zram, watchdog return to macOS. **One CPU, software rendering, no Wi-Fi.**
+- **CPU (NATIVE, 2026-11-08):** on current firmware (macOS 26.6.2) a second core fetched our reset code at EL2 and parked within 6 µs. It was booted as an aura-wrapped Mach-O object; the raw-object test stays negative. The original loader was restored and byte-proven.
+- **All-15-core prototype:** public aura + Linux #985 + our unpublished T6050 patch. It is built and reviewed offline. The owner approved one trial, which is in preparation; **there is no hardware result yet**.
+- **GPU:** blocked on J714s voltage tables and on 27.x firmware (not approved). **Wi-Fi:** the first activation failed (cause unknown); a staged diagnostic is prepared, not run.
+- **Help wanted:** see the task map in [SOURCES.md](SOURCES.md).
+
+## Earlier TL;DR (2026-11-06, FT19 update)
 **The built-in keyboard types in native Omarchy. On FT18-r2 the owner reports it is much faster.** Severe lag was reported on FT9; the cause of the later improvement is not isolated. This test kernel enables one CPU, and the framebuffer desktop saturates it. USB-C root SSH works on the same build. The trackpad enumerates but does not work; Wi-Fi still has no PCIe link.
 
 The keyboard breakthrough was getting the MTP firmware past two blocked accesses, enabling the missing Apple HID driver, and setting one GPIO data bit **before** the keyboard processor starts. [Native findings, build hashes, and corrections](keyboard/STATUS-2026-11-05.md). This is an experimental bring-up, not a finished daily-driver install.
@@ -24,10 +33,10 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 | **Root shell over USB serial** | 13:01: u10s (gser gadget + `agetty`) — `uid=0(root)`, `PRETTY_NAME="Omarchy"` | NATIVE |
 | **SSH over USB-C** | verified through FT19: gser + CDC-EEM; root commands and a file read checked before cancelling the return timer | NATIVE |
 | **Internal keyboard** | **FT9, FT14 and FT18-r2: owner-confirmed typing**. FT18-r2 reported much faster; no quantified latency test. Controller ID `05ac:0359` | NATIVE |
-| Internal trackpad | **FT21: firmware reports the multi-touch interface READY** after a host AFE reset pulse sent in response to the firmware's own reset request, then a fresh image. Classified as a clickpad; admitted by the desktop after a userspace re-add. **Physical pointer/click/scroll still being confirmed.** Manual one-shot; [reproduce](patches/2026-11-06/ft21-reset-fresh/REPRODUCE.md) | NATIVE (READY; physical pending) |
-| Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`; still unresolved | NATIVE (failing) |
+| Internal trackpad | **FT21: firmware reports the multi-touch interface READY** after a host AFE reset pulse sent in response to the firmware's own reset request, then a fresh image. Classified as a clickpad; admitted by the desktop after a userspace re-add. **Physical pointer/click/scroll still being confirmed.** **2026-11-06 update:** the owner reports the trackpad works on the kernel #30 boot (physical report; not re-tested since). Manual one-shot; [reproduce](patches/2026-11-06/ft21-reset-fresh/REPRODUCE.md) | NATIVE (READY; physical pending) |
+| Wi-Fi (N1) | prior runs: chip powered, port READY, root port answers `106b:100c`, link state machine stays at `0x00`. **2026-11-08:** the first runtime activation (build 3408) reset the machine, cause unknown (guards returned it safely); a staged stage-1/2 diagnostic (3410) is prepared, not run | NATIVE (failing) |
 | USB host (phone tethering) | port controller woken, roles set to SOURCE+DFP, phone charges for 5 glorious seconds, xHCI sees nothing | NATIVE (failing) |
-| SMP / accelerated GPU | current build uses one CPU and simpledrm; no accelerated GPU demonstrated | NATIVE (limited) |
+| SMP / accelerated GPU | **2026-11-08:** one secondary core starts and parks at EL2 in Mach-O mode (diagnostic, never given to Linux); an all-15 prototype is offline and in trial preparation. Daily kernel still one CPU and simpledrm; GPU blocked (J714s voltage table, 27.x firmware) | NATIVE (limited) |
 | CPU clock control | FT13 bounded states 5/6/7 trial changes instruction throughput as expected; restored boot state 6, write gate closed. No desktop-speed improvement yet verified | NATIVE |
 | Battery / AC, sensors, lid, power button, RTC | NATIVE (failing): porting the J714c SMC work ([PLATFORM-PORT.md](PLATFORM-PORT.md)); the first battery readout hard-hung (watchdog reset to macOS); diagnosing the stalling SMC key | — |
 | Persistent unattended access, Touch ID, camera, speakers… | not verified complete | — |
@@ -74,5 +83,7 @@ Labels: **NATIVE** = seen with our own eyes on the J714s · **VM** = QEMU · **R
 - `m5-omarchy/`: research reports, kernel patches/DT overrides, build scripts, initramfs, rootfs overlay, tasks. No license file yet: all rights reserved by the owner until one is chosen, except files carrying their own SPDX header (e.g. `tools/step2-fast.sh` MIT, kernel patches GPL-2.0).
 - `logs/`: native boot logs (scrubbed).
 - `SCAN.md`: what was excluded or scrubbed for publication.
+- `STATUS-2026-11-08.md`: the current status and helper handoff.
+- `SOURCES.md`: the public source and provenance index (adopted vs candidate vs incompatible) and the contributor task map.
 
 No binaries are included: no boot objects, kernels, DTBs, initramfs, rootfs images or Apple firmware. Hashes are listed so results can be matched to builds.
