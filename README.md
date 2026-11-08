@@ -11,13 +11,13 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 
 ## Current status (2026-11-08)
 
-**All 15 CPUs and native GPU acceleration now work in Omarchy, including a fresh login with persistent isolated Mesa integration.** Linux `7.3.0-j714s-thermal-monitor-g34f2f5bb4d03-dirty` boots through the refreshed-stub/public m1n1 route. Each CPU passed a pinned, affinity-checked known-answer test; Aurora reports **16 enabled GPU cores**. Four public rendering/pixel/compute tests passed, and Hyprland itself reports **Apple M5 Pro (G17S B1)** with the isolated Mesa libraries loaded.
+**All 15 CPUs and native GPU acceleration now work in Omarchy, including a fresh login with persistent isolated Mesa integration.** Linux `7.3.0-j714s-dvfs-thermal-future-g34f2f5bb4d03-dirty` now boots through the refreshed-stub/public m1n1 route. Each CPU passed a pinned, affinity-checked known-answer test on the preceding GPU profile; Aurora reports **16 enabled GPU cores**. Four public rendering/pixel/compute tests passed, and Hyprland itself reports **Apple M5 Pro (G17S B1)** with the isolated Mesa libraries loaded.
 
 The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 loads a small ESP stage2, which loads the kernel, DTB and initrd as separate files. Macintosh HD was verified as the persistent default before this one-shot Linux boot. Earlier statements below about an unrefreshed stub or an unbootable one-core baseline are historical.
 
 | Area | Current evidence and limit |
 |---|---|
-| CPU / desktop | **15 online CPUs (`0-14`)**; all 15 passed sequential pinned SHA-256/gzip correctness checks. Hardware-rendered Hyprland, active **3024×1890** output and a nonblank desktop verified; same boot passed 900 seconds with the old guard masked |
+| CPU / desktop | **15 online CPUs (`0-14`)**; all 15 passed pinned SHA-256/gzip checks on the preceding GPU profile. The new CPU-frequency pilot completed one conservative OPP change and restore in each of the **three cluster policies**, with `userspace` and boost off. These are nominal STATUS readings, not measured MHz. Hardware-rendered Hyprland, active **3024×1890** output and a nonblank desktop verified; the preceding GPU desktop passed 900 seconds with the old guard masked |
 | USB access | Standard EEM-only `1d6b:0102`, class `02/0c/07`; native host binding and the scoped direct SSH route verified |
 | RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. **4 GiB allocated and locked concurrently** across four 1 GiB memtester workers; each completed all 18 checks, exit 0. This qualifies that sample, not all RAM. The earlier 2 GiB/180-second timeout remains partial |
 | Storage | **1 TB Apple NVMe**, **120 GB ext4 root**. A new **4 GiB file write/fsync and separate direct CRC32C verification passed**, with stable SHA-256. Short uncapped file burst: fio **1.46 GB/s write / 5.79 GB/s read**, potentially controller-cache influenced; not sustained NAND or whole-device qualification |
