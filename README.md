@@ -11,7 +11,7 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 
 ## Current status (2026-11-08)
 
-**All 15 CPUs and native GPU acceleration now work in a short Omarchy desktop trial.** Linux `7.3.0-g34f2f5bb4d03-dirty` (#2) boots through the refreshed-stub/public m1n1 route. Each CPU passed a pinned, affinity-checked known-answer test; Aurora reports **16 enabled GPU cores**. Four public rendering/pixel/compute tests passed, and Hyprland itself reports **Apple M5 Pro (G17S B1)** with the isolated Mesa libraries loaded.
+**All 15 CPUs and native GPU acceleration now work in Omarchy, including a fresh login with persistent isolated Mesa integration.** Linux `7.3.0-j714s-thermal-monitor-g34f2f5bb4d03-dirty` boots through the refreshed-stub/public m1n1 route. Each CPU passed a pinned, affinity-checked known-answer test; Aurora reports **16 enabled GPU cores**. Four public rendering/pixel/compute tests passed, and Hyprland itself reports **Apple M5 Pro (G17S B1)** with the isolated Mesa libraries loaded.
 
 The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 loads a small ESP stage2, which loads the kernel, DTB and initrd as separate files. Macintosh HD was verified as the persistent default before this one-shot Linux boot. Earlier statements below about an unrefreshed stub or an unbootable one-core baseline are historical.
 
@@ -19,14 +19,14 @@ The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 l
 |---|---|
 | CPU / desktop | **15 online CPUs (`0-14`)**; all 15 passed sequential pinned SHA-256/gzip correctness checks. Hardware-rendered Hyprland, active **3024×1890** output and a nonblank desktop verified; same boot passed 900 seconds with the old guard masked |
 | USB access | Standard EEM-only `1d6b:0102`, class `02/0c/07`; native host binding and the scoped direct SSH route verified |
-| RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. A **2 GiB locked-memory test timed out at 180 seconds**: partial coverage, **not a full RAM pass** |
-| Storage | **1 TB Apple NVMe**, **120 GB ext4 root**. A new **1 GiB file write/fsync and separate direct CRC32C verification passed**, with stable whole-file SHA-256. Not a throughput or whole-device qualification |
-| GPU | **NATIVE:** G17S firmware **27.3 / 26C5035r** initialized; actual fuse masks identify **16 enabled cores**. Four public tests passed, including 12-scene rendering/compute coverage. A normal UWSM-managed client also passed all 12 scenes on Apple G17S |
-| Input / other hardware | Earlier keyboard/trackpad results are historical; current completeness/latency is under owner trial. Wi-Fi/BT, battery/sensors, suspend and other peripherals are not newly qualified |
+| RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. **4 GiB allocated and locked concurrently** across four 1 GiB memtester workers; each completed all 18 checks, exit 0. This qualifies that sample, not all RAM. The earlier 2 GiB/180-second timeout remains partial |
+| Storage | **1 TB Apple NVMe**, **120 GB ext4 root**. A new **4 GiB file write/fsync and separate direct CRC32C verification passed**, with stable SHA-256. Short uncapped file burst: fio **1.46 GB/s write / 5.79 GB/s read**, potentially controller-cache influenced; not sustained NAND or whole-device qualification |
+| GPU | **NATIVE:** G17S firmware **27.3 / 26C5035r** initialized; actual fuse masks identify **16 enabled cores**. Four public tests passed, including 12-scene rendering/compute coverage. A normal UWSM-managed client also passed all 12 scenes on Apple G17S. Vulkan headless rendering, compute/render submissions and **15,597,568 CPU-model correctness checks** passed on Borealis |
+| Input / other hardware | Earlier keyboard/trackpad results are historical; current completeness/latency is under owner trial. Read-only SMC monitoring now exposes named **TCMb**, a computed SoC hotspot; fan manual control stays disabled. Wi-Fi/BT, battery, suspend and other peripherals are not newly qualified |
 
 The first split-payload boot did reach all 15 CPUs, but an old rootfs guard remained eligible and initiated the return around 900 seconds. The fix uses **per-boot `/run/systemd/system.control` masks**, which override the actual regular `/etc` unit files. The current profile keeps ordinary journals persistent and leaves the old guard/logger inactive. [Exact evidence, artifact hashes and handoff](STATUS-2026-11-08.md).
 
-Mesa **`043a4c5`** remains isolated from system Mesa. The accelerated desktop uses runtime session integration; persistence is still in preparation. These are short functional tests and a working session, **not thermal, performance or long-soak qualification**. Simpledrm provides panel scanout while Aurora performs rendering; this is not the earlier llvmpipe desktop. The stable CPU rollback remains preserved.
+Mesa **`043a4c5`** remains isolated from system Mesa. A private `/opt` package and supported user UWSM hooks survived a fresh graphical login without the earlier runtime overlay; system Mesa remains unchanged. These are bounded functional, RAM-sample and file-I/O results, **not Vulkan conformance, full-memory, thermal-protection or long-soak qualification**. Simpledrm provides panel scanout while Aurora performs rendering; this is not the earlier llvmpipe desktop. The stable CPU rollback remains preserved.
 
 ### Historical one-core baseline
 
