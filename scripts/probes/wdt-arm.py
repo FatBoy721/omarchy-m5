@@ -7,10 +7,13 @@
     hv/wdt-arm.py --off           # the new proxy answered: disarm
 
 m1n1 disables the watchdog early in init (wdt_disable(), "Primary WDT
-disabled"), which only covers hangs before that point. Our m1n1 (patch 0004)
-leaves it armed when its boot args carry "m1n1.wdt=keep", so a hang anywhere
-in the experimental image resets the M5 into the installed stage-1 after
-SECONDS instead of needing a power-button hold. Armed right before
+disabled"), which only covers hangs before that point. Retaining it across
+chainload requires both patch 0004 (wdt=keep) and patch 0009 (the flat native
+boot-argument layout); the isolated GPU loaders include both. Without 0009,
+the old C layout drops "m1n1" and misses the token. Require the new loader's
+"Primary WDT left armed" message; do not assume older fallback binaries
+include this fix. The timer then covers the experimental image for SECONDS.
+Armed right before
 ./boot-linux.sh instead, it catches a kernel that hangs before its apple_wdt
 driver probes; once probed, the kernel keeps an already-running watchdog fed
 on its own (WATCHDOG_HANDLE_BOOT_ENABLED). Probes that hang the bus are

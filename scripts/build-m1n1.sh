@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # omarchy-m5 dev harness - build m1n1 for T6050.
 #
-# Produces:
-#   vendor/m1n1/build/m1n1.bin   - raw stage-1 image for kmutil configure-boot
-#   vendor/m1n1/build/m1n1.macho - Mach-O variant
+# Produces (M1N1 defaults to vendor/m1n1):
+#   $M1N1/build/m1n1.bin   - raw stage-1 image for kmutil configure-boot
+#   $M1N1/build/m1n1.macho - Mach-O variant
 #
 # CHAINLOADING=1 (default) builds a chainloadable image: the installed
 # stage-1 m1n1 loads this build over USB via proxyclient, giving a ~7s
 # dev iteration cycle without touching boot policy. Set CHAINLOADING=0
 # for the image you actually install via kmutil.
+# M1N1=build/m1n1-gpu selects an independently prepared GPU trial tree.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [ ! -d vendor/m1n1 ]; then
-    echo "ERROR: vendor/m1n1 missing. Run scripts/fetch-sources.sh first." >&2
+M1N1="${M1N1:-vendor/m1n1}"
+if [ ! -d "$M1N1" ]; then
+    echo "ERROR: $M1N1 missing; prepare the selected source tree first." >&2
     exit 1
 fi
 
@@ -38,7 +40,7 @@ JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}"
 # make treats it as up to date and never re-evaluates CFG. Flipping
 # CHAINLOADING/RELEASE would then silently produce the *previous* config.
 # Compare the config ourselves and delete the header when it has to change.
-CFG_FILE=vendor/m1n1/build/build_cfg.h
+CFG_FILE="$M1N1/build/build_cfg.h"
 WANT=""
 [ "$RELEASE" = 1 ] && WANT="$WANT#define RELEASE"$'\n'
 [ "$CHAINLOADING" = 1 ] && WANT="$WANT#define CHAINLOADING"$'\n'
@@ -55,9 +57,9 @@ case "$("$GMAKE" --version | head -1)" in
     *" 3."*) echo "ERROR: $GMAKE is too old for m1n1; brew install make" >&2; exit 1 ;;
 esac
 
-echo "==> Building m1n1 (CHAINLOADING=$CHAINLOADING, RELEASE=$RELEASE, -j$JOBS)"
-"$GMAKE" -C vendor/m1n1 -j"$JOBS" CHAINLOADING="$CHAINLOADING" RELEASE="$RELEASE"
+echo "==> Building $M1N1 (CHAINLOADING=$CHAINLOADING, RELEASE=$RELEASE, -j$JOBS)"
+"$GMAKE" -C "$M1N1" -j"$JOBS" CHAINLOADING="$CHAINLOADING" RELEASE="$RELEASE"
 
 echo
 echo "==> Artifacts:"
-ls -lh vendor/m1n1/build/m1n1.bin vendor/m1n1/build/m1n1.macho 2>/dev/null || true
+ls -lh "$M1N1/build/m1n1.bin" "$M1N1/build/m1n1.macho" 2>/dev/null || true

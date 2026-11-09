@@ -27,10 +27,10 @@ BOARD="j714s"
 # SMP is broken on T6050 (secondaries never execute the reset vector), so the
 # first milestone is deliberately single-core.
 #
-# Console: earlycon=efifb draws the kernel log on the panel from early
-# setup_arch() on - the bring-up kernel (patch 0001) describes m1n1's
-# framebuffer to it - and tty0 takes over once simpledrm/fbcon bind;
-# keep_bootcon keeps the early one so a crash in between stays readable.
+# Console: on this DT boot, earlycon=efifb needs patch 0001's
+# CONFIG_OMARCHY_FB_MARKERS initializer and valid framebuffer geometry.
+# Normal marker-disabled builds reject it; tty0 starts once simpledrm/fbcon
+# bind. keep_bootcon retains a boot console only if one was initialized.
 # No bare `earlycon`: it resolves through /chosen/stdout-path, which is
 # serial0 (the s5l UART behind the debug cable).
 #

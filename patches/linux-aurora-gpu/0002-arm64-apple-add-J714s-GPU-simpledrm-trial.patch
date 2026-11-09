@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenAI coding assistant <assistant@local.invalid>
+Subject: [PATCH] arm64: dts: apple: isolate the first J714s GPU display trial
+
+TripleU613 reports accelerated J714s operation with Linux DCP off:
+https://github.com/TripleU613/Omarchy-M5-Pro/blob/13cc8196396ef2029ec0931f17fcb0ff9ad73c21/STATUS-2026-11-08.md
+
+Retain this machine's voltage bins and live preflight, not the different
+bins in draft rolotrealanis98/linux#1 at 77782baf9d4923e42b3bc20f2bb816789c5afba8.
+The existing shared ID, board geometry and M5 render-policy admission already
+rejects invalid/all-zero masks before firmware boot. Do not duplicate it or
+reject a valid partially fused cluster.
+
+Keep the DCP GPU DT and CPU fallbacks intact. This new DT requires the matching
+m1n1 simpledrm opt-out patch, since an older loader can re-enable DCP nodes.
+This is local AI-assisted integration, not a new hardware qualification.
+---
+diff --git a/arch/arm64/boot/dts/apple/Makefile b/arch/arm64/boot/dts/apple/Makefile
+--- a/arch/arm64/boot/dts/apple/Makefile
++++ b/arch/arm64/boot/dts/apple/Makefile
+@@ -100,6 +100,7 @@ dtb-$(CONFIG_ARCH_APPLE) += t6040-j616s-tether.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t6041-j616c.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu.dtb
++dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-simpledrm.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t8112-j413.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t8112-j415.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t8112-j473.dtb
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dts
+@@ -0,0 +1,12 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * Isolated first GPU trial: retain the inherited simple framebuffer rather
++ * than handing DCP to Linux. All DCP nodes are disabled in the shared board
++ * tree; the matching loader must honor this opt-out instead of enabling them.
++ * GPU voltage bins and all other board settings remain the local J714s ones.
++ */
++#include "t6050-j714s-gpu.dts"
++
++&dcp {
++	apple,m1n1-simpledrm-only;
++};

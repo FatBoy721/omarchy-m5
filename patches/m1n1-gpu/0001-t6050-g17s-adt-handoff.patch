@@ -1,0 +1,379 @@
+From: omarchy-m5 local integration
+Subject: [PATCH] kboot: validated runtime-ADT T6050 G17S GPU handoff
+
+Adapted from Rolando Trevino <rolotrealanis@gmail.com>, omacom/m1n1 PR #37,
+commit 2bebfe7708c7077377ecc0d80d29bfb458335c0d, src/kboot_gpu.c (MIT).
+Upstream source: https://github.com/omacom/m1n1/pull/37
+
+Apply after 4184923ffb2dff079b384d6a32cc02142aa14572 plus the existing
+patches/m1n1 series 0001,0002,0003,0004,0007,0008. Those patches exactly
+reconstruct the local tracked vendor baseline; 0005/0006 target another
+source layout and are deliberately excluded. No N1/diskboot/USB/PMP changes.
+
+Local integration consumes a trial-only apple,m1n1-gpu-handoff marker on a
+DT whose GPU and resources start disabled. Only after all live-ADT values
+are checked does the GPU become okay. Validate the actual J714s AIC3 binding,
+GFX/GFX1 order, native windows, six reservation references and names, range
+alignment/contiguity/overlap and size bounds. Runtime addresses only; no MMIO.
+No marker or no GPU leaves the DT unchanged. Preserve DCP/watchdog/USB code.
+
+This patch is local trial work, not a claim of J714s GPU hardware qualification.
+Offline smoke harness: patches/m1n1-gpu/smoke-handoff.py. No hardware access.
+---
+diff --git c/src/kboot_gpu.c w/src/kboot_gpu.c
+index 8161534..8765ee9 100644
+--- c/src/kboot_gpu.c
++++ w/src/kboot_gpu.c
+@@ -490,8 +490,352 @@ static int fdt_set_aux_opp(void *dt, int gpu, const char *prop, const struct aux
+     return 0;
+ }
+ 
++/* Adapted from Rolando Trevino's MIT-licensed omacom/m1n1 PR #37,
++ * commit 2bebfe7708c7077377ecc0d80d29bfb458335c0d. Local J714s integration:
++ * retain the existing DCP/USB/watchdog chain; no G17 OPP, N1 or PMP startup.
++ */
++static int t6050_dt_reg_by_name(void *dt, int node, const char *name, u64 *base)
++{
++    int parent = fdt_parent_offset(dt, node);
++    int index = fdt_stringlist_search(dt, node, "reg-names", name), len;
++    const fdt64_t *reg = fdt_getprop(dt, node, "reg", &len);
++    if (parent < 0 || fdt_address_cells(dt, parent) != 2 ||
++        fdt_size_cells(dt, parent) != 2 || index < 0 || !reg ||
++        len % 16 || index >= len / 16)
++        return -1;
++    *base = fdt64_ld(&reg[2 * index]);
++    return 0;
++}
++
++/*
++ * T6050 (M5 Pro, G17S).
++ *
++ * The GPU driver adopts the GPU as iBoot leaves it: both coprocessor images loaded but not
++ * started (/arm-io/gfx-asc and gfx1-asc) and the UAT set up. Everything published here comes from
++ * the ADT of this boot. No GPU register is touched, and there are no operating points or power
++ * values to fill: the driver keeps its own tables for this GPU.
++ *  - The UAT regions: sgx gfx-handoff, gfx-shared-l2-region, gfx-shared-region and gpu-region.
++ *  - gpu-fw-text, from gfx-asc __TEXT to the end of gfx1-asc __TEXT, and gpu-fw-data, from gfx-asc
++ *    __DATA to the end of gfx1-asc __DATA_SHARED_RO, from segment-ranges. Each must be contiguous,
++ *    and the data segments must lie at the sgx gfx{,1}-data{,-shared-ro}-base addresses. The
++ *    images move between iBoot builds, so none of this is hardcoded.
++ *  - The wrapper and iop-vbar windows of the two GPU mailboxes, from the coprocessor whose ADT
++ *    role is the mailbox's apple,firmware-role. The mailbox's interrupts must be that
++ *    coprocessor's. The mailboxes are enabled with the GPU.
++ * The device tree's sgx window must be the ADT's.
++ *
++ * The fill requires the trial-only apple,m1n1-gpu-handoff marker. Older loaders leave this
++ * DT's GPU disabled; this loader enables it last. Failure disables the GPU and all its resources.
++ */
++#define T6050_WRAPPER_SIZE 0x88000 /* the ASCWrap v6 window the mailbox driver requires */
++#define T6050_VBAR_SIZE    8       /* the part of iop-vbar the mailbox driver maps */
++#define T6050_FW_TEXT      4
++#define T6050_FW_DATA      5
++
++static const struct {
++    const char *name; /* /arm-io/sgx <name>-base and -size; NULL: from segment-ranges */
++    const char *path;
++} t6050_regions[] = {
++    {"gfx-handoff", "/reserved-memory/uat-handoff"},
++    {"gfx-shared-l2-region", "/reserved-memory/uat-l2-pagetables"},
++    {"gfx-shared-region", "/reserved-memory/uat-pagetables"},
++    {"gpu-region", "/reserved-memory/uat-ttbs"},
++    {NULL, "/reserved-memory/gpu-fw-text"},
++    {NULL, "/reserved-memory/gpu-fw-data"},
++};
++
++static const char *const t6050_asc[2] = {"/arm-io/gfx-asc", "/arm-io/gfx1-asc"};
++static const char *const t6050_roles[2] = {"GFX", "GFX1"};
++static const char *const t6050_mbox_aliases[2] = {"gpu-mbox", "gpu-mbox1"};
++static const char *const t6050_region_names[] = {
++    "handoff", "l2-pagetables", "pagetables", "ttbs", "fw-text", "fw-data",
++};
++
++static bool t6050_range_valid(u64 base, u64 size, u64 alignment)
++{
++    return base && size && !(base & (alignment - 1)) && !(size & (alignment - 1)) &&
++           base < (1ULL << 42) && size <= (1ULL << 42) - base;
++}
++
++/* Segment <name> of GPU coprocessor <asc>; segment-names is one ';'-separated list */
++static int t6050_segment(int asc, const char *name, u64 *phys, u64 *size)
++{
++    int node = adt_path_offset(adt, t6050_asc[asc]);
++    u32 names_len = 0, len = 0;
++    const char *names = node < 0 ? NULL : adt_getprop(adt, node, "segment-names", &names_len);
++    const struct adt_segment_ranges *seg =
++        node < 0 ? NULL : adt_getprop(adt, node, "segment-ranges", &len);
++
++    if (names && names_len && seg && len && !(len % sizeof(*seg))) {
++        size_t want = strlen(name);
++        const char *p = names, *end = names + names_len;
++        for (u32 i = 0; i < len / sizeof(*seg) && p < end; i++) {
++            const char *q = memchr(p, ';', end - p);
++            size_t n = q ? (size_t)(q - p) : strnlen(p, end - p);
++            if (n == want && !memcmp(p, name, n)) {
++                *phys = seg[i].phys;
++                *size = seg[i].size;
++                if (!t6050_range_valid(*phys, *size, SZ_16K))
++                    bail("FDT: GPU: T6050: invalid %s segment\n", name);
++                return 0;
++            }
++            if (!q)
++                break;
++            p = q + 1;
++        }
++    }
++    bail("FDT: GPU: T6050: %s has no %s segment\n", t6050_asc[asc], name);
++}
++
++/* The six regions from the ADT: non-zero, 16 KiB aligned, below 4 TiB, no overlaps */
++static int t6050_get_regions(void *dt, int sgx, u64 *base, u64 *size)
++{
++    for (size_t i = 0; i < T6050_FW_TEXT; i++) {
++        char prop[64];
++        snprintf(prop, sizeof(prop), "%s-base", t6050_regions[i].name);
++        if (ADT_GETPROP(adt, sgx, prop, &base[i]) != sizeof(u64))
++            bail("FDT: GPU: T6050: no sgx %s\n", prop);
++        snprintf(prop, sizeof(prop), "%s-size", t6050_regions[i].name);
++        if (ADT_GETPROP(adt, sgx, prop, &size[i]) != sizeof(u64))
++            bail("FDT: GPU: T6050: no sgx %s\n", prop);
++    }
++
++    u64 text[2], text_size[2];
++    for (int asc = 0; asc < 2; asc++)
++        if (t6050_segment(asc, "__TEXT", &text[asc], &text_size[asc]))
++            return -1;
++    if (text[0] + text_size[0] != text[1])
++        bail("FDT: GPU: T6050: the __TEXT segments are not contiguous\n");
++    base[T6050_FW_TEXT] = text[0];
++    size[T6050_FW_TEXT] = text[1] + text_size[1] - text[0];
++
++    static const char *const data_prop[4] = {
++        "gfx-data-base",
++        "gfx-data-shared-ro-base",
++        "gfx1-data-base",
++        "gfx1-data-shared-ro-base",
++    };
++    u64 next = 0;
++    for (int i = 0; i < 4; i++) {
++        const char *seg = i & 1 ? "__DATA_SHARED_RO" : "__DATA";
++        u64 phys, len, want;
++        if (t6050_segment(i / 2, seg, &phys, &len))
++            return -1;
++        if (ADT_GETPROP(adt, sgx, data_prop[i], &want) != sizeof(u64) || phys != want ||
++            (i && phys != next))
++            bail("FDT: GPU: T6050: %s %s is not at sgx %s or not contiguous\n", t6050_asc[i / 2],
++                 seg, data_prop[i]);
++        if (!i)
++            base[T6050_FW_DATA] = phys;
++        next = phys + len;
++    }
++    size[T6050_FW_DATA] = next - base[T6050_FW_DATA];
++
++    for (size_t i = 0; i < ARRAY_SIZE(t6050_regions); i++) {
++        const char *path = t6050_regions[i].path;
++        int node = fdt_path_offset(dt, path);
++        int parent = node < 0 ? node : fdt_parent_offset(dt, node);
++        if (!t6050_range_valid(base[i], size[i], SZ_16K) || parent < 0 ||
++            fdt_address_cells(dt, parent) != 2 || fdt_size_cells(dt, parent) != 2 ||
++            !fdt_getprop(dt, node, "no-map", NULL))
++            bail("FDT: GPU: T6050: unusable %s 0x%lx+0x%lx\n", path, base[i], size[i]);
++        for (size_t j = 0; j < i; j++)
++            if (base[i] < base[j] + size[j] && base[j] < base[i] + size[i])
++                bail("FDT: GPU: T6050: %s overlaps %s\n", path, t6050_regions[j].path);
++        printf("FDT: GPU: T6050: %-34s 0x%lx+0x%lx\n", path, base[i], size[i]);
++    }
++    return 0;
++}
++
++/* Mailbox <ph>: verify the native window, binding and interrupt tuples for role <asc>. */
++static int t6050_get_mbox(void *dt, u32 ph, int asc, u64 *wrapper, u64 *vbar)
++{
++    int mbox = fdt_node_offset_by_phandle(dt, ph);
++    int parent = mbox < 0 ? mbox : fdt_parent_offset(dt, mbox);
++    int role_len = 0;
++    const char *role = mbox < 0 ? NULL :
++        fdt_getprop(dt, mbox, "apple,firmware-role", &role_len);
++    int cells_len = 0;
++    const fdt32_t *cells = mbox < 0 ? NULL :
++        fdt_getprop(dt, mbox, "#mbox-cells", &cells_len);
++    int anode = adt_path_offset(adt, t6050_asc[asc]);
++    u32 arole_len = 0;
++    const char *arole = anode < 0 ? NULL : adt_getprop(adt, anode, "role", &arole_len);
++    size_t expected_len = strlen(t6050_roles[asc]) + 1;
++    if (parent < 0 || fdt_address_cells(dt, parent) != 2 ||
++        fdt_size_cells(dt, parent) != 2 || !role || role_len != (int)expected_len ||
++        memcmp(role, t6050_roles[asc], expected_len) || !arole ||
++        arole_len != expected_len || memcmp(arole, t6050_roles[asc], expected_len) ||
++        !cells || cells_len != 4 || fdt32_ld(cells) ||
++        mbox != fdt_path_offset(dt, t6050_mbox_aliases[asc]) ||
++        fdt_stringlist_count(dt, mbox, "reg-names") != 2 ||
++        fdt_stringlist_search(dt, mbox, "reg-names", "wrapper") != 0 ||
++        fdt_stringlist_search(dt, mbox, "reg-names", "iop-vbar") != 1)
++        bail("FDT: GPU: T6050: mailbox role/order/binding is unusable\n");
++    int path[8];
++    u64 wrapper_size, vbar_size;
++    if (adt_path_offset_trace(adt, t6050_asc[asc], path) < 0 ||
++        adt_get_reg(adt, path, "reg", 0, wrapper, &wrapper_size) < 0 ||
++        adt_get_reg(adt, path, "reg", 1, vbar, &vbar_size) < 0 ||
++        wrapper_size != T6050_WRAPPER_SIZE || vbar_size < T6050_VBAR_SIZE ||
++        !t6050_range_valid(*wrapper, wrapper_size, SZ_16K) ||
++        !t6050_range_valid(*vbar, T6050_VBAR_SIZE, 8) ||
++        (*wrapper < *vbar + T6050_VBAR_SIZE && *vbar < *wrapper + wrapper_size))
++        bail("FDT: GPU: T6050: no GPU coprocessor window for mailbox role %s\n", role);
++
++    /* This board's AIC3 uses three cells; four-cell DTs explicitly include die zero. */
++    int irq_parent = mbox, parent_len = 0;
++    const fdt32_t *parent_ph = NULL;
++    while (irq_parent >= 0) {
++        parent_ph = fdt_getprop(dt, irq_parent, "interrupt-parent", &parent_len);
++        if (parent_ph)
++            break;
++        irq_parent = fdt_parent_offset(dt, irq_parent);
++    }
++    if (!parent_ph || parent_len != 4)
++        bail("FDT: GPU: T6050: mailbox has no interrupt parent\n");
++    irq_parent = fdt_node_offset_by_phandle(dt, fdt32_ld(parent_ph));
++    const fdt32_t *irq_cells = irq_parent < 0 ? NULL :
++        fdt_getprop(dt, irq_parent, "#interrupt-cells", &parent_len);
++    if (!irq_cells || parent_len != 4 ||
++        fdt_node_check_compatible(dt, irq_parent, "apple,t6050-aic3"))
++        bail("FDT: GPU: T6050: mailbox interrupt parent is not T6050 AIC3\n");
++    u32 ncells = fdt32_ld(irq_cells);
++    int len;
++    u32 alen;
++    const fdt32_t *irqs = fdt_getprop(dt, mbox, "interrupts", &len);
++    const u32 *airqs = adt_getprop(adt, anode, "interrupts", &alen);
++    if (!irqs || !airqs || (ncells != 3 && ncells != 4) ||
++        len != (int)(8 * ncells) || alen != 16 ||
++        fdt_stringlist_count(dt, mbox, "interrupt-names") != 2 ||
++        fdt_stringlist_search(dt, mbox, "interrupt-names", "send-empty") != 0 ||
++        fdt_stringlist_search(dt, mbox, "interrupt-names", "recv-not-empty") != 1)
++        bail("FDT: GPU: T6050: mailbox %s has no usable interrupts\n", role);
++    for (int i = 0; i < 2; i++)
++        if (fdt32_ld(&irqs[ncells * i]) ||
++            (ncells == 4 && fdt32_ld(&irqs[ncells * i + 1])) ||
++            fdt32_ld(&irqs[ncells * i + ncells - 2]) != airqs[i + 1] ||
++            fdt32_ld(&irqs[ncells * i + ncells - 1]) != 4)
++            bail("FDT: GPU: T6050: mailbox %s interrupt tuple mismatches ADT\n", role);
++
++    printf("FDT: GPU: T6050: mailbox %s: wrapper 0x%lx, iop-vbar 0x%lx (%s)\n", role, *wrapper,
++           *vbar, t6050_asc[asc]);
++    return 0;
++}
++
++static int dt_set_gpu_t6050(void *dt)
++{
++    int gpu = fdt_path_offset(dt, "gpu");
++    if (gpu < 0)
++        return 0;
++    if (fdt_node_check_compatible(dt, gpu, "apple,agx-g17s"))
++        return 0;
++
++    /* A trial DT remains safe with an older loader: only this loader consumes the marker. */
++    int marker_len;
++    if (!fdt_getprop(dt, gpu, "apple,m1n1-gpu-handoff", &marker_len))
++        return 0;
++
++    size_t touched = 0;
++    u32 mbox_ph[2] = {0, 0};
++    u64 base[ARRAY_SIZE(t6050_regions)], size[ARRAY_SIZE(t6050_regions)];
++    u64 wrapper[2], vbar[2], sgx_base, dt_sgx_base;
++    int sgx_path[8], len;
++    if (marker_len != 0)
++        goto disable;
++
++    int sgx = adt_path_offset_trace(adt, "/arm-io/sgx", sgx_path);
++    if (sgx < 0 || adt_get_reg(adt, sgx_path, "reg", 0, &sgx_base, NULL) < 0 ||
++        t6050_dt_reg_by_name(dt, gpu, "sgx", &dt_sgx_base) || dt_sgx_base != sgx_base) {
++        printf("FDT: GPU: T6050: gpu sgx is not the ADT's\n");
++        goto disable;
++    }
++    if (t6050_get_regions(dt, sgx, base, size))
++        goto disable;
++    const fdt32_t *regions = fdt_getprop(dt, gpu, "memory-region", &len);
++    if (!regions || len != sizeof(fdt32_t) * ARRAY_SIZE(t6050_regions) ||
++        fdt_stringlist_count(dt, gpu, "memory-region-names") != ARRAY_SIZE(t6050_regions))
++        goto disable;
++    for (size_t i = 0; i < ARRAY_SIZE(t6050_regions); i++)
++        if (fdt_node_offset_by_phandle(dt, fdt32_ld(&regions[i])) !=
++                fdt_path_offset(dt, t6050_regions[i].path) ||
++            fdt_stringlist_search(dt, gpu, "memory-region-names", t6050_region_names[i]) != (int)i)
++            goto disable;
++
++    const fdt32_t *mboxes = fdt_getprop(dt, gpu, "mboxes", &len);
++    if (!mboxes || len != sizeof(mbox_ph)) {
++        printf("FDT: GPU: T6050: gpu needs two mboxes\n");
++        goto disable;
++    }
++    for (int i = 0; i < 2; i++)
++        mbox_ph[i] = fdt32_ld(&mboxes[i]);
++    for (int i = 0; i < 2; i++)
++        if (t6050_get_mbox(dt, mbox_ph[i], i, &wrapper[i], &vbar[i]))
++            goto disable;
++    u64 mmio_base[] = {wrapper[0], vbar[0], wrapper[1], vbar[1]};
++    u64 mmio_size[] = {T6050_WRAPPER_SIZE, T6050_VBAR_SIZE,
++                       T6050_WRAPPER_SIZE, T6050_VBAR_SIZE};
++    for (size_t i = 0; i < ARRAY_SIZE(mmio_base); i++) {
++        for (size_t j = 0; j < i; j++)
++            if (mmio_base[i] < mmio_base[j] + mmio_size[j] &&
++                mmio_base[j] < mmio_base[i] + mmio_size[i])
++                goto disable;
++        for (size_t j = 0; j < ARRAY_SIZE(t6050_regions); j++)
++            if (mmio_base[i] < base[j] + size[j] && base[j] < mmio_base[i] + mmio_size[i])
++                goto disable;
++    }
++
++    /* Everything is validated. Fill and enable the mailboxes, then publish the regions last. */
++    for (int i = 0; i < 2; i++) {
++        fdt64_t reg[4];
++        fdt64_st(&reg[0], wrapper[i]);
++        fdt64_st(&reg[1], T6050_WRAPPER_SIZE);
++        fdt64_st(&reg[2], vbar[i]);
++        fdt64_st(&reg[3], T6050_VBAR_SIZE);
++        int mbox = fdt_node_offset_by_phandle(dt, mbox_ph[i]);
++        if (mbox < 0 || fdt_setprop(dt, mbox, "reg", reg, sizeof(reg)))
++            goto disable;
++        mbox = fdt_node_offset_by_phandle(dt, mbox_ph[i]);
++        if (mbox < 0 || fdt_setprop_string(dt, mbox, "status", "okay"))
++            goto disable;
++    }
++
++    while (touched < ARRAY_SIZE(t6050_regions)) {
++        size_t r = touched++;
++        if (dt_set_resvmem(dt, t6050_regions[r].path, base[r], size[r]))
++            goto disable;
++    }
++    gpu = fdt_path_offset(dt, "gpu");
++    if (gpu < 0 || fdt_setprop_string(dt, gpu, "status", "okay"))
++        goto disable;
++
++    printf("FDT: GPU: T6050 GPU handed off: UAT, firmware and mailboxes from the ADT\n");
++    return 0;
++
++disable:
++    gpu = fdt_path_offset(dt, "gpu");
++    if (gpu >= 0 && fdt_setprop_string(dt, gpu, "status", "disabled"))
++        return -1;
++    /* Disable all placeholders too, even if failure preceded publication. */
++    for (size_t r = 0; r < ARRAY_SIZE(t6050_regions); r++) {
++        int node = fdt_path_offset(dt, t6050_regions[r].path);
++        if (node >= 0 && fdt_setprop_string(dt, node, "status", "disabled"))
++            return -1;
++    }
++    for (int i = 0; i < 2; i++) {
++        int mbox = fdt_path_offset(dt, t6050_mbox_aliases[i]);
++        if (mbox >= 0 && fdt_setprop_string(dt, mbox, "status", "disabled"))
++            return -1;
++    }
++    printf("FDT: GPU: invalid T6050 ADT or DT data, disabling GPU\n");
++    return 0;
++}
++
+ int dt_set_gpu(void *dt)
+ {
++    if (chip_id == T6050)
++        return dt_set_gpu_t6050(dt);
++
+     bool has_cs_afr = false;
+     int (*calc_power)(u32 count, u32 table_count, const struct perf_state *core,
+                       const struct perf_state *sram, const struct aux_perf_states *cs, u32 *max_pwr,

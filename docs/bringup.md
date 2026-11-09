@@ -624,6 +624,313 @@ original kernel, reboot/power-cycle to m1n1 and use the default
 default kernel: all 15 CPUs, SSD root, simpledrm and trackpad returned.
 No boot-policy change is needed in either direction.
 
+### GPU trial (isolated J714s)
+
+This local trial keeps the verified DCP/battery and default bundles intact.
+Native rendering/compute and Vulkan-backed Zink now pass on this J714s in
+the separate **simpledrm / Linux-DCP-off** profile. The two exercised boots
+used `7.3.0-g929e67a1da3e`; the second also verified the corrected loader's
+watchdog retention. These are short headless GPU checks, not accelerated
+desktop, GPU+DCP, suspend or sustained-load qualification.
+
+Sources:
+
+- Aurora Linux [PR #1173](https://github.com/aurora-silicon/linux/pull/1173),
+  pinned at `34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a`, followed by the
+  existing sixteen Aurora patches and `patches/linux-aurora-gpu/`.
+- The existing m1n1 base `4184923ffb2dff079b384d6a32cc02142aa14572`,
+  reconstructed in `build/m1n1-gpu-simpledrm` with patches 0001–0004,
+  0007–0009, plus `patches/m1n1-gpu/`. The GPU handoff is a licensed local
+  adaptation of commit `2bebfe7708c7077377ecc0d80d29bfb458335c0d` from
+  [m1n1 PR #37](https://github.com/aurora-silicon/m1n1/pull/37).
+  It does not import the N1/USB-host bootloader stack or start PMP.
+- Mesa [PR #194](https://github.com/aurora-silicon/mesa/pull/194),
+  pinned at `043a4c58080c4951fea3797fe45fc6898ce77632`.
+- The working
+  [other-J714s report](https://github.com/TripleU613/Omarchy-M5-Pro/blob/13cc8196396ef2029ec0931f17fcb0ff9ad73c21/STATUS-2026-11-08.md)
+  motivated the explicit DCP-off profile, not a claim that GPU+DCP works.
+  The [draft J714s voltage PR](https://github.com/rolotrealanis98/linux/pull/1),
+  reviewed at `77782baf9d4923e42b3bc20f2bb816789c5afba8`, was **not applied**:
+  all 13 active main voltage rows differ from this Mac's data.
+- Private Vulkan Loader `9e9518d2cf00054a220ae1a40f4406804b420ef5` and Headers
+  `6802bb4733b63ed5efd3adb308a6c885ef180ea1` are pinned to v1.4.363, matching
+  Mesa's bundled header revision.
+
+The J714s voltage tables come from the private runtime ADT captured on
+2026-11-06, SHA256
+`e68662cd086179dd7fdebdd3046eec4fbf27aa287b266a7e0a550434a8ad2017`.
+They describe this device, not every J714s. `boot-linux.sh` checks the live
+model, both firmware-version properties and all four raw voltage-table
+hashes before invoking Linux. Its `hv/gpu-preflight.py` reads only boot
+arguments and ADT RAM; unlike `m1n1.setup`, it does not reset the PMU panic
+counter or change the proxy heap. Raw ADT captures remain private.
+Firmware-version metadata is not image attestation: the GPU driver must
+also admit the actual loaded firmware through its exact-image checks.
+
+| Device-specific value | This J714s | Reported peer J714s |
+| --- | --- | --- |
+| Top GPU frequency | 1620 MHz | 1620 MHz |
+| Top-state core / SRAM voltage | 1055 / 1055 mV | 1025 / 1010 mV |
+| Enabled-core masks, per cluster | `0x3bb`, `0x37b` | `0x3db`, `0x3db` |
+| Enabled GPU cores | 16 | 16 |
+
+Our masks were read through the live driver's GET_PARAMS ioctl, not inferred
+from the SKU or the packed raw register debug value. The existing driver
+already rejects out-of-geometry and aggregate-zero masks before starting
+firmware; no additional mask workaround was needed.
+
+The trial DT leaves the GPU, both native mailboxes and all six firmware/UAT
+reservations disabled. The matching loader validates the current ADT
+ranges, role addresses, IRQs and bindings before enabling the GPU. The
+old loader leaves this GPU DT disabled, providing the control boot.
+No firmware physical address is baked into the DT.
+The `aurora-gpu-simpledrm` DT additionally marks DCP with
+`apple,m1n1-simpledrm-only`. Its private loader disables the Linux DCP
+bindings before DCP hardware checks, without shutting down native display
+firmware or disabling the chosen simple-framebuffer. Marker-less DTs retain
+the original DCP handoff. Both GPU display profiles share the
+`build/linux-aurora-gpu` kernel source/output tree, but have separate DTs,
+loader trees, loader binaries and tether archives.
+
+**Build:** use a Rust compiler with matching `rust-src`, LLVM/Clang, and
+the normal cross-build prerequisites. This host used Rust 1.99.0 for the
+kernel and LLVM 23.1.3. Prepare the branch's corrected bindgen once; stock
+bindgen failed the mandatory C/Rust alignment assertions. Never disable
+those assertions or change scheduler configuration to mask that defect.
+
+```sh
+KERNEL_FLAVOR=aurora-gpu-simpledrm scripts/build-kernel-aurora.sh prepare
+# Only if this private generator has not already been prepared:
+python3 build/linux-aurora-gpu/tools/aurora-bindgen/build.py
+RUSTC="$(rustup which --toolchain stable rustc)" make kernel-aurora-gpu-simpledrm
+make m1n1-gpu-simpledrm
+```
+
+Mesa uses a private snapshot of the existing target SDK,
+`build/hyprland-dcp-sysroot`; it does not update system Mesa or that SDK.
+Its host shader tools need the matching LLVM development libraries.
+The bootstrap steps are one-time local preparations, not global installs:
+
+```sh
+scripts/build-mesa-gpu.sh bootstrap
+scripts/build-mesa-gpu.sh bootstrap-host
+scripts/build-mesa-gpu.sh build
+KERNEL_FLAVOR=aurora-gpu-simpledrm scripts/mktether.sh
+tar -xzf build/tether-aurora-gpu-simpledrm-bundle.tar.gz -C build
+```
+
+The packer removes its staging directory after archiving, so extract the
+bundle before using it. Mesa's separate archive is
+`build/mesa-gpu/mesa-j714s-gpu-043a4c58080c.tar.gz`; all its contents are under
+`/opt/mesa-j714s-gpu-043a4c58080c`. The wrapper scopes the experimental M5
+enable flag, EGL/GLX/Vulkan selection and caches to one process tree.
+It clears software forcing and shim/preload settings in that subprocess;
+no software GPU driver or shim is packaged.
+
+The initial target Zink attempt failed before rendering because
+`libvulkan.so.1` was absent. A DT_NEEDED dependency audit cannot catch this
+runtime-loaded dependency. The builder now includes the pinned Vulkan
+loader, licenses and provenance; packaging rejects an absent/invalid loader.
+For an already-built private Mesa stage, `scripts/build-mesa-gpu.sh runtime`
+adds the loader and repackages without repeating Mesa or shader-tool setup.
+It also emits a `*-vulkan-runtime.tar.gz` delta containing only the private
+loader/runtime metadata. That delta was deployed to the existing `/opt`
+prefix; all ten installed ELF payloads match the completed package's stage.
+Neither `/usr` libraries nor the user's compositor configuration was changed.
+
+**Offline evidence:** the real loader C handoff passed fourteen cases using
+the compiled DTs and saved ADT: exact ranges/mailboxes, unchanged baseline
+and marker-less DTs, malformed-resource rejection and explicit simpledrm
+isolation. Twelve additional cases exercise the actual C boot-argument
+layout and watchdog function against Python-serialized revisions 1–3,
+including leading, embedded and end-of-capacity retention arguments and
+nonzero trailing-field sentinels: **26 cases pass**. These host checks do not
+exercise the target Rust ADT FFI or prove a physical watchdog reset.
+The live calibration check accepted this Mac and rejected seven offline
+identity/table mutations. The earlier nine-ELF QEMU dependency check was
+userspace compatibility evidence, not GPU work; the later real Zink run
+proved the added dynamic Vulkan-loader dependency.
+
+Run the host handoff/ABI checks without connecting to the Mac:
+
+```sh
+python3 patches/m1n1-gpu/smoke-handoff.py \
+  --adt build/adt-runtime-j714s-unattended-20261108T213635Z.bin \
+  --dtb build/linux-aurora-gpu-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dtb \
+  --default-dtb build/linux-aurora-out/arch/arm64/boot/dts/apple/t6050-j714s.dtb \
+  --simpledrm-dtb build/linux-aurora-gpu-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dtb
+```
+
+Use the corresponding private saved runtime ADT if its local filename differs.
+
+**2026-11-08 control checkpoint:** the known-good loader booted
+`7.3.0-g13d170d6b6f4` with CPUs `0-14`, `/dev/nvme0n1p5` ext4 root
+read-write, USB IPv6 SSH, `appledrmfb`, both SMC power supplies and enumerated
+MTP keyboard/multi-touch devices. Battery reported Full/100% and 26.6 C.
+The live GPU DT status was `disabled` and there were no render nodes.
+At that earlier checkpoint, no GPU-enabled loader boot, target Mesa
+installation, accelerated rendering or compositor test had been performed.
+The installed boot object and both recovery bundles were unchanged.
+
+This is not full qualification. The captured log contains `b2bd_*` power-state
+warnings, PMGR deferred-probe timeouts, a multi-touch start timeout, and an
+unclean FAT-volume warning for `nvme0n1p4`. Devices enumerating is not proof of
+working gestures. No Oops, panic, SError or lockup was found in the captured
+log; no filesystem repair was attempted. The offline comparison below
+separates existing warnings from the touch failure. Local evidence is saved in
+`build/gpu-control-2026-11-08.json` and
+`build/gpu-control-2026-11-08-dmesg.log`.
+
+**Offline follow-through (no target access):**
+
+- The control's AFE firmware reports `Failed to attach to AFE (-6)`,
+  `No HINT_L (-6)` and `AFE[0] bootload failed` at about 2.18 seconds,
+  before the multi-touch timeout at 4.19 seconds. It never reports multi-touch
+  READY in the saved log. In contrast, the complete battery, packaged-trackpad
+  and DCP fallback logs all reach `Touch interface ready` without that timeout.
+  The management-interface READY message and an enumerated input device are
+  not substitutes for touch READY or working gestures.
+- The complete DockChannel HID **source file** is byte-identical in the two
+  build trees, and the fallback/trial archives contain byte-identical
+  initramfs images. The compiled DT diff adds the disabled GPU handoff nodes
+  and aliases, plus a consistently renumbered keyboard-backlight PWM phandle;
+  it does not change MTP bindings. The saved November 6 and control-preflight
+  ADTs also have identical MTP transport/interface properties; the reviewed
+  MTP IOP nodes differ only in `segment-ranges`. These checks do not establish
+  why the AFE failed, nor prove the two kernels behave identically. No timeout
+  increase, speculative SMC reset sequence or driver patch is justified yet.
+- The `b2bd_*` failures and the same six ATC0/1/2 CIO/PCIe deferred providers
+  already occur in the battery baseline. Both compiled DTs resolve those
+  providers to their respective `atc*_common` parents. The GPU and both native
+  mailboxes are disabled and reference `gfx -> afr + gpx`, not those six ATC
+  providers. `APPLE_PMGR_PWRSTATE`, `APPLE_PMP_REPORT` and `APPLE_PMC` are already
+  enabled in both configs. This is a static dependency check, not proof that
+  GPU power transitions work; it is not a reason to enable or poke PMP/PMC.
+- `Malformed early option 'earlycon'` also predates this trial. These DT-only
+  builds disable `CONFIG_OMARCHY_FB_MARKERS`, whose diagnostic initializer
+  supplies the EFI `screen_info` used by `earlycon=efifb`. Normal display output
+  instead starts through simpledrm/fbcon and later DCP. The packaging comments
+  now state that limitation; boot arguments and framebuffer addresses were not
+  changed merely to suppress the warning.
+- The `nvme0n1p4` unclean FAT-volume warning is present in all three saved
+  working baselines too. It is not new evidence of a GPU regression and does
+  not by itself establish filesystem damage. Assessment/repair remains an
+  attended task with the filesystem unmounted; none was attempted offline.
+- Raw DT decompilation reports ten unit-name warnings for the two disabled
+  zero-address mailbox placeholders and six disabled reserved-memory
+  placeholders. Their live addresses are supplied by the guarded loader.
+  These warnings are recorded, not hidden or treated as hardware qualification.
+
+Local comparison artifacts are `build/gpu-control-offline-dtb.diff`,
+`build/gpu-control-offline-power-graph.json`,
+`build/gpu-control-offline-touch-metadata.json` and
+`build/t6050-j714s-gpu-offline-dtc.log`. No runtime code or trial artifact was
+changed by this offline review; no SSH, serial connection, MMIO, reboot or
+target Mesa installation was performed.
+
+**2026-11-08/09 accelerated simpledrm checkpoint:**
+
+- Both GPU boots exposed `/dev/dri/renderD128` through the `aurora` driver,
+  retained `simpledrmdrmfb`, disabled Linux DCP, brought up CPUs `0-14`,
+  mounted `/dev/nvme0n1p5` read-write and restored USB IPv6 SSH.
+- The kernel admitted exact GPU firmware **27.3 / 26C5035r**, acknowledged
+  primary and secondary initdata, and retired the opening firmware records.
+- Native renderer: `Apple M5 Pro (G17S B1)`. Zink renderer:
+  `zink Vulkan 1.4(Apple M5 Pro (G17S B1) (AURORA_BOREALIS))`.
+  Both use Mesa `26.3.0-devel (git-043a4c5808)`.
+- On each boot, native and Zink each passed all thirteen printed
+  `gl-native-smoke` scene variants, including pixel readback and compute,
+  and all fourteen `gl-index-coverage` cases, each covering 4096/4096 pixels.
+  All four commands exited zero; no new kernel messages appeared during
+  either boot's test set. This is not a Vulkan conformance run.
+- Both boots reached `Touch interface ready` and `Touch MT ready`; the
+  earlier control's AFE failure did not recur. No physical gesture test
+  was possible, and no MTP driver or SMC-reset change was made.
+- Captured hwmon exposes battery, NAND, charge-regulator, Wi-Fi/BT and NVMe
+  temperatures, **not a GPU temperature**. Do not infer GPU thermal safety
+  from those sensors. No prolonged workload or thermal qualification ran.
+
+The first GPU boot exposed a watchdog-retention bug: C's nested boot-argument
+union inserted four bytes before the command line, so it saw `.wdt=keep`
+instead of `m1n1.wdt=keep`. Python's flat serializer was correct.
+`patches/m1n1/0009-xnuboot-preserve-flat-commandline-layout.patch` packs the
+nested records and explicitly preserves their tail padding, keeping flags
+and actual-memory-size fields at their original offsets. The actual-C
+regression failed before and passed after the fix across all three revisions.
+After a normal Linux reboot returned to the installed m1n1 proxy, the
+corrected loader printed `Primary WDT left armed (m1n1.wdt=keep)`. A read-only
+register check found control `0x4`, the 120-second alarm, and an advancing
+counter before rearming for Linux. All four GPU checks then passed again.
+This verifies retention, not an intentionally induced watchdog reset.
+
+The proven pre-fix bundle remains at
+`build/tether-aurora-gpu-simpledrm-7.3.0-g929e67a1da3e-before-bootargs-fix.tar.gz`
+(SHA256 `cdc179c322b33275bbeb63f72b938a6a33f886efc3cf8c12158c42859e943147`).
+It needs the post-chainload watchdog arm and must not be described as
+preserving the pre-chainload timer. The corrected hardware-tested loader is
+SHA256 `4931741f9e0ff149c51894695caedc30ec514e587ace72fd50018b0e348ea202`;
+the complete private Mesa archive is
+SHA256 `3fafb0e973c9ed44147c604e5ca6bc68c85fa48a7c6f4faae569dcd399d58f1b`.
+Kernel/DT, bundle and preserved fallback hashes, commands, UTC timestamps
+and log paths are recorded in `build/gpu-simpledrm-trial-20261108.json`.
+The installed boot object and original recovery artifacts were not changed.
+
+**Remaining qualification:** check real keyboard/trackpad behavior and an
+accelerated Hyprland session with visible output before relying on the GPU
+desktop. Keep GPU+DCP, suspend/resume and longer thermal/power behavior as
+separate experiments; these short offscreen tests do not establish them.
+If touch AFE errors recur, capture the complete startup log and compare
+against the fallback rather than extending timeouts or guessing SMC resets.
+
+The exercised headless GPU handoff sequence is:
+
+```sh
+cd build/tether-aurora-gpu-simpledrm
+export M1N1DEVICE=/dev/m1n1
+export BOOTARGS="earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 arm64.nowfxt kvm-arm.wfi_trap_policy=trap m5.root=/dev/nvme0n1p5 systemd.unit=multi-user.target"
+python3 hv/wdt-arm.py 120
+./proxyclient/tools/chainload.py -r boot/m1n1-chain.bin m1n1.wdt=keep
+python3 hv/nvme-proxy-probe.py
+python3 hv/wdt-arm.py 120
+./boot-linux.sh
+```
+
+Use the direct chainloader for the retention argument: `chainload.sh` accepts
+an image path but does not forward extra boot arguments. Require the
+`Primary WDT left armed` message when testing pre-chainload protection;
+the preserved older fallback loaders do not contain the ABI correction.
+For a GPU-disabled control, use the known-good loader with the matching
+control DT; do not infer simpledrm isolation from an old loader ignoring the
+new DCP opt-out marker.
+
+These boots load RAM, not the installed boot object, but Linux mounts the
+existing SSD root read-write. The watchdog protects early handoff; once
+Linux's watchdog driver takes over it is fed, so not every later hang will
+reset automatically. Keep physical power-cycle access and both original
+bundles available. Serial loss at handoff is expected; discover the new USB
+network interface before reconnecting, rather than reloading Linux.
+
+After explicitly installing only the private Mesa archive, identify the
+actual GPU render node and run numerical pixel/compute checks:
+
+```sh
+P=/opt/mesa-j714s-gpu-043a4c58080c
+"$P/bin/mesa-j714s-gpu" native "$P/bin/gl-native-smoke" /dev/dri/renderDNNN
+"$P/bin/mesa-j714s-gpu" zink "$P/bin/gl-native-smoke" /dev/dri/renderDNNN
+"$P/bin/mesa-j714s-gpu" native "$P/bin/gl-index-coverage"
+"$P/bin/mesa-j714s-gpu" zink "$P/bin/gl-index-coverage"
+```
+
+Replace `renderDNNN` with the discovered GPU node, not an assumed number.
+Zink exercises Vulkan-backed rendering/compute, not Vulkan conformance.
+Inspect kernel logs for rejected submissions, firmware mismatch, UAT/DART
+faults, timeouts and resets; a renderer string alone is not a pass.
+Only after these checks, stop the old compositor session normally and try
+`"$P/bin/mesa-j714s-gpu" native /usr/local/bin/Hyprland`, checking actual
+visible output. Outside this wrapper the software desktop remains available
+with `env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe start-hyprland`.
+No DCP sleep, N1, audio or PMC/PMP activation is qualified by this trial.
+
 ### Standalone (no second machine - one 1TR ceremony per image)
 
 m1n1 parses everything appended after its own image as a payload chain

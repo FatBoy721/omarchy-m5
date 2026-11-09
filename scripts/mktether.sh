@@ -9,7 +9,9 @@
 #
 #   scripts/mktether.sh              -> build/tether-bundle.tar.gz
 #   KERNEL_FLAVOR=aurora scripts/mktether.sh -> build/tether-aurora-bundle.tar.gz
-# Both variants use build/m1n1-chain.bin (override with M1N1_CHAIN).
+#   KERNEL_FLAVOR=aurora-gpu scripts/mktether.sh -> build/tether-aurora-gpu-bundle.tar.gz
+#   KERNEL_FLAVOR=aurora-gpu-simpledrm scripts/mktether.sh -> separate DCP-off GPU bundle
+# The GPU trial uses its isolated loader; M1N1_CHAIN overrides the binary.
 #   scp build/tether-bundle.tar.gz thinkpad:
 #
 # Everything in the bundle is self-contained: m1n1's proxyclient package,
@@ -23,6 +25,8 @@ cd "$(dirname "$0")/.."
 BOARD="j714s"
 KERNEL_FLAVOR="${KERNEL_FLAVOR:-asahi}"
 CHAIN="${M1N1_CHAIN:-build/m1n1-chain.bin}"
+DT_NAME="t6050-$BOARD.dtb"
+GPU_TRIAL=0
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -39,25 +43,42 @@ case "$KERNEL_FLAVOR" in
         BOOT="build/linux-aurora-out/arch/arm64/boot"
         BUILD_COMMAND="make kernel-aurora"
         ;;
-    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi or aurora)" ;;
+    aurora-gpu|aurora-gpu-simpledrm)
+        GPU_TRIAL=1
+        OUT="build/tether-$KERNEL_FLAVOR-bundle.tar.gz"
+        STAGE="build/tether-$KERNEL_FLAVOR"
+        BOOT="build/linux-aurora-gpu-out/arch/arm64/boot"
+        BUILD_COMMAND="make kernel-$KERNEL_FLAVOR"
+        GPU_SUFFIX=""
+        DISPLAY_SCOPE="Linux DCP handoff enabled; GPU+DCP coexistence is not yet qualified."
+        if [ "$KERNEL_FLAVOR" = aurora-gpu-simpledrm ]; then
+            GPU_SUFFIX="-simpledrm"
+            DISPLAY_SCOPE="Linux DCP handoff disabled; inherited simpledrm scanout is retained."
+        fi
+        DT_NAME="t6050-$BOARD-gpu$GPU_SUFFIX.dtb"
+        CHAIN="${M1N1_CHAIN:-build/m1n1-chain-gpu$GPU_SUFFIX.bin}"
+        M1N1="${M1N1:-build/m1n1-gpu$GPU_SUFFIX}"
+        ;;
+    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi, aurora, aurora-gpu or aurora-gpu-simpledrm)" ;;
 esac
-DTB="$BOOT/dts/apple/t6050-$BOARD.dtb"
+M1N1="${M1N1:-vendor/m1n1}"
+DTB="$BOOT/dts/apple/$DT_NAME"
 KERNEL="$BOOT/Image.gz"
 
-[ -d vendor/m1n1/proxyclient ] || die "vendor/m1n1 missing - run: make fetch"
+[ -d "$M1N1/proxyclient" ]      || die "$M1N1/proxyclient missing; prepare the selected loader source"
 [ -f "$KERNEL" ]               || die "$KERNEL missing - run: $BUILD_COMMAND"
 [ -f "$DTB" ]                  || die "$DTB missing - run: $BUILD_COMMAND"
 [ -f build/initramfs.cpio.gz ] || die "initramfs missing - run: make initramfs"
-[ -f "$CHAIN" ]               || die "$CHAIN missing - run: CHAINLOADING=1 scripts/build-m1n1.sh && cp vendor/m1n1/build/m1n1.bin build/m1n1-chain.bin"
+[ -f "$CHAIN" ]               || die "$CHAIN missing; build and stage the selected chainloadable loader first"
 
 echo "==> Staging $STAGE"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/boot"
 
 # proxyclient is pure python; ship it verbatim so the host needs no clone
-cp -R vendor/m1n1/proxyclient "$STAGE/proxyclient"
+cp -R "$M1N1/proxyclient" "$STAGE/proxyclient"
 find "$STAGE/proxyclient" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
-cp vendor/m1n1/udev/80-m1n1.rules "$STAGE/"
+cp "$M1N1/udev/80-m1n1.rules" "$STAGE/"
 
 # Live-hardware probes (guarded sysreg/MMIO from the m1n1 proxy) and the
 # PMGR tree they check; they find proxyclient/ as their sibling.
@@ -65,14 +86,16 @@ mkdir -p "$STAGE/hv"
 cp scripts/probes/*.py dt/t6050-pmgr.dtsi "$STAGE/hv/"
 
 cp "$KERNEL"                 "$STAGE/boot/Image.gz"
-cp "$DTB"                    "$STAGE/boot/t6050-$BOARD.dtb"
+cp "$DTB"                    "$STAGE/boot/$DT_NAME"
 cp build/initramfs.cpio.gz   "$STAGE/boot/"
 cp "$CHAIN"                 "$STAGE/boot/m1n1-chain.bin"
 if [ "$KERNEL_FLAVOR" = asahi ] && [ -f build/m1n1-chain-payload.bin ]; then
     cp build/m1n1-chain-payload.bin "$STAGE/boot/"
 fi
 
-# earlycon=efifb: kernel log on the panel from setup_arch() on (patch 0001);
+# On this DT boot, earlycon=efifb needs patch 0001's marker-enabled screen_info
+# and framebuffer geometry verified for this boot. Normal marker-disabled
+# builds reject earlycon; visible console output starts via simpledrm/fbcon.
 # pd_ignore_unused: T6050 SErrors when genpd powers off unclaimed domains
 # (patch 0004 makes sync_state honour it). See mkpayload.sh for the rest.
 # m5.root: switch_root to Arch on disk0s5 (scripts/provision-rootfs.sh); /init
@@ -83,6 +106,10 @@ fi
 # All 15 cores start once the stub runs mBoot >= 20457.60 (macOS 27.3
 # beta 1); on older stub firmware add maxcpus=1.
 BOOTARGS="earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 arm64.nowfxt kvm-arm.wfi_trap_policy=trap m5.root=/dev/nvme0n1p5"
+GPU_PREFLIGHT=""
+if [ "$GPU_TRIAL" = 1 ]; then
+    GPU_PREFLIGHT="python3 hv/gpu-preflight.py"
+fi
 
 cat > "$STAGE/boot-linux.sh" <<EOF
 #!/bin/sh
@@ -100,9 +127,10 @@ if [ ! -e "\$M1N1DEVICE" ]; then
     echo "re-run this." >&2
     exit 1
 fi
+$GPU_PREFLIGHT
 exec ./proxyclient/tools/linux.py \\
     boot/Image.gz \\
-    boot/t6050-$BOARD.dtb \\
+    boot/$DT_NAME \\
     "\${INITRAMFS:-boot/initramfs.cpio.gz}" \\
     -b "\${BOOTARGS:-$BOOTARGS}" "\$@"
 EOF
@@ -181,7 +209,7 @@ if [ ! -e "\$M1N1DEVICE" ]; then
     exit 1
 fi
 exec ./proxyclient/tools/dump_fdt.py \\
-    boot/t6050-$BOARD.dtb boot/initramfs.cpio.gz \\
+    boot/$DT_NAME boot/initramfs.cpio.gz \\
     "\${BOOTARGS:-$BOOTARGS}" "\${1:-fdt-final.dtb}"
 EOF
 
@@ -254,7 +282,7 @@ fi
 {
     cat boot/m1n1-chain.bin
     printf 'chosen.bootargs=%s\n' "\${BOOTARGS:-$HV_BOOTARGS}"
-    cat boot/Image.gz boot/t6050-$BOARD.dtb boot/initramfs.cpio.gz
+    cat boot/Image.gz boot/$DT_NAME boot/initramfs.cpio.gz
 } > hv/guest-payload.bin
 exec ./proxyclient/tools/run_guest.py -l hv/hv.log --raw hv/guest-payload.bin "\$@"
 EOF
@@ -275,6 +303,11 @@ until [ -e "$M1N1DEVICE" ]; do
 done
 ./chainload.sh
 python3 hv/nvme-proxy-probe.py
+EOF
+if [ "$GPU_TRIAL" = 1 ]; then
+    printf '%s\n' 'python3 hv/wdt-arm.py 120' >> "$STAGE/boot-m5.sh"
+fi
+cat >> "$STAGE/boot-m5.sh" <<'EOF'
 ./boot-linux.sh "$@" || true    # pyserial raises when the proxy vanishes at handoff
 # The M5 answers on 10.55.<n>.2, n = the M5 port the cable is in (UDC 0
 # left-back, 1 left-front, 2 right); subnets without a link fail at once.
@@ -292,6 +325,24 @@ done
 EOF
 
 chmod +x "$STAGE/boot-linux.sh" "$STAGE/chainload.sh" "$STAGE/boot-hv.sh" "$STAGE/boot-m5.sh"
+
+if [ "$GPU_TRIAL" = 1 ]; then
+    FEATURE_SCOPE="This is the isolated J714s GPU trial, with Rust/Asahi and a GPU DT.
+It is not a replacement for the verified battery/DCP or default bundles.
+GPU initialization alone is not proof of rendering; use the isolated Mesa
+userspace and verify real work and visible output before calling it qualified.
+The GPU boot-linux.sh reads the live ADT and rejects different firmware
+metadata or voltage bins before invoking Linux; it does not import m1n1.setup.
+Display profile: $DISPLAY_SCOPE"
+else
+    FEATURE_SCOPE="The default kernel is the simpledrm fallback. Aurora adds the internal
+DCP display driver, brightness control and display off/on. Neither of these
+two baseline flavors provides GPU acceleration."
+fi
+WATCHDOG_STEP=""
+if [ "$GPU_TRIAL" = 1 ]; then
+    WATCHDOG_STEP="    python3 hv/wdt-arm.py 120"
+fi
 
 cat > "$STAGE/README.md" <<EOF
 # omarchy-m5 tether bundle
@@ -321,6 +372,7 @@ then re-login. Without the udev rule, pass \`M1N1DEVICE=/dev/ttyACM0\`.
 
     ./chainload.sh
     python3 hv/nvme-proxy-probe.py
+$WATCHDOG_STEP
     ./boot-linux.sh
 
 Override the cmdline without repacking:
@@ -328,8 +380,8 @@ Override the cmdline without repacking:
     BOOTARGS="... initcall_debug" ./boot-linux.sh   # start from the default in boot-linux.sh
 
 The console uses \`console=tty0\` on the Mac's panel: simpledrm on the
-default kernel, Apple DCP on the Aurora variant. Early marker bands are
-disabled in normal builds. The m1n1 USB serial device disappears at Linux
+default and aurora-gpu-simpledrm profiles, Apple DCP on the other Aurora
+profiles. Early marker bands are disabled in normal builds. The m1n1 USB serial device disappears at Linux
 handoff; reconnect over the USB network. If pyserial reports a non-TTY
 miniterm error after "Preparing to boot kernel", check the panel/network
 before trying another load. m1n1's own output uses \`/dev/m1n1-sec\`.
@@ -371,10 +423,9 @@ With stub firmware mBoot-20457.60.65.0.1, all 15 usable CPUs start. Keep
 around WFI, so \`idle=nop\` is no longer needed. The three fused-off CPU
 slots are not failed starts. Only older stub firmware needs \`maxcpus=1\`.
 
-The default kernel is the simpledrm fallback. Aurora adds the internal
-DCP display driver, brightness control and display off/on. Neither kernel
-provides GPU acceleration. See the repository's docs/bringup.md for the
-verified feature scope and experimental-kernel limitations.
+$FEATURE_SCOPE
+See the repository's docs/bringup.md for the verified feature scope and
+experimental-kernel limitations.
 
 ## Dumping the final FDT
 

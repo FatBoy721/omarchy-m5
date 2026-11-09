@@ -1,0 +1,35 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenAI coding assistant <assistant@local.invalid>
+Subject: [PATCH] kboot: honor an explicit T6050 simpledrm-only display trial
+
+Local MIT-licensed adaptation of the existing T6050 DCP handoff. Keep all
+DCP display nodes disabled on an explicit opt-out, before checking DCP
+registers or inherited DARTs. Leave the chosen simple framebuffer and its
+memory exclusion untouched. No marker preserves the existing DCP path.
+
+The isolated J714s GPU-simpledrm DT uses this to test GPU rendering without
+Linux DCP takeover. Native firmware scanout remains running; this is not a
+DCP power-off request. The original loader and installed boot object are
+not changed by this separate build profile.
+---
+diff --git a/src/kboot.c b/src/kboot.c
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -2331,8 +2331,16 @@
+     static const u32 disp_sids[] = {0, 16};
+     int path[8];
+     u64 vram_base = 0, vram_size = 0;
++    int dcp = t6050_dcp_node();
+ 
+-    if (t6050_dcp_node() < 0)
++    if (dcp < 0)
+         return 1;
+ 
++    if (fdt_getprop(dt, dcp, "apple,m1n1-simpledrm-only", NULL)) {
++        if (!t6050_dcp_find_nodes(&nodes))
++            bail("DCP handoff: malformed simpledrm-only display bindings\n");
++        printf("DCP handoff: simpledrm-only requested; skipping DCP hardware checks\n");
++        return t6050_dcp_set_status(&nodes, "disabled");
++    }
++
+     if (!t6050_dcp_find_nodes(&nodes) || !t6050_dcp_running() ||

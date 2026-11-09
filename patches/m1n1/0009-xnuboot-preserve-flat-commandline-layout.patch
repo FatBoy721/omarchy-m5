@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenAI <assistant@openai.com>
+Subject: [PATCH] xnuboot: preserve the native flat command-line ABI
+
+The nested revision structs align the C union to eight bytes, moving cmdline
+from the native/Python offset 108 to 112 while leaving the trailing u64 fields
+at their correct offsets. On J714s a chainloaded m1n1.wdt=keep was printed as
+.wdt=keep, and the watchdog was disabled instead of preserved.
+
+Pack each revision record and make its existing four-byte tail gap explicit.
+This keeps all three command-line capacities, trailing field offsets and the
+outer structure size, without changing the already-correct Python serializer.
+
+Native flat layout reference:
+https://github.com/apple-oss-distributions/xnu/blob/main/pexpert/pexpert/arm64/boot.h
+
+The offline handoff smoke consumes Python-serialized records through this C
+header and the real wdt_disable body, including leading and end-of-capacity
+markers and nonzero tail-field sentinels.
+
+---
+diff --git a/src/xnuboot.h b/src/xnuboot.h
+--- a/src/xnuboot.h
++++ b/src/xnuboot.h
+@@ -27,21 +27,27 @@
+     u32 machine_type;
+     void *devtree;
+     u32 devtree_size;
++    /* The native byte-aligned command line begins immediately after devtree_size.
++     * Pack these records so the union adds no leading gap; explicit tail padding
++     * preserves the aligned boot_flags/mem_size_actual offsets for every revision. */
+     union {
+         struct {
+             char cmdline[CMDLINE_LENGTH_RV1];
++            u32 _pad;
+             u64 boot_flags;
+             u64 mem_size_actual;
+-        } rv1;
++        } __attribute__((packed)) rv1;
+         struct {
+             char cmdline[CMDLINE_LENGTH_RV2];
++            u32 _pad;
+             u64 boot_flags;
+             u64 mem_size_actual;
+-        } rv2;
++        } __attribute__((packed)) rv2;
+         struct {
+             char cmdline[CMDLINE_LENGTH_RV3];
++            u32 _pad;
+             u64 boot_flags;
+             u64 mem_size_actual;
+-        } rv3;
++        } __attribute__((packed)) rv3;
+     };
+ };

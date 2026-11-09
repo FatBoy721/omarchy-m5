@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# omarchy-m5 - build the J714s kernel from aurora-silicon/linux (PR #1012).
+# omarchy-m5 - build the isolated J714s Aurora DCP or GPU kernel.
 #
-# Source tree: build/linux-aurora, branch j714s = PR #1012 head 5b0f106acdd7
-# + patches/linux-aurora/*.patch. Output: out of tree in
-# build/linux-aurora-out (the source tree stays clean). Same toolchain
-# approach as scripts/build-kernel.sh: LLVM=1 (clang/lld), GNU make, and the
+# The default keeps the verified PR #1012 base and local patch series.
+# GPU flavors select PR #1173 plus the per-device J714s GPU overlay.
+# CPU fallback and GPU builds are isolated; GPU display variants share a kernel.
+# Toolchain approach: scripts/build-kernel.sh's LLVM=1 (clang/lld), GNU make,
 # brew gnubin/llvm + host-shim workarounds on macOS.
 #
 # Usage (from anywhere):
@@ -16,24 +16,50 @@
 #   KEEP_CONFIG=1 scripts/build-kernel-aurora.sh # keep an existing valid .config
 #   LINUX=build/linux-aurora-fresh OUT=build/linux-aurora-fresh-out \
 #       scripts/build-kernel-aurora.sh prepare # isolated fresh preparation
+#   KERNEL_FLAVOR=aurora-gpu scripts/build-kernel-aurora.sh # isolated GPU trial
+#   KERNEL_FLAVOR=aurora-gpu-simpledrm scripts/build-kernel-aurora.sh # DCP-off DT
 #   make kernel-aurora                        # default build; no installation
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-BASE_SHA=5b0f106acdd71de11400464adfeb8c87a83b20b0
+KERNEL_FLAVOR="${KERNEL_FLAVOR:-aurora}"
+SOURCE_FLAVOR="$KERNEL_FLAVOR"
 REPO_URL=https://github.com/aurora-silicon/linux
-LINUX="${LINUX:-build/linux-aurora}"
-OUT="${OUT:-build/linux-aurora-out}"
-PATCHES=patches/linux-aurora
-FRAGMENT=configs/aurora-j714s.config
-DTB=apple/t6050-j714s.dtb
+PATCH_DIRS=(patches/linux-aurora)
+FRAGMENTS=(configs/aurora-j714s.config)
+case "$KERNEL_FLAVOR" in
+    aurora)
+        BASE_SHA=5b0f106acdd71de11400464adfeb8c87a83b20b0
+        DTB=apple/t6050-j714s.dtb
+        ;;
+    aurora-gpu|aurora-gpu-simpledrm)
+        BASE_SHA=34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a
+        SOURCE_FLAVOR=aurora-gpu
+        PATCH_DIRS+=(patches/linux-aurora-gpu)
+        FRAGMENTS+=(configs/aurora-j714s-gpu.config)
+        DTB=apple/t6050-j714s-gpu.dtb
+        if [ "$KERNEL_FLAVOR" = aurora-gpu-simpledrm ]; then
+            DTB=apple/t6050-j714s-gpu-simpledrm.dtb
+        fi
+        ;;
+    *)
+        echo "ERROR: unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use aurora, aurora-gpu or aurora-gpu-simpledrm)" >&2
+        exit 1
+        ;;
+esac
+LINUX="${LINUX:-build/linux-$SOURCE_FLAVOR}"
+OUT="${OUT:-build/linux-$SOURCE_FLAVOR-out}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}"
 
 GMAKE="$(command -v gmake || command -v make)"
 mkdir -p "$OUT"
 OUT_ABS="$(cd "$OUT" && pwd)"
 KMAKE=("$GMAKE" -C "$LINUX" O="$OUT_ABS" ARCH=arm64 LLVM=1 -j"$JOBS")
+# Keep explicit Rust tool selections on make's command line; Kbuild's
+# defaults otherwise take precedence over environment variables.
+[ -z "${RUSTC:-}" ] || KMAKE+=("RUSTC=$RUSTC")
+[ -z "${BINDGEN:-}" ] || KMAKE+=("BINDGEN=$BINDGEN")
 
 if [ "$(uname -s)" = Darwin ]; then
     # See scripts/build-kernel.sh: GNU sed/coreutils (merge_config.sh uses
@@ -66,12 +92,16 @@ prepare() {
         echo "ERROR: $LINUX has tracked changes; preserve or commit them before preparing." >&2
         exit 1
     fi
-    local patches=("$PWD/$PATCHES"/*.patch)
+    local patches=() series=() dir
     local commits commit expected actual applied=0
-    if [ ! -f "${patches[0]}" ]; then
-        echo "ERROR: no patches found in $PATCHES." >&2
-        exit 1
-    fi
+    for dir in "${PATCH_DIRS[@]}"; do
+        series=("$PWD/$dir"/*.patch)
+        if [ ! -f "${series[0]}" ]; then
+            echo "ERROR: no patches found in $dir." >&2
+            exit 1
+        fi
+        patches+=("${series[@]}")
+    done
     if [ -n "$(git -C "$LINUX" rev-list --min-parents=2 "$BASE_SHA..HEAD")" ]; then
         echo "ERROR: $LINUX contains merge commits above the pinned base." >&2
         exit 1
@@ -93,7 +123,7 @@ prepare() {
         applied=$((applied + 1))
     done
     if [ "$applied" -lt "${#patches[@]}" ]; then
-        echo "==> Applying remaining patches from $PATCHES (${applied}/${#patches[@]} already applied)"
+        echo "==> Applying remaining $KERNEL_FLAVOR patches (${applied}/${#patches[@]} already applied)"
         git -C "$LINUX" -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
             am -q "${patches[@]:$applied}"
     fi
@@ -113,6 +143,14 @@ REQUIRED_Y="CONFIG_DRM CONFIG_DRM_SIMPLEDRM CONFIG_DRM_FBDEV_EMULATION
             CONFIG_USB_DWC3 CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_EEM
             CONFIG_USB_CONFIGFS_NCM CONFIG_USB_CONFIGFS_ACM CONFIG_DRM_APPLE"
 REQUIRED_UNSET="CONFIG_RUST"
+if [ "$SOURCE_FLAVOR" = aurora-gpu ]; then
+    REQUIRED_Y+=" CONFIG_RUST CONFIG_DRM_ASAHI CONFIG_APPLE_PMP_REPORT
+                  CONFIG_RUST_APPLE_MAILBOX CONFIG_RUST_APPLE_RTKIT CONFIG_CRYPTO_LIB_SHA256"
+    REQUIRED_UNSET="CONFIG_APPLE_PMP CONFIG_APPLE_AOP CONFIG_APPLE_SEP
+                    CONFIG_DRM_ASAHI_G15 CONFIG_DRM_ASAHI_G16 CONFIG_DRM_ASAHI_G18
+                    CONFIG_DRM_ASAHI_M5 CONFIG_DRM_APPLE_DCP_T8132
+                    CONFIG_APPLE_T8132_PLATFORM_HANDOFF"
+fi
 
 config_ok() {
     local cfg="$OUT/.config"
@@ -122,11 +160,11 @@ config_ok() {
 }
 
 gen_config() {
-    echo "==> Generating $OUT/.config: defconfig + asahi.config + $FRAGMENT"
+    echo "==> Generating $OUT/.config: defconfig + asahi.config + ${FRAGMENTS[*]}"
     "${KMAKE[@]}" defconfig
     # -m: merge only; olddefconfig below resolves the result in $OUT.
     "$LINUX/scripts/kconfig/merge_config.sh" -m -O "$OUT" "$OUT/.config" \
-        "$LINUX/arch/arm64/configs/asahi.config" "$FRAGMENT"
+        "$LINUX/arch/arm64/configs/asahi.config" "${FRAGMENTS[@]}"
     "${KMAKE[@]}" olddefconfig
 }
 
@@ -142,7 +180,7 @@ ensure_config() {
     for sym in $REQUIRED_UNSET; do
         ! grep -q "^$sym=" "$OUT/.config" || { echo "ERROR: $sym is set" >&2; bad=1; }
     done
-    [ "$bad" = 0 ] || { echo "       after merging asahi.config + $FRAGMENT." >&2; exit 1; }
+    [ "$bad" = 0 ] || { echo "       after merging asahi.config + ${FRAGMENTS[*]}." >&2; exit 1; }
 }
 
 case "${1:-all}" in

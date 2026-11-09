@@ -1,0 +1,284 @@
+From 13d170d6b6f4acb52df539b5a96057611dc416b4 Mon Sep 17 00:00:00 2001
+From: OpenAI coding assistant <assistant@local.invalid>
+Date: Sun, 8 Nov 2026 11:24:58 -0600
+Subject: [PATCH] arm64: apple: add isolated J714s GPU trial and device voltage
+ bins
+
+Local AI-assisted adaptation of Aurora PR1173 at 34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a, after the omarchy-m5 sixteen-patch Aurora baseline. No upstream authorship or hardware verification is claimed.
+
+Use the saved J714s runtime ADT e68662cd086179dd7fdebdd3046eec4fbf27aa287b266a7e0a550434a8ad2017 for main and auxiliary voltage tables. Main entries encode u32 Hz/mV; auxiliary entries encode u64 microvolts/Hz. Keep upstream J716s selection intact and preserve ID-derived topology checks. Do not install unmeasured leakage-controller calibration.
+
+Keep the working board DT included unchanged. All firmware reservations and native mailbox resources start disabled and are filled only by the matching fail-closed m1n1 GPU handoff. No live hardware access, builds or tests were performed while authoring this patch.
+---
+ arch/arm64/boot/dts/apple/Makefile            |   1 +
+ arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts | 102 ++++++++++++++++++
+ drivers/gpu/drm/asahi/driver.rs               |   4 +
+ drivers/gpu/drm/asahi/fwid.rs                 |   1 +
+ drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs   |  47 ++++++++
+ drivers/gpu/drm/asahi/hw/t6050.rs             |  15 ++-
+ 6 files changed, 167 insertions(+), 3 deletions(-)
+ create mode 100644 arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts
+
+diff --git a/arch/arm64/boot/dts/apple/Makefile b/arch/arm64/boot/dts/apple/Makefile
+index 1f3509509..ab56cac2e 100644
+--- a/arch/arm64/boot/dts/apple/Makefile
++++ b/arch/arm64/boot/dts/apple/Makefile
+@@ -99,6 +99,7 @@ dtb-$(CONFIG_ARCH_APPLE) += t6040-j616s.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t6040-j616s-tether.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t6041-j616c.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s.dtb
++dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t8112-j413.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t8112-j415.dtb
+ dtb-$(CONFIG_ARCH_APPLE) += t8112-j473.dtb
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts
+new file mode 100644
+index 000000000..2d3054aa4
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts
+@@ -0,0 +1,102 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * Local J714s GPU trial, based on runtime ADT captured 2026-11-06:
++ * SHA256 e68662cd086179dd7fdebdd3046eec4fbf27aa287b266a7e0a550434a8ad2017.
++ * Include the working board verbatim: CPU binning, DCP, battery and input
++ * remain shared. No firmware physical address is a compile-time constant.
++ */
++#include "t6050-j714s.dts"
++
++/ {
++	aliases {
++		gpu = &gpu;
++		gpu-mbox = &gfx_mbox;
++		gpu-mbox1 = &gfx1_mbox;
++	};
++
++	reserved-memory {
++		uat_handoff: uat-handoff {
++			reg = <0 0 0 0>;
++			no-map;
++			status = "disabled";
++		};
++
++		uat_l2_pagetables: uat-l2-pagetables {
++			reg = <0 0 0 0>;
++			no-map;
++			status = "disabled";
++		};
++
++		uat_pagetables: uat-pagetables {
++			reg = <0 0 0 0>;
++			no-map;
++			status = "disabled";
++		};
++
++		uat_ttbs: uat-ttbs {
++			reg = <0 0 0 0>;
++			no-map;
++			status = "disabled";
++		};
++
++		gpu_fw_text: gpu-fw-text {
++			reg = <0 0 0 0>;
++			no-map;
++			status = "disabled";
++		};
++
++		gpu_fw_data: gpu-fw-data {
++			reg = <0 0 0 0>;
++			no-map;
++			status = "disabled";
++		};
++	};
++};
++
++&soc {
++	gpu: gpu@2300000000 {
++		compatible = "apple,j714s-gpu", "apple,agx-g17s";
++		reg = <0x23 0x00000000 0 0x03fdc000>;
++		reg-names = "sgx";
++		mboxes = <&gfx_mbox>, <&gfx1_mbox>;
++		/* ADT GFX_SGX/ASC/ASC1 are virtual children of GFX. */
++		power-domains = <&ps_gfx>;
++		memory-region = <&uat_handoff>, <&uat_l2_pagetables>,
++				<&uat_pagetables>, <&uat_ttbs>,
++				<&gpu_fw_text>, <&gpu_fw_data>;
++		memory-region-names = "handoff", "l2-pagetables", "pagetables",
++				      "ttbs", "fw-text", "fw-data";
++		/* Only the matching loader may enable this after validating all
++		 * runtime reservations, role addresses and mailbox interrupts. */
++		apple,m1n1-gpu-handoff;
++		status = "disabled";
++	};
++
++	gfx_mbox: mailbox-gfx {
++		compatible = "apple,t6050-native-ascwrap-v6";
++		reg = <0 0 0 0>, <0 0 0 0>;
++		reg-names = "wrapper", "iop-vbar";
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 2797 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 2800 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "send-empty", "recv-not-empty";
++		apple,firmware-role = "GFX";
++		power-domains = <&ps_gfx>;
++		#mbox-cells = <0>;
++		status = "disabled";
++	};
++
++	gfx1_mbox: mailbox-gfx1 {
++		compatible = "apple,t6050-native-ascwrap-v6";
++		reg = <0 0 0 0>, <0 0 0 0>;
++		reg-names = "wrapper", "iop-vbar";
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 2801 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 2804 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "send-empty", "recv-not-empty";
++		apple,firmware-role = "GFX1";
++		power-domains = <&ps_gfx>;
++		#mbox-cells = <0>;
++		status = "disabled";
++	};
++};
+diff --git a/drivers/gpu/drm/asahi/driver.rs b/drivers/gpu/drm/asahi/driver.rs
+index ef1534619..ebc6319a3 100644
+--- a/drivers/gpu/drm/asahi/driver.rs
++++ b/drivers/gpu/drm/asahi/driver.rs
+@@ -173,6 +173,10 @@ macro_rules! asahi_of_device_table {
+                     of::DeviceId::new(c"apple,agx-t8142"),
+                     ProbeConfig::M5
+                 ),
++                (
++                    of::DeviceId::new(c"apple,j714s-gpu"),
++                    ProbeConfig::G17(&hw::t6050::CONFIG_J714S)
++                ),
+                 (
+                     of::DeviceId::new(c"gpu,t6050"),
+                     ProbeConfig::G17M5
+diff --git a/drivers/gpu/drm/asahi/fwid.rs b/drivers/gpu/drm/asahi/fwid.rs
+index 254063e51..bfb0df03c 100644
+--- a/drivers/gpu/drm/asahi/fwid.rs
++++ b/drivers/gpu/drm/asahi/fwid.rs
+@@ -499,6 +499,7 @@ fn t6050_admits_only_its_pinned_image() {
+             &crate::hw::t6050::CONFIG_ULTRA,
+             &crate::hw::t6050::CONFIG_MAX,
+             &crate::hw::t6050::CONFIG,
++            &crate::hw::t6050::CONFIG_J714S,
+         ] {
+             let crate::g17::fw::variant::Firmware::Identified(builds) = cfg.firmware else {
+                 panic!("an M5 board on bare metal must identify its loaded firmware");
+diff --git a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
+index 68c828d1b..e165400de 100644
+--- a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
++++ b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
+@@ -1581,6 +1581,16 @@ fn write_relocated_words(
+     (1470, 900, 900), (1578, 960, 960), (1620, 990, 990),
+ ]);
+ 
++// The same saved J714s ADT's afr-perf-states and cs-perf-states, which are identical.
++// Their encoding is u64 microvolts/Hz, unlike the main-domain u32 Hz/mV pairs.
++// min_sram_volt is 775000 uV. Convert to MHz/mV, then apply that SRAM floor.
++const J714S_AUX_PERF_STATES: [M5AuxPerfState; 14] = one_lane([
++    (24, 125, 775), (338, 595, 775), (486, 625, 775), (636, 650, 775),
++    (796, 690, 775), (888, 705, 775), (988, 750, 775), (1084, 775, 775),
++    (1182, 805, 805), (1278, 840, 840), (1374, 870, 870),
++    (1470, 910, 910), (1578, 985, 985), (1620, 1015, 1015),
++]);
++
+ // J716c ADT afr-perf-states (identical to cs-perf-states). SRAM is
+ // max(775, core), the rule the J714 column follows.
+ const J716C_AUX_PERF_STATES: [M5AuxPerfState; 14] = one_lane([
+@@ -2207,6 +2217,20 @@ pub(crate) struct Board {
+     g17d_forms: false,
+ };
+ 
++/// Local J714s, runtime ADT e68662cd086179dd7fdebdd3046eec4fbf27aa287b266a7e0a550434a8ad2017.
++/// The ADT establishes voltage bins, two tables, MCC mask 0xf and the J714 AON records.
++/// Two by ten is the G17S slot capacity, not an assertion of twenty enabled cores:
++/// probe checks the ID-register geometry and uses the sampled enabled-core masks.
++/// No leakage/controller calibration was measured on this part.
++pub(crate) const J714S: Board = Board {
++    perf_states: &J714S_GPU_PERF_STATES,
++    aux_perf_states: &J714S_AUX_PERF_STATES,
++    relative_frequency: relative_frequency(&J714S_GPU_PERF_STATES, 1),
++    calibration: None,
++    controller_defaults: None,
++    ..J714
++};
++
+ /// M5 Max: four clusters of ten cores.
+ pub(crate) const J716C: Board = Board {
+     clusters: 4,
+@@ -2595,6 +2619,29 @@ pub(crate) fn relayout_m5_policy(
+     (1578, 1000, 1000, 1000, 1000), (1620, 1025, 1040, 1025, 1040),
+ ]);
+ 
++// Local J714s /arm-io/sgx perf-states and perf-states-sram: 14 u32 Hz/mV pairs
++// per lane, lane 0 then lane 1. The *1 properties duplicate lane 1.
++// These are this device's bins, not a general J714s characterization.
++// SRAM starts at 775 mV (raw bytes 00 00 00 00 07 03 00 00 at P0), then
++// tracks each lane's core voltage. Reading each 8-byte pair as one u64 would
++// incorrectly report roughly 3.3e12, not a voltage or a fixed-point encoding.
++pub(crate) const J714S_GPU_PERF_STATES: [M5PerfState; 14] = two_tables([
++    (0, 125, 125, 775, 775),
++    (338, 595, 610, 775, 775),
++    (486, 625, 655, 775, 775),
++    (636, 660, 675, 775, 775),
++    (796, 710, 725, 775, 775),
++    (888, 725, 735, 775, 775),
++    (988, 755, 770, 775, 775),
++    (1084, 780, 795, 780, 795),
++    (1182, 810, 810, 810, 810),
++    (1278, 850, 850, 850, 850),
++    (1374, 895, 890, 895, 890),
++    (1470, 940, 935, 940, 935),
++    (1578, 1015, 1015, 1015, 1015),
++    (1620, 1055, 1055, 1055, 1055),
++]);
++
+ // J716s ADT sgx perf-states (table 0, then table 1 = perf-states1) and perf-states-sram /
+ // perf-states-sram1, mV. The bins are this part's: the J714 table differs in every active state.
+ pub(crate) const J716S_GPU_PERF_STATES: [M5PerfState; 14] = two_tables([
+diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
+index 76d1b7f16..6f37ad096 100644
+--- a/drivers/gpu/drm/asahi/hw/t6050.rs
++++ b/drivers/gpu/drm/asahi/hw/t6050.rs
+@@ -123,8 +123,8 @@
+     uat_quirks: CONFIG_ULTRA.uat_quirks,
+     region_c: None,
+     chip: None,
+-    // The 16-inch board's tables. Both M5 Pro boards report ID variant 3, so a 14-inch one takes
+-    // them too, as the 14-inch M5 Max takes J716c's.
++    // The generic M5 Pro profile retains the 16-inch board's tables.
++    // The local J714s trial uses CONFIG_J714S via its specific compatible.
+     m5: Some(&crate::g17::fw::m5::initdata::J716S),
+     adopt_root_entries: true,
+     fabric_bridge: false,
+@@ -142,6 +142,13 @@
+     },
+ };
+ 
++/// Local J714s trial: this machine's ADT voltage bins, not the J716s bins.
++/// Identity and slot geometry are still checked against the GPU ID registers.
++pub(crate) const CONFIG_J714S: Config = Config {
++    m5: Some(&crate::g17::fw::m5::initdata::J714S),
++    ..CONFIG
++};
++
+ /// M5 Max: ID variant 4, GPU variant C, HAL generation 300 like the M5 Pro.
+ pub(crate) const CONFIG_MAX: Config = Config {
+     chip_id: 0x6050,
+@@ -299,11 +306,13 @@
+ const _: () = {
+     use crate::g17::fw::m5::initdata::{J716C, J716S, J775D};
+     assert!(CONFIG.core_layout.operand_state.bank_bytes() == J716S.gpu_cores * 0x1800);
++    assert!(CONFIG_J714S.core_layout.operand_state.bank_bytes()
++        == crate::g17::fw::m5::initdata::J714S.gpu_cores * 0x1800);
+     assert!(CONFIG_MAX.core_layout.operand_state.bank_bytes() == J716C.gpu_cores * 0x1800);
+     assert!(CONFIG_ULTRA.core_layout.operand_state.bank_bytes() == J775D.gpu_cores * 0x1800);
+ };
+ 
+-/// Every T6050 board binds the same compatible; the ID registers select the configuration.
++/// Generic T6050 compatibles use ID selection; the J714s trial selects its board explicitly.
+ pub(crate) fn config(id: &G17Id) -> Option<&'static Config> {
+     [&CONFIG, &CONFIG_MAX, &CONFIG_ULTRA].into_iter().find(|cfg| id.family == cfg.identity.family
+         && id.variant == cfg.identity.variant && id.num_dies == cfg.identity.num_dies)

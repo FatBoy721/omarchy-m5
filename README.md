@@ -41,8 +41,8 @@ The experimental Aurora/DCP path and its limits are described below.
 | **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
 | Sleep (s2idle) | ✅ On the default kernel, `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping stop during sleep. The default simpledrm path leaves the panel lit |
 | Battery / charger | Verified on Aurora: battery telemetry, charging/discharging and charger notifications. Still disabled on the default fallback kernel |
-| Wi-Fi / Bluetooth (N1) | ⏳ not yet; the J714c port matches our ADT but needs a pre-Linux PCIe link trainer |
-| GPU | ⏳ not started |
+| Wi-Fi / Bluetooth (N1) | Not yet qualified on J714s; a separate driver/firmware trial is pending |
+| GPU | Native GL/compute and Vulkan-backed Zink checks pass on this J714s, using an isolated simpledrm trial with Linux DCP off. Accelerated desktop, GPU+DCP and sustained-load qualification remain open |
 
 Today the machine boots Arch from the internal SSD on **all 15 cores**; the
 kernel is staged over the USB tether (`boot-m5.sh`). Apple fixed the
@@ -103,6 +103,30 @@ build is a local override described in the
 [runbook](docs/bringup.md#aurora-kernel-with-internal-dcp-experimental).
 Lid suspend/resume still needs qualification on DCP. Keep the default kernel
 as the tested fallback; do not infer sleep or GPU support from the desktop.
+
+## M5 Pro GPU trial (isolated J714s)
+
+The isolated GPU trial now performs real rendering on this J714s. Two boots of
+`7.3.0-g929e67a1da3e` passed native GL/compute and Vulkan-backed Zink smoke
+checks, plus all 14 indexed-rendering cases in each mode, with no new kernel
+messages during the tests. The GPU reports **Apple M5 Pro (G17S B1), 16 enabled
+cores**. This is short functional coverage, not Vulkan conformance or general
+application/thermal qualification.
+
+The working profile uses **simpledrm, with Linux DCP disabled**. It combines
+Aurora Linux PR #1173, Mesa PR #194 and the minimal m1n1 GPU handoff, retaining
+**this Mac's own voltage bins**, not the other J714s's draft voltage profile.
+`make kernel-aurora-gpu-simpledrm` and `make m1n1-gpu-simpledrm` use private
+build trees; `scripts/build-mesa-gpu.sh` packages Mesa and its Vulkan loader
+under `/opt`, without replacing system graphics libraries.
+
+Both original recovery bundles and the installed boot object are unchanged.
+The corrected trial loader also passed a live watchdog-preservation check.
+Touch firmware reached READY on both GPU boots, but physical input and an
+accelerated Hyprland session still need checking. The
+[GPU runbook](docs/bringup.md#gpu-trial-isolated-j714s) records the tested
+artifacts, source pins, live calibration guard, earlier control findings and
+remaining limits. **GPU + DCP is not yet qualified.**
 
 ## Aura Mach-O Stage 1 (optional, untested on hardware)
 
