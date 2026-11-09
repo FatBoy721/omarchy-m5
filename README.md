@@ -1,13 +1,15 @@
 # Omarchy-M5-Pro
 
-> *"It boots."* — us, 47 times, about 11 of which were true.
-
-Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator. This is a lab notebook with a commit history, not a product: every result is labelled, and claims that turned out wrong are corrected in place.
+Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator. We are turning the verified integrations collected here into a normal installation path through the existing [Omarchy Mac Installer](https://github.com/omacom/omarchy-mac-installer). We reuse demonstrated public work, qualify each model and firmware combination, and publish matching release components. **No installable M5 release is published by this repository yet.** The bring-up record remains available, with results and corrections labelled.
 
 **Labels:**
 - **NATIVE** = seen on this J714s.
 - **REPORTED** = someone else's claim.
 - **offline** = built and reviewed, not run.
+
+## Installer integration
+
+The [integration and release contract](INTEGRATION.md) defines the first release, support admission and remaining blockers. The existing installer already provides the macOS app, signed catalogs, disk planning and Recovery enrollment; the work here is to integrate a tested hardware stack into that path. A working research boot does not admit a machine to a supported release.
 
 ## Current status (2026-11-09)
 
@@ -58,7 +60,7 @@ The [canonical full-laptop checklist](STATUS-2026-11-08.md#full-laptop-integrati
 - Kernel/DTB/initrd changes can use the enrolled ESP path without a new enrollment while stage1 remains unchanged; changing the enrolled stage1 itself is a separate operation.
 - The current masks are per boot. No pre-Linux automatic recovery or universal watchdog fallback is promised; keep the owner power-button/macOS fallback available for experimental boots.
 - This repo ships **no binaries**: no boot objects, kernels, DTBs, initramfs, rootfs images or Apple firmware. The current local integration is not yet a complete public reproduction bundle.
-- This remains experimental bring-up, not an installer or a GPU-qualified daily driver.
+- The current published artifacts remain experimental bring-up. Installer integration is the new project direction; it does not retroactively qualify this stack for daily use.
 
 ## How we work, AI, and licensing
 - **Who does what:**
