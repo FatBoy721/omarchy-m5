@@ -1,13 +1,17 @@
 # Omarchy-M5-Pro
 
-> *"It boots."* — us, 47 times, about 11 of which were true.
-
-Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator. This is a lab notebook with a commit history, not a product: every result is labelled, and claims that turned out wrong are corrected in place.
+We are bringing proven Apple Silicon work together into a normal [Omarchy](https://omarchy.org) installer, starting with the **14-inch M5 Pro MacBook Pro** (J714s / Mac17,9 / T6050). We reuse the existing Mac installer and demonstrated public fixes, package a coherent stack, then qualify installation, updates and recovery on each exact model and firmware combination. **This is developer integration; no installable M5 release is published here yet.** Earlier native bring-up results remain available below, with their tested profiles and limits.
 
 **Labels:**
 - **NATIVE** = seen on this J714s.
 - **REPORTED** = someone else's claim.
 - **offline** = built and reviewed, not run.
+
+## Installer integration
+
+The [integration and release contract](INTEGRATION.md) defines the release gates and remaining blockers. Reviewed source is now available in the [installer integration branch](https://github.com/TripleU613/omarchy-mac-installer/tree/codex/m5-installer-integration) ([`61bd334`](https://github.com/TripleU613/omarchy-mac-installer/commit/61bd3349b74eac454b55b0194a00b02da194e9e8)) and [matching package recipes](https://github.com/TripleU613/omarchy-pkgs/commit/bf098840308602cd2d5a99fa8445353a3386290d). The installer reuses the normal app, signed artifacts, disk planning, Recovery and Limine/UKI path; J714s is admitted only through its explicit developer route. Public support remains blocked.
+
+Source checks, exact device/firmware planning, normal firmware preparation and first-boot profile checks pass. A runtime kernel package exists and the [Mesa build passed on an ARM CI runner](https://github.com/TripleU613/omarchy-pkgs/actions/runs/42649339647); native headers/DKMS and the new packages' installation qualification remain open. **A complete installer image, macOS app qualification and physical clean-install/update/recovery testing are still required.** The working research desktop is not that release.
 
 ## Current status (2026-11-09)
 
@@ -58,7 +62,7 @@ The [canonical full-laptop checklist](STATUS-2026-11-08.md#full-laptop-integrati
 - Kernel/DTB/initrd changes can use the enrolled ESP path without a new enrollment while stage1 remains unchanged; changing the enrolled stage1 itself is a separate operation.
 - The current masks are per boot. No pre-Linux automatic recovery or universal watchdog fallback is promised; keep the owner power-button/macOS fallback available for experimental boots.
 - This repo ships **no binaries**: no boot objects, kernels, DTBs, initramfs, rootfs images or Apple firmware. The current local integration is not yet a complete public reproduction bundle.
-- This remains experimental bring-up, not an installer or a GPU-qualified daily driver.
+- The current published artifacts remain experimental bring-up. Installer integration is the new project direction; it does not retroactively qualify this stack for daily use.
 
 ## How we work, AI, and licensing
 - **Who does what:**
