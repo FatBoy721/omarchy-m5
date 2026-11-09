@@ -1,0 +1,17 @@
+#!/usr/bin/python3
+# m5-resize-root (task 27): grow the mounted root ext4 to its whole partition, online.
+# resize2fs refused after switch_root ("Device or resource busy while opening"): it did not see / as mounted and
+# tried an exclusive offline open. This issues the same kernel call resize2fs uses online: EXT4_IOC_RESIZE_FS.
+import fcntl, os, struct, subprocess, sys
+src = subprocess.run(["findmnt", "-no", "SOURCE", "/"], capture_output=True, text=True).stdout.strip()
+part = os.path.basename(os.path.realpath(src))
+size = int(open(f"/sys/class/block/{part}/size").read()) * 512          # sysfs: 512-byte units
+st = os.statvfs("/")
+new_blocks = size // st.f_frsize
+print(f"root {src}: partition {size} B, block {st.f_frsize}, fs {st.f_blocks} -> {new_blocks} blocks")
+if new_blocks <= st.f_blocks:
+    sys.exit(0)
+EXT4_IOC_RESIZE_FS = 0x40086610                                      # _IOW('f', 16, __u64)
+fd = os.open("/", os.O_RDONLY)
+fcntl.ioctl(fd, EXT4_IOC_RESIZE_FS, struct.pack("Q", new_blocks))
+print("resized:", os.statvfs("/").f_blocks, "blocks")

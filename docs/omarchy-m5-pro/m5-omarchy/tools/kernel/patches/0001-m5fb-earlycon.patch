@@ -1,0 +1,214 @@
+diff --git i/drivers/firmware/Kconfig w/drivers/firmware/Kconfig
+index 12dc70254..273afd43a 100644
+--- i/drivers/firmware/Kconfig
++++ w/drivers/firmware/Kconfig
+@@ -6,6 +6,8 @@
+ 
+ menu "Firmware Drivers"
+ 
++source "drivers/firmware/Kconfig.m5"
++
+ source "drivers/firmware/arm_scmi/Kconfig"
+ 
+ config ARM_SCPI_PROTOCOL
+diff --git i/drivers/firmware/Kconfig.m5 w/drivers/firmware/Kconfig.m5
+new file mode 100644
+index 000000000..137fc426e
+--- /dev/null
++++ w/drivers/firmware/Kconfig.m5
+@@ -0,0 +1,10 @@
++config M5FB_EARLYCON
++	bool "Early console on a linear framebuffer given on the command line (m5fb)"
++	depends on ARM64
++	select SERIAL_CORE
++	select SERIAL_EARLYCON
++	select SERIAL_CORE_CONSOLE
++	select FONT_SUPPORT
++	help
++	  earlycon=m5fb,<base>,<width>,<height>,<stride>,<bpp> draws printk text on a
++	  framebuffer (bpp 30 = x2r10g10b10, 32 = xrgb8888). For Apple M5 bring-up.
+diff --git i/drivers/firmware/Makefile w/drivers/firmware/Makefile
+index 4ddec2820..a0e60bcfe 100644
+--- i/drivers/firmware/Makefile
++++ w/drivers/firmware/Makefile
+@@ -38,3 +38,4 @@ obj-y				+= samsung/
+ obj-y				+= smccc/
+ obj-y				+= tegra/
+ obj-y				+= xilinx/
++obj-$(CONFIG_M5FB_EARLYCON)	+= m5fb_earlycon.o
+diff --git i/drivers/firmware/m5fb_earlycon.c w/drivers/firmware/m5fb_earlycon.c
+new file mode 100644
+index 000000000..e3658626a
+--- /dev/null
++++ w/drivers/firmware/m5fb_earlycon.c
+@@ -0,0 +1,159 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * m5fb earlycon: printk text straight onto a linear framebuffer whose geometry is given on the
++ * command line, for machines with no EFI screen_info and no UART (Apple M5 Pro bring-up).
++ *
++ *   earlycon=m5fb,<base>,<width>,<height>,<stride bytes>,<bpp>[,<x offset px>]
++ *   e.g. earlycon=m5fb,0x105d3110000,3024,1964,12096,30
++ *
++ * x offset: draw only in columns [xoff, width), e.g. the right half, so fbcon (left) and this
++ * bootconsole (keep_bootcon) don't overwrite each other. bpp 30 = x2r10g10b10 in 32-bit words (white 0x3fffffff); bpp 32 = xrgb8888 (white 0x00ffffff).
++ * Derived from drivers/firmware/efi/earlycon.c (Copyright (C) 2013 Intel Corporation, Matt Fleming).
++ * ponytail: wraps to the top instead of scrolling (scrolling an uncached 23 MB panel per line is far
++ * too slow with initcall_debug); the line below the cursor is cleared so the newest text is findable.
++ */
++#include <linux/console.h>
++#include <linux/font.h>
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/serial_core.h>
++#include <linux/string.h>
++#include <asm/early_ioremap.h>
++#include <asm/io.h>
++
++static const struct console *m5fb_con __initdata;
++static const struct font_desc *font;
++static u64 fb_base;
++static u32 fb_w, fb_h, fb_stride, fb_white;
++static u32 cur_x, cur_y;
++static void __iomem *fb_map;	/* whole-FB mapping once ioremap works */
++
++static int __init m5fb_remap(void)
++{
++	if (!m5fb_con || !console_is_registered(m5fb_con))
++		return 0;
++	/* never past the panel's last byte, also with an x offset */
++	fb_map = ioremap_wc(fb_base, (size_t)fb_stride * (fb_h - 1) + fb_w * 4);
++	return fb_map ? 0 : -ENOMEM;
++}
++early_initcall(m5fb_remap);
++
++/* Device mapping before ioremap works (early_memremap_prot needs EFI); aligned 32-bit stores only,
++ * and memset_io: a plain memset may use DC ZVA, which faults on device memory. */
++static __ref u32 __iomem *m5fb_map_line(u32 y)
++{
++	if (fb_map)
++		return fb_map + (size_t)y * fb_stride;
++	return early_ioremap(fb_base + (u64)y * fb_stride, fb_w * 4);
++}
++
++static __ref void m5fb_unmap_line(u32 __iomem *p)
++{
++	if (!fb_map)
++		early_iounmap(p, fb_w * 4);
++}
++
++static void m5fb_clear_row(u32 y0)
++{
++	u32 h;
++
++	for (h = 0; h < font->height && y0 + h < fb_h; h++) {
++		u32 __iomem *dst = m5fb_map_line(y0 + h);
++
++		if (!dst)
++			return;
++		memset_io(dst, 0, fb_w * 4);
++		m5fb_unmap_line(dst);
++	}
++}
++
++static void m5fb_newline(void)
++{
++	cur_x = 0;
++	cur_y += font->height;
++	if (cur_y + font->height > fb_h)
++		cur_y = 0;
++	m5fb_clear_row(cur_y);
++	if (cur_y + 2 * font->height <= fb_h)
++		m5fb_clear_row(cur_y + font->height);
++}
++
++static void m5fb_write(struct console *con, const char *str, unsigned int num)
++{
++	u32 bytes = BITS_TO_BYTES(font->width);
++
++	while (num) {
++		u32 linemax = (fb_w - cur_x) / font->width;
++		u32 count = strnchrnul(str, num, '\n') - str;
++		u32 h;
++
++		if (count > linemax)
++			count = linemax;
++
++		for (h = 0; h < font->height; h++) {
++			u32 __iomem *line = m5fb_map_line(cur_y + h);
++			u32 __iomem *dst;
++			u32 i, m;
++
++			if (!line)
++				return;
++			dst = line + cur_x;
++			for (i = 0; i < count; i++) {
++				const u8 *src = font->data +
++					(unsigned char)str[i] * font->height * bytes + h * bytes;
++
++				for (m = 0; m < font->width; m++)
++					writel_relaxed((src[m / 8] >> (7 - m % 8)) & 1 ? fb_white : 0, dst++);
++			}
++			m5fb_unmap_line(line);
++		}
++
++		cur_x += count * font->width;
++		str += count;
++		num -= count;
++		if (num && *str == '\n') {
++			str++;
++			num--;
++			m5fb_newline();
++		} else if (cur_x + font->width > fb_w) {
++			m5fb_newline();
++		}
++	}
++	/* drain write-combined stores: the next instruction may reset the SoC (task 25) */
++	wmb();
++}
++
++static int __init m5fb_setup(struct earlycon_device *device, const char *opt)
++{
++	u32 bpp = 0, xoff = 0;
++
++	/* uart_parse_earlycon() consumed the base into mapbase; the rest is in device->options
++	 * (register_earlycon() passes opt = NULL when parsing succeeded) */
++	fb_base = device->port.mapbase;
++	opt = device->options;
++	if (!fb_base || !opt[0] ||
++	    sscanf(opt, "%u,%u,%u,%u,%u", &fb_w, &fb_h, &fb_stride, &bpp, &xoff) < 4)
++		return -EINVAL;
++	if (bpp == 30)
++		fb_white = 0x3fffffff;
++	else if (bpp == 32)
++		fb_white = 0x00ffffff;
++	else
++		return -EINVAL;
++	if (!fb_w || !fb_h || fb_stride < fb_w * 4 || xoff >= fb_w)
++		return -EINVAL;
++	fb_base += (u64)xoff * 4;
++	fb_w -= xoff;	/* stride unchanged: each row still starts stride bytes apart */
++
++	font = get_default_font(fb_w, fb_h, NULL, NULL);
++	if (!font)
++		return -ENODEV;
++
++	cur_x = cur_y = 0;
++	m5fb_clear_row(0);
++	device->con->write = m5fb_write;
++	m5fb_con = device->con;
++	return 0;
++}
++EARLYCON_DECLARE(m5fb, m5fb_setup);
+--- a/arch/arm64/kernel/setup.c
++++ b/arch/arm64/kernel/setup.c
+@@ -311,6 +311,8 @@
+ 	omarchy_fb_earlycon_init();
+ 
+ 	parse_early_param();
++	/* m5: first line on the m5fb earlycon proves setup_arch was reached */
++	pr_notice("m5: setup_arch reached, earlycon parsed\n");
+ 
+ 	dynamic_scs_init();
+ 

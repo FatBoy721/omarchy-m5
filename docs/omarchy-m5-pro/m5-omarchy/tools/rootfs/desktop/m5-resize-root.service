@@ -1,0 +1,11 @@
+[Unit]
+Description=m5: grow the root ext4 to the whole partition (first boot)
+ConditionPathExists=/var/lib/m5/resize-pending
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c '/usr/local/bin/m5-resize-root && rm -f /var/lib/m5/resize-pending'
+
+[Install]
+WantedBy=multi-user.target

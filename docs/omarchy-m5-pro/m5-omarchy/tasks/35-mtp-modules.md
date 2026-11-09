@@ -1,0 +1,9 @@
+# Task 35 — overnight MTP (keyboard/trackpad) experiments as MODULES (no new gz possible tonight)
+
+Constraint: the Mac's boot object is gz15 (kernel loop-v1, build tree ~/m5-omarchy/build/linux-loop, CONFIG_MODULES=y). gz16 (kexec fix) needs a 1TR the owner will do in the morning. Until then the ONLY way to change behaviour is rootfs drop-ins via ESP m5drop/ (allow-list: etc/, usr/local/, usr/lib/systemd/, usr/lib/firmware/) applied before switch_root on every boot. Safety already in place (VM-proved): m5-guard reboots to macOS 15 min after sddm; systemd RuntimeWatchdogSec=60 resets on hangs.
+
+Build out-of-tree module(s) against linux-loop (vermagic must match exactly; verify with modinfo) + a systemd unit (etc/systemd/system/m5-exp.service, WantedBy via a drop-in on an already-enabled unit like sddm.service.d — no symlinks needed) that insmods /usr/local/lib/m5/*.ko and copies dmesg to the ESP logger output.
+Experiments for MTP (294600000 ASC, wrapper 0x294050000, DART 0x294800000, DAPF 0x294810000, PS_PROT 0x2890fc000), in order, each one a separate test set (t02, t03, …) under ~/m5-omarchy/loop/tNN/m5drop/ with a README of what it tests and what result decides it:
+ t02: READ-ONLY dump: ASC CPU_CONTROL & nearby, wrapper regs, DART TCR/TTBR per stream, DAPF window regs, mailbox state — before and after the stock rtkit-helper probe failure. No writes.
+ t03+: start-sequence candidates derived from ADT props (dapf-instance-0, dart-tunables-instance-0, wrapper/ASC regs) and the Linux asahi drivers (rtkit, apple-dart, mailbox) — cite sources; one change per test; log every write. Only MTP/DART-mtp/DAPF/wrapper registers may be written. No PMGR/SMC/audio.
+Write tools/loop/README.md listing tests in priority order. Report reports/35-mtp-modules.md. Print exactly `DONE 35` when t02 + at least two t03+ sets are ready (or `BLOCKED 35: <q>`). No dialogs. Don't touch the Mac — the PM pushes and boots.

@@ -1,0 +1,2357 @@
+9.37 start n1w12 (N1 W2: rc read, port0 PHY lane, core RUN (skip if running), port0 enable+config; no train)
+7.3.0-m5n1+
+7.3.0-m5n1+ SMP preempt mod_unload aarch64
+--- DT evidence
+root compatible: apple,j714s apple,t6050 apple,arm-platform 
+m5-n1-w1 node: present
+/proc/device-tree/soc@200000000/nvme@45dcc0000: apple,t6050-nvme-ans2 apple,t8132-nvme-ans2 
+/proc/device-tree/soc@200000000/iommu@41dc50000: apple,t6050-sart apple,t8132-sart 
+/proc/device-tree/soc@200000000/interrupt-controller@280400000: apple,t6050-aic3 apple,t8122-aic3 
+apcie_sys_gp_oc (loop-v1-only label) present: 
+9.54 insmod mfd-core
+9.61 insmod mfd-core rc=0
+11.70 insmod macsmc
+11.75 insmod macsmc rc=0
+13.79 insmod m5_n1
+13.85 insmod rc=0
+14.91 stage pmgr
+14.97 stage pmgr rc=0
+15.02 stage power
+15.08 stage power rc=0
+15.12 stage rc
+15.17 stage rc rc=0
+15.21 stage rd:1cb0000018
+15.27 stage rd:1cb0000018 rc=0
+15.31 stage rd:1cb0000728
+15.38 stage rd:1cb0000728 rc=0
+15.43 stage corerun
+15.48 stage corerun rc=0
+15.52 stage en1
+15.57 stage en1 rc=0
+15.64 stage en2
+15.67 stage en2 rc=0
+15.71 stage physw
+15.75 stage physw rc=0
+15.78 stage pmgr
+15.83 stage pmgr rc=0
+15.88 stage tuncmp
+15.95 stage tuncmp rc=0
+16.03 stage smc
+16.10 stage smc rc=0
+16.16 stage clkreq
+16.25 stage clkreq rc=0
+16.32 stage gp13
+16.47 stage gp13 rc=0
+16.51 stage clkreq
+16.54 stage clkreq rc=0
+16.58 stage smc
+16.64 stage smc rc=0
+16.70 stage phy
+16.74 stage phy rc=0
+16.80 stage rd:417010000
+16.84 stage rd:417010000 rc=0
+16.90 stage refreq
+16.96 stage refreq rc=0
+17.01 stage rd:417010000
+17.06 stage rd:417010000 rc=0
+17.16 stage rd:4100280a8
+17.22 stage rd:4100280a8 rc=0
+17.30 stage asahien
+17.46 stage asahien rc=0
+17.53 stage config
+17.66 stage config rc=0
+17.80 stage asahiprep
+17.92 stage asahiprep rc=0
+18.03 stage gp13
+18.20 stage gp13 rc=0
+18.24 stage clkreq
+18.30 stage clkreq rc=0
+18.36 stage dumprp
+18.41 stage dumprp rc=0
+18.48 stage dumpport
+18.54 stage dumpport rc=0
+18.59 stage tuncmp
+18.65 stage tuncmp rc=0
+18.74 stage ltssmgo
+/usr/local/bin/m5-exp: line 18: echo: write error: Link has been severed
+20.16 stage ltssmgo rc=1
+20.19 stage dumprp
+20.24 stage dumprp rc=0
+20.29 stage dumpport
+20.35 stage dumpport rc=0
+20.40 stage tuncmp
+20.45 stage tuncmp rc=0
+20.50 stage pmgr
+20.54 stage pmgr rc=0
+--- lspci -nn
+--- /sys/bus/pci/devices
+20.57 stage perst
+20.61 stage perst rc=0
+20.65 end
+--- dmesg
+[    0.000000] Booting Linux on physical CPU 0x0000040000 [0x611f0641]
+[    0.000000] Linux version 7.3.0-m5n1+ (tripleu@ush) (clang version 23.1.3, LLD 23.1.3) #4 SMP PREEMPT Thu Nov  5 06:39:15 EST 2026
+[    0.000000] Machine model: Apple MacBook Pro (14-inch, M5 Pro, 2026)
+[    0.000000] printk: debug: skip boot console de-registration.
+[    0.000000] printk: debug: ignoring loglevel setting.
+[    0.000000] earlycon: [3024,1964,12096,30,1512] unsupported earlycon uart clkrate option
+[    0.000000] earlycon: m5fb0 MMIO:0x00000105d3110000 (options '3024,1964,12096,30,1512')
+[    0.000000] printk: legacy bootconsole [m5fb0] enabled
+[    0.000000] m5: setup_arch reached, earlycon parsed
+[    0.000000] OF: reserved mem: 0x000001000436c000..0x00000100043cbfff (384 KiB) nomap non-reusable m5boot-rsv0@1000436c000
+[    0.000000] OF: reserved mem: 0x00000100042b8000..0x000001000436bfff (720 KiB) nomap non-reusable m5boot-rsv1@100042b8000
+[    0.000000] OF: reserved mem: 0x0000010004b7c000..0x0000010005127fff (5808 KiB) nomap non-reusable m5boot-rsv2@10004b7c000
+[    0.000000] OF: reserved mem: 0x0000010005128000..0x0000010005133fff (48 KiB) nomap non-reusable m5boot-rsv3@10005128000
+[    0.000000] OF: reserved mem: 0x0000010005134000..0x0000010005137fff (16 KiB) nomap non-reusable m5boot-rsv4@10005134000
+[    0.000000] OF: reserved mem: 0x0000010005138000..0x0000010005177fff (256 KiB) nomap non-reusable m5boot-rsv5@10005138000
+[    0.000000] OF: reserved mem: 0x0000010005178000..0x000001000517bfff (16 KiB) nomap non-reusable m5boot-rsv6@10005178000
+[    0.000000] OF: reserved mem: 0x00000100043cc000..0x0000010004a87fff (6896 KiB) nomap non-reusable m5boot-rsv7@100043cc000
+[    0.000000] OF: reserved mem: 0x0000010004a88000..0x0000010004b7bfff (976 KiB) nomap non-reusable m5boot-rsv8@10004a88000
+[    0.000000] OF: reserved mem: 0x00000105fffc0000..0x00000105ffffffff (256 KiB) nomap non-reusable m5boot-rsv9@105fffc0000
+[    0.000000] OF: reserved mem: 0x00000105fffbc000..0x00000105fffbffff (16 KiB) nomap non-reusable m5boot-rsv10@105fffbc000
+[    0.000000] OF: reserved mem: 0x00000105fffac000..0x00000105fffbbfff (64 KiB) nomap non-reusable m5boot-rsv11@105fffac000
+[    0.000000] OF: reserved mem: 0x00000105fffa8000..0x00000105fffabfff (16 KiB) nomap non-reusable m5boot-rsv12@105fffa8000
+[    0.000000] OF: reserved mem: 0x00000105fff28000..0x00000105fffa7fff (512 KiB) nomap non-reusable m5boot-rsv13@105fff28000
+[    0.000000] OF: reserved mem: 0x00000105fff24000..0x00000105fff27fff (16 KiB) nomap non-reusable m5boot-rsv14@105fff24000
+[    0.000000] OF: reserved mem: 0x00000105fff20000..0x00000105fff23fff (16 KiB) nomap non-reusable m5boot-rsv15@105fff20000
+[    0.000000] OF: reserved mem: 0x00000105fff1c000..0x00000105fff1ffff (16 KiB) nomap non-reusable m5boot-rsv16@105fff1c000
+[    0.000000] OF: reserved mem: 0x00000105fff18000..0x00000105fff1bfff (16 KiB) nomap non-reusable m5boot-rsv17@105fff18000
+[    0.000000] OF: reserved mem: 0x00000105fff14000..0x00000105fff17fff (16 KiB) nomap non-reusable m5boot-rsv18@105fff14000
+[    0.000000] OF: reserved mem: 0x00000105fff08000..0x00000105fff13fff (48 KiB) nomap non-reusable m5boot-rsv19@105fff08000
+[    0.000000] OF: reserved mem: 0x00000105ffef0000..0x00000105fff07fff (96 KiB) nomap non-reusable m5boot-rsv20@105ffef0000
+[    0.000000] OF: reserved mem: 0x00000105ffed0000..0x00000105ffeeffff (128 KiB) nomap non-reusable m5boot-rsv21@105ffed0000
+[    0.000000] OF: reserved mem: 0x00000105ffea0000..0x00000105ffecffff (192 KiB) nomap non-reusable m5boot-rsv22@105ffea0000
+[    0.000000] OF: reserved mem: 0x00000105ffe80000..0x00000105ffe9ffff (128 KiB) nomap non-reusable m5boot-rsv23@105ffe80000
+[    0.000000] OF: reserved mem: 0x00000105ffe60000..0x00000105ffe7ffff (128 KiB) nomap non-reusable m5boot-rsv24@105ffe60000
+[    0.000000] OF: reserved mem: 0x00000105ffe30000..0x00000105ffe5ffff (192 KiB) nomap non-reusable m5boot-rsv25@105ffe30000
+[    0.000000] OF: reserved mem: 0x00000105ffe20000..0x00000105ffe2ffff (64 KiB) nomap non-reusable m5boot-rsv26@105ffe20000
+[    0.000000] OF: reserved mem: 0x00000105ffe00000..0x00000105ffe1ffff (128 KiB) nomap non-reusable m5boot-rsv27@105ffe00000
+[    0.000000] OF: reserved mem: 0x00000105ffdd0000..0x00000105ffdfffff (192 KiB) nomap non-reusable m5boot-rsv28@105ffdd0000
+[    0.000000] OF: reserved mem: 0x00000105ffda0000..0x00000105ffdcffff (192 KiB) nomap non-reusable m5boot-rsv29@105ffda0000
+[    0.000000] OF: reserved mem: 0x00000105ffd90000..0x00000105ffd9ffff (64 KiB) nomap non-reusable m5boot-rsv30@105ffd90000
+[    0.000000] OF: reserved mem: 0x00000105ffd70000..0x00000105ffd8ffff (128 KiB) nomap non-reusable m5boot-rsv31@105ffd70000
+[    0.000000] OF: reserved mem: 0x00000105ffd40000..0x00000105ffd6ffff (192 KiB) nomap non-reusable m5boot-rsv32@105ffd40000
+[    0.000000] OF: reserved mem: 0x00000105ffd10000..0x00000105ffd3ffff (192 KiB) nomap non-reusable m5boot-rsv33@105ffd10000
+[    0.000000] OF: reserved mem: 0x00000105ffd00000..0x00000105ffd0ffff (64 KiB) nomap non-reusable m5boot-rsv34@105ffd00000
+[    0.000000] OF: reserved mem: 0x00000105ffce0000..0x00000105ffcfffff (128 KiB) nomap non-reusable m5boot-rsv35@105ffce0000
+[    0.000000] OF: reserved mem: 0x00000105ffcb0000..0x00000105ffcdffff (192 KiB) nomap non-reusable m5boot-rsv36@105ffcb0000
+[    0.000000] OF: reserved mem: 0x00000105ffc80000..0x00000105ffcaffff (192 KiB) nomap non-reusable m5boot-rsv37@105ffc80000
+[    0.000000] OF: reserved mem: 0x00000105ffc70000..0x00000105ffc7ffff (64 KiB) nomap non-reusable m5boot-rsv38@105ffc70000
+[    0.000000] OF: reserved mem: 0x00000105ffc50000..0x00000105ffc6ffff (128 KiB) nomap non-reusable m5boot-rsv39@105ffc50000
+[    0.000000] OF: reserved mem: 0x00000105ffc20000..0x00000105ffc4ffff (192 KiB) nomap non-reusable m5boot-rsv40@105ffc20000
+[    0.000000] OF: reserved mem: 0x00000105ffbf0000..0x00000105ffc1ffff (192 KiB) nomap non-reusable m5boot-rsv41@105ffbf0000
+[    0.000000] OF: reserved mem: 0x00000105ffbe0000..0x00000105ffbeffff (64 KiB) nomap non-reusable m5boot-rsv42@105ffbe0000
+[    0.000000] OF: reserved mem: 0x00000105d30e8000..0x00000105d3107fff (128 KiB) nomap non-reusable m5boot-rsv43@105d30e8000
+[    0.000000] OF: reserved mem: 0x00000105d30b8000..0x00000105d30e7fff (192 KiB) nomap non-reusable m5boot-rsv44@105d30b8000
+[    0.000000] OF: reserved mem: 0x00000105d3088000..0x00000105d30b7fff (192 KiB) nomap non-reusable m5boot-rsv45@105d3088000
+[    0.000000] OF: reserved mem: 0x00000105d3078000..0x00000105d3087fff (64 KiB) nomap non-reusable m5boot-rsv46@105d3078000
+[    0.000000] OF: reserved mem: 0x00000105d3058000..0x00000105d3077fff (128 KiB) nomap non-reusable m5boot-rsv47@105d3058000
+[    0.000000] OF: reserved mem: 0x00000105d3028000..0x00000105d3057fff (192 KiB) nomap non-reusable m5boot-rsv48@105d3028000
+[    0.000000] OF: reserved mem: 0x00000105d2ff8000..0x00000105d3027fff (192 KiB) nomap non-reusable m5boot-rsv49@105d2ff8000
+[    0.000000] OF: reserved mem: 0x00000105d2fe8000..0x00000105d2ff7fff (64 KiB) nomap non-reusable m5boot-rsv50@105d2fe8000
+[    0.000000] OF: reserved mem: 0x00000105d2fc8000..0x00000105d2fe7fff (128 KiB) nomap non-reusable m5boot-rsv51@105d2fc8000
+[    0.000000] OF: reserved mem: 0x00000105d2f98000..0x00000105d2fc7fff (192 KiB) nomap non-reusable m5boot-rsv52@105d2f98000
+[    0.000000] OF: reserved mem: 0x00000105d2f68000..0x00000105d2f97fff (192 KiB) nomap non-reusable m5boot-rsv53@105d2f68000
+[    0.000000] OF: reserved mem: 0x00000105d2f58000..0x00000105d2f67fff (64 KiB) nomap non-reusable m5boot-rsv54@105d2f58000
+[    0.000000] OF: reserved mem: 0x00000105d2f38000..0x00000105d2f57fff (128 KiB) nomap non-reusable m5boot-rsv55@105d2f38000
+[    0.000000] OF: reserved mem: 0x00000105d2f08000..0x00000105d2f37fff (192 KiB) nomap non-reusable m5boot-rsv56@105d2f08000
+[    0.000000] OF: reserved mem: 0x00000105d2ed8000..0x00000105d2f07fff (192 KiB) nomap non-reusable m5boot-rsv57@105d2ed8000
+[    0.000000] OF: reserved mem: 0x00000105d2ec8000..0x00000105d2ed7fff (64 KiB) nomap non-reusable m5boot-rsv58@105d2ec8000
+[    0.000000] OF: reserved mem: 0x00000105ffbc0000..0x00000105ffbdffff (128 KiB) nomap non-reusable m5boot-rsv59@105ffbc0000
+[    0.000000] OF: reserved mem: 0x00000105ffba0000..0x00000105ffbbffff (128 KiB) nomap non-reusable m5boot-rsv60@105ffba0000
+[    0.000000] OF: reserved mem: 0x00000105ffb80000..0x00000105ffb9ffff (128 KiB) nomap non-reusable m5boot-rsv61@105ffb80000
+[    0.000000] OF: reserved mem: 0x00000105ffb60000..0x00000105ffb7ffff (128 KiB) nomap non-reusable m5boot-rsv62@105ffb60000
+[    0.000000] OF: reserved mem: 0x00000105ffb40000..0x00000105ffb5ffff (128 KiB) nomap non-reusable m5boot-rsv63@105ffb40000
+[    0.000000] OF: reserved mem: 0x00000105ffb20000..0x00000105ffb3ffff (128 KiB) nomap non-reusable m5boot-rsv64@105ffb20000
+[    0.000000] OF: reserved mem: 0x00000105ffb00000..0x00000105ffb1ffff (128 KiB) nomap non-reusable m5boot-rsv65@105ffb00000
+[    0.000000] OF: reserved mem: 0x00000105ffae0000..0x00000105ffafffff (128 KiB) nomap non-reusable m5boot-rsv66@105ffae0000
+[    0.000000] OF: reserved mem: 0x00000105ffadc000..0x00000105ffadffff (16 KiB) nomap non-reusable m5boot-rsv67@105ffadc000
+[    0.000000] OF: reserved mem: 0x00000105d2ec4000..0x00000105d2ec7fff (16 KiB) nomap non-reusable m5boot-rsv68@105d2ec4000
+[    0.000000] OF: reserved mem: 0x00000105ffad8000..0x00000105ffadbfff (16 KiB) nomap non-reusable m5boot-rsv69@105ffad8000
+[    0.000000] OF: reserved mem: 0x00000105d2ec0000..0x00000105d2ec3fff (16 KiB) nomap non-reusable m5boot-rsv70@105d2ec0000
+[    0.000000] OF: reserved mem: 0x00000105ff2d8000..0x00000105ffad7fff (8192 KiB) nomap non-reusable m5boot-rsv71@105ff2d8000
+[    0.000000] OF: reserved mem: 0x00000105ff298000..0x00000105ff2d7fff (256 KiB) nomap non-reusable m5boot-rsv72@105ff298000
+[    0.000000] OF: reserved mem: 0x00000105ff264000..0x00000105ff297fff (208 KiB) nomap non-reusable m5boot-rsv73@105ff264000
+[    0.000000] OF: reserved mem: 0x00000105d98dc000..0x00000105d9a63fff (1568 KiB) nomap non-reusable m5boot-rsv74@105d98dc000
+[    0.000000] OF: reserved mem: 0x00000105d9a64000..0x00000105ff263fff (614400 KiB) nomap non-reusable m5boot-rsv75@105d9a64000
+[    0.000000] OF: reserved mem: 0x00000105d310c000..0x00000105d310ffff (16 KiB) nomap non-reusable m5boot-rsv76@105d310c000
+[    0.000000] OF: reserved mem: 0x00000105d3110000..0x00000105d88bbfff (89776 KiB) nomap non-reusable m5boot-rsv77@105d3110000
+[    0.000000] OF: reserved mem: 0x00000105d2e60000..0x00000105d2ebffff (384 KiB) nomap non-reusable m5boot-rsv78@105d2e60000
+[    0.000000] OF: reserved mem: 0x00000105d2464000..0x00000105d2e5bfff (10208 KiB) nomap non-reusable m5boot-rsv79@105d2464000
+[    0.000000] OF: reserved mem: 0x00000105d2444000..0x00000105d2463fff (128 KiB) nomap non-reusable m5boot-rsv80@105d2444000
+[    0.000000] OF: reserved mem: 0x00000105d8cdc000..0x00000105d98dbfff (12288 KiB) nomap non-reusable m5boot-rsv81@105d8cdc000
+[    0.000000] OF: reserved mem: 0x00000105d897c000..0x00000105d8cdbfff (3456 KiB) nomap non-reusable m5boot-rsv82@105d897c000
+[    0.000000] OF: reserved mem: 0x00000105d3108000..0x00000105d310bfff (16 KiB) nomap non-reusable m5boot-rsv83@105d3108000
+[    0.000000] OF: reserved mem: 0x00000105d88bc000..0x00000105d897bfff (768 KiB) nomap non-reusable m5boot-rsv84@105d88bc000
+[    0.000000] OF: reserved mem: 0x00000105d1a4c000..0x00000105d2443fff (10208 KiB) nomap non-reusable m5boot-rsv85@105d1a4c000
+[    0.000000] OF: reserved mem: 0x00000105d1a2c000..0x00000105d1a4bfff (128 KiB) nomap non-reusable m5boot-rsv86@105d1a2c000
+[    0.000000] OF: reserved mem: 0x00000105d0e2c000..0x00000105d1a2bfff (12288 KiB) nomap non-reusable m5boot-rsv87@105d0e2c000
+[    0.000000] OF: reserved mem: 0x00000105d0434000..0x00000105d0e2bfff (10208 KiB) nomap non-reusable m5boot-rsv88@105d0434000
+[    0.000000] OF: reserved mem: 0x00000105d0414000..0x00000105d0433fff (128 KiB) nomap non-reusable m5boot-rsv89@105d0414000
+[    0.000000] OF: reserved mem: 0x00000105cf814000..0x00000105d0413fff (12288 KiB) nomap non-reusable m5boot-rsv90@105cf814000
+[    0.000000] OF: reserved mem: 0x00000105cee1c000..0x00000105cf813fff (10208 KiB) nomap non-reusable m5boot-rsv91@105cee1c000
+[    0.000000] OF: reserved mem: 0x00000105cedfc000..0x00000105cee1bfff (128 KiB) nomap non-reusable m5boot-rsv92@105cedfc000
+[    0.000000] OF: reserved mem: 0x00000105ce1fc000..0x00000105cedfbfff (12288 KiB) nomap non-reusable m5boot-rsv93@105ce1fc000
+[    0.000000] OF: reserved mem: 0x00000105cd804000..0x00000105ce1fbfff (10208 KiB) nomap non-reusable m5boot-rsv94@105cd804000
+[    0.000000] OF: reserved mem: 0x00000105cd7e4000..0x00000105cd803fff (128 KiB) nomap non-reusable m5boot-rsv95@105cd7e4000
+[    0.000000] OF: reserved mem: 0x00000105ccbe4000..0x00000105cd7e3fff (12288 KiB) nomap non-reusable m5boot-rsv96@105ccbe4000
+[    0.000000] OF: reserved mem: 0x00000002a3040000..0x00000002a305ffff (128 KiB) nomap non-reusable m5boot-rsv97@2a3040000
+[    0.000000] OF: reserved mem: 0x00000002a30c0000..0x00000002a30cffff (64 KiB) nomap non-reusable m5boot-rsv98@2a30c0000
+[    0.000000] OF: reserved mem: 0x00000100c1a98000..0x00000100c1a9ffff (32 KiB) nomap non-reusable m5boot-rsv99@100c1a98000
+[    0.000000] OF: reserved mem: 0x0000000395c00000..0x0000000395c257ff (150 KiB) nomap non-reusable m5boot-rsv100@395c00000
+[    0.000000] OF: reserved mem: 0x0000000395c80000..0x0000000395c92bff (75 KiB) nomap non-reusable m5boot-rsv101@395c80000
+[    0.000000] OF: reserved mem: 0x0000004395c00000..0x0000004395c257ff (150 KiB) nomap non-reusable m5boot-rsv102@4395c00000
+[    0.000000] OF: reserved mem: 0x0000004395c80000..0x0000004395c92bff (75 KiB) nomap non-reusable m5boot-rsv103@4395c80000
+[    0.000000] OF: reserved mem: 0x00000100be090000..0x00000100bf08ffff (16384 KiB) nomap non-reusable m5boot-rsv104@100be090000
+[    0.000000] OF: reserved mem: 0x00000100bf090000..0x00000100c008ffff (16384 KiB) nomap non-reusable m5boot-rsv105@100bf090000
+[    0.000000] OF: reserved mem: 0x00000100c0090000..0x00000100c0a8ffff (10240 KiB) nomap non-reusable m5boot-rsv106@100c0090000
+[    0.000000] OF: reserved mem: 0x00000105cabec000..0x00000105ccbe3fff (32736 KiB) nomap non-reusable m5boot-rsv107@105cabec000
+[    0.000000] OF: reserved mem: 0x0000010100000000..0x000001010000ffff (64 KiB) nomap non-reusable m5boot-rsv108@10100000000
+[    0.000000] OF: reserved mem: 0x0000010100010000..0x000001010002ffff (128 KiB) nomap non-reusable m5boot-rsv109@10100010000
+[    0.000000] OF: reserved mem: 0x00000101000d0000..0x00000101001c7fff (992 KiB) nomap non-reusable m5boot-rsv110@101000d0000
+[    0.000000] OF: reserved mem: 0x0000010106e0c000..0x000001010720bfff (4096 KiB) nomap non-reusable m5boot-rsv111@10106e0c000
+[    0.000000] OF: reserved mem: 0x00000100c1f18000..0x00000100c1f1ffff (32 KiB) nomap non-reusable m5boot-rsv112@100c1f18000
+[    0.000000] OF: reserved mem: 0x000001010020c000..0x000001010060bfff (4096 KiB) nomap non-reusable m5boot-rsv113@1010020c000
+[    0.000000] OF: reserved mem: 0x000001010060c000..0x0000010100a0bfff (4096 KiB) nomap non-reusable m5boot-rsv114@1010060c000
+[    0.000000] OF: reserved mem: 0x00000100c1f14000..0x00000100c1f17fff (16 KiB) nomap non-reusable m5boot-rsv115@100c1f14000
+[    0.000000] OF: reserved mem: 0x0000010100a0c000..0x0000010106e0bfff (102400 KiB) nomap non-reusable m5boot-rsv116@10100a0c000
+[    0.000000] OF: reserved mem: 0x00000101088c0000..0x000001010a8bffff (32768 KiB) nomap non-reusable m5boot-rsv117@101088c0000
+[    0.000000] OF: reserved mem: 0x000001059ab00000..0x00000105caafffff (786432 KiB) nomap non-reusable m5boot-rsv118@1059ab00000
+[    0.000000] OF: reserved mem: 0x0000010107218000..0x00000101088bffff (23200 KiB) nomap non-reusable m5boot-rsv119@10107218000
+[    0.000000] OF: reserved mem: 0x000001000233c000..0x0000010003ae3fff (24224 KiB) nomap non-reusable m5boot-rsv120@1000233c000
+[    0.000000] OF: reserved mem: 0x0000010001d04000..0x000001000233bfff (6368 KiB) nomap non-reusable m5boot-rsv121@10001d04000
+[    0.000000] OF: reserved mem: 0x0000010000308000..0x0000010000b9bfff (8784 KiB) nomap non-reusable m5boot-rsv122@10000308000
+[    0.000000] OF: reserved mem: 0x0000010000268000..0x00000100002a3fff (240 KiB) nomap non-reusable m5boot-rsv123@10000268000
+[    0.000000] OF: reserved mem: 0x00000100002a4000..0x00000100002c3fff (128 KiB) nomap non-reusable m5boot-rsv124@100002a4000
+[    0.000000] OF: reserved mem: 0x00000100002c4000..0x00000100002c7fff (16 KiB) nomap non-reusable m5boot-rsv125@100002c4000
+[    0.000000] OF: reserved mem: 0x00000100002c8000..0x00000100002cbfff (16 KiB) nomap non-reusable m5boot-rsv126@100002c8000
+[    0.000000] OF: reserved mem: 0x0000010000028000..0x0000010000267fff (2304 KiB) nomap non-reusable m5boot-rsv127@10000028000
+[    0.000000] OF: reserved mem: 0x000001000000c000..0x0000010001d03fff (29664 KiB) nomap non-reusable m5boot-rsv128@1000000c000
+[    0.000000] OF: reserved mem: 0x0000010000000000..0x0000010000003fff (16 KiB) nomap non-reusable m5boot-rsv129@10000000000
+[    0.000000] OF: reserved mem: 0x0000010000004000..0x000001000000bfff (32 KiB) nomap non-reusable m5boot-rsv130@10000004000
+[    0.000000] OF: reserved mem: 0x00000100bdc4c000..0x00000100be08bfff (4352 KiB) nomap non-reusable m5boot-rsv131@100bdc4c000
+[    0.000000] OF: reserved mem: 0x00000100bdc08000..0x00000100bdc47fff (256 KiB) nomap non-reusable m5boot-rsv132@100bdc08000
+[    0.000000] OF: reserved mem: 0x00000100b4004000..0x00000100bdc03fff (159744 KiB) nomap non-reusable m5boot-rsv133@100b4004000
+[    0.000000] OF: reserved mem: 0x00000100c2308000..0x00000100c231ffff (96 KiB) nomap non-reusable m5boot-rsv134@100c2308000
+[    0.000000] OF: reserved mem: 0x00000100c22fc000..0x00000100c22fffff (16 KiB) nomap non-reusable m5boot-rsv135@100c22fc000
+[    0.000000] OF: reserved mem: 0x00000100c2300000..0x00000100c2303fff (16 KiB) nomap non-reusable m5boot-rsv136@100c2300000
+[    0.000000] OF: reserved mem: 0x00000100c2304000..0x00000100c2307fff (16 KiB) nomap non-reusable m5boot-rsv137@100c2304000
+[    0.000000] OF: reserved mem: 0x00000100c22a4000..0x00000100c22fbfff (352 KiB) nomap non-reusable m5boot-rsv138@100c22a4000
+[    0.000000] OF: reserved mem: 0x00000100c1aa4000..0x00000100c22a3fff (8192 KiB) nomap non-reusable m5boot-rsv139@100c1aa4000
+[    0.000000] OF: reserved mem: 0x00000100c0a94000..0x00000100c1a93fff (16384 KiB) nomap non-reusable m5boot-rsv140@100c0a94000
+[    0.000000] OF: reserved mem: 0x00000100b4000000..0x00000100b4003fff (16 KiB) nomap non-reusable m5boot-rsv141@100b4000000
+[    0.000000] OF: reserved mem: 0x0000000290c00000..0x0000000290eeffff (3008 KiB) nomap non-reusable m5boot-rsv142@290c00000
+[    0.000000] OF: reserved mem: 0x0000000294c00000..0x0000000294e7ffff (2560 KiB) nomap non-reusable m5boot-rsv143@294c00000
+[    0.000000] OF: reserved mem: 0x000000028a800000..0x000000028a8bffff (768 KiB) nomap non-reusable m5boot-rsv144@28a800000
+[    0.000000] OF: reserved mem: 0x0000000284500000..0x00000002845fffff (1024 KiB) nomap non-reusable m5boot-rsv145@284500000
+[    0.000000] OF: reserved mem: 0x0000004284500000..0x00000042845fffff (1024 KiB) nomap non-reusable m5boot-rsv146@4284500000
+[    0.000000] OF: reserved mem: 0x0000002285340000..0x0000002285353fff (80 KiB) nomap non-reusable m5boot-rsv147@2285340000
+[    0.000000] OF: reserved mem: 0x00000022853c0000..0x00000022853cffff (64 KiB) nomap non-reusable m5boot-rsv148@22853c0000
+[    0.000000] OF: reserved mem: 0x00000023a1340000..0x00000023a1353fff (80 KiB) nomap non-reusable m5boot-rsv149@23a1340000
+[    0.000000] OF: reserved mem: 0x00000023a13c0000..0x00000023a13cffff (64 KiB) nomap non-reusable m5boot-rsv150@23a13c0000
+[    0.000000] OF: reserved mem: 0x0000006285340000..0x0000006285353fff (80 KiB) nomap non-reusable m5boot-rsv151@6285340000
+[    0.000000] OF: reserved mem: 0x00000062853c0000..0x00000062853cffff (64 KiB) nomap non-reusable m5boot-rsv152@62853c0000
+[    0.000000] OF: reserved mem: 0x00000063a1340000..0x00000063a1353fff (80 KiB) nomap non-reusable m5boot-rsv153@63a1340000
+[    0.000000] OF: reserved mem: 0x00000063a13c0000..0x00000063a13cffff (64 KiB) nomap non-reusable m5boot-rsv154@63a13c0000
+[    0.000000] OF: reserved mem: 0x0000000582680000..0x0000000582697fff (96 KiB) nomap non-reusable m5boot-rsv155@582680000
+[    0.000000] OF: reserved mem: 0x0000000582700000..0x000000058270ffff (64 KiB) nomap non-reusable m5boot-rsv156@582700000
+[    0.000000] OF: reserved mem: 0x00000105d2e5c000..0x00000105d2e5ffff (16 KiB) nomap non-reusable m5boot-rsv157@105d2e5c000
+[    0.000000] OF: reserved mem: 0x00000100c1f10000..0x00000100c1f13fff (16 KiB) nomap non-reusable m5boot-rsv158@100c1f10000
+[    0.000000] OF: reserved mem: 0x0000010107214000..0x0000010107217fff (16 KiB) nomap non-reusable m5boot-rsv159@10107214000
+[    0.000000] OF: reserved mem: 0x00000101001c8000..0x00000101001cbfff (16 KiB) nomap non-reusable m5boot-rsv160@101001c8000
+[    0.000000] OF: reserved mem: 0x0000010100030000..0x00000101000cffff (640 KiB) nomap non-reusable m5boot-rsv161@10100030000
+[    0.000000] OF: reserved mem: 0x00000101001cc000..0x000001010020bfff (256 KiB) nomap non-reusable m5boot-rsv162@101001cc000
+[    0.000000] OF: reserved mem: 0x0000010107210000..0x0000010107213fff (16 KiB) nomap non-reusable m5boot-rsv163@10107210000
+[    0.000000] OF: reserved mem: 0x000001010720c000..0x000001010720ffff (16 KiB) nomap non-reusable m5boot-rsv164@1010720c000
+[    0.000000] OF: reserved mem: 0x0000010062400000..0x00000100723fffff (262144 KiB) nomap non-reusable m5boot-rsv165@10062400000
+[    0.000000] OF: reserved mem: 0x0000010062300000..0x00000100623fffff (1024 KiB) nomap non-reusable m5boot-rsv166@10062300000
+[    0.000000] OF: reserved mem: 0x0000010062100000..0x00000100622fffff (2048 KiB) nomap non-reusable m5boot-rsv167@10062100000
+[    0.000000] OF: reserved mem: 0x0000010042100000..0x00000100620fffff (524288 KiB) nomap non-reusable m5boot-rsv168@10042100000
+[    0.000000] OF: reserved mem: 0x0000010042000000..0x00000100420fffff (1024 KiB) nomap non-reusable m5boot-rsv169@10042000000
+[    0.000000] OF: reserved mem: 0x0000010024000000..0x0000010041ffffff (491520 KiB) nomap non-reusable m5boot-rsv170@10024000000
+[    0.000000] OF: reserved mem: 0x0000010004000000..0x0000010023ffffff (524288 KiB) nomap non-reusable m5boot-rsv171@10004000000
+[    0.000000] OF: reserved mem: 0x00000105d3110000..0x00000105d47b7fff (23200 KiB) nomap non-reusable m5boot-rsv172@105d3110000
+[    0.000000] OF: reserved mem: 0x00000100043cc000..0x0000010004a87fff (6896 KiB) nomap non-reusable m5boot-rsv173@100043cc000
+[    0.000000] OF: reserved mem: 0x0000000294c00000..0x0000000294c53fff (336 KiB) nomap non-reusable mtp-text@294c00000
+[    0.000000] OF: reserved mem: 0x0000000294c54000..0x0000000294cbffff (432 KiB) nomap non-reusable mtp-data@294c54000
+[    0.000000] OF: reserved mem: 0x000001000ccdc000..0x000001000ccdefff (12 KiB) nomap non-reusable mtp-oslog@1000ccdc000
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               mtp-text@294c00000 (0x0000000294c00000--0x0000000294c54000) overlaps with m5boot-rsv143@294c00000 (0x0000000294c00000--0x0000000294e80000)
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               m5boot-rsv143@294c00000 (0x0000000294c00000--0x0000000294e80000) overlaps with mtp-data@294c54000 (0x0000000294c54000--0x0000000294cc0000)
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               m5boot-rsv128@1000000c000 (0x000001000000c000--0x0000010001d04000) overlaps with m5boot-rsv127@10000028000 (0x0000010000028000--0x0000010000268000)
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               m5boot-rsv171@10004000000 (0x0000010004000000--0x0000010024000000) overlaps with m5boot-rsv1@100042b8000 (0x00000100042b8000--0x000001000436c000)
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               m5boot-rsv173@100043cc000 (0x00000100043cc000--0x0000010004a88000) overlaps with m5boot-rsv7@100043cc000 (0x00000100043cc000--0x0000010004a88000)
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               m5boot-rsv139@100c1aa4000 (0x00000100c1aa4000--0x00000100c22a4000) overlaps with m5boot-rsv158@100c1f10000 (0x00000100c1f10000--0x00000100c1f14000)
+[    0.000000] OF: reserved mem: OVERLAP DETECTED!
+               m5boot-rsv172@105d3110000 (0x00000105d3110000--0x00000105d47b8000) overlaps with m5boot-rsv77@105d3110000 (0x00000105d3110000--0x00000105d88bc000)
+[    0.000000] Number of cores (18) exceeds configured maximum of 1 - clipping
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000010005200000-0x00000105ca9fffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000010005200000-0x00000100723fffff]
+[    0.000000]   node   0: [mem 0x0000010072400000-0x00000100b3ffffff]
+[    0.000000]   node   0: [mem 0x00000100b4000000-0x00000100bdc03fff]
+[    0.000000]   node   0: [mem 0x00000100bdc04000-0x00000100bdc07fff]
+[    0.000000]   node   0: [mem 0x00000100bdc08000-0x00000100bdc47fff]
+[    0.000000]   node   0: [mem 0x00000100bdc48000-0x00000100bdc4bfff]
+[    0.000000]   node   0: [mem 0x00000100bdc4c000-0x00000100be08bfff]
+[    0.000000]   node   0: [mem 0x00000100be08c000-0x00000100be08ffff]
+[    0.000000]   node   0: [mem 0x00000100be090000-0x00000100c0a8ffff]
+[    0.000000]   node   0: [mem 0x00000100c0a90000-0x00000100c0a93fff]
+[    0.000000]   node   0: [mem 0x00000100c0a94000-0x00000100c1a93fff]
+[    0.000000]   node   0: [mem 0x00000100c1a94000-0x00000100c1a97fff]
+[    0.000000]   node   0: [mem 0x00000100c1a98000-0x00000100c1a9ffff]
+[    0.000000]   node   0: [mem 0x00000100c1aa0000-0x00000100c1aa3fff]
+[    0.000000]   node   0: [mem 0x00000100c1aa4000-0x00000100c231ffff]
+[    0.000000]   node   0: [mem 0x00000100c2320000-0x00000100ffffffff]
+[    0.000000]   node   0: [mem 0x0000010100000000-0x000001010a8bffff]
+[    0.000000]   node   0: [mem 0x000001010a8c0000-0x000001059aafffff]
+[    0.000000]   node   0: [mem 0x000001059ab00000-0x00000105ca9fffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000010005200000-0x00000105ca9fffff]
+[    0.000000] On node 0, zone Normal: 5248 pages in unavailable ranges
+[    0.000000] On node 0, zone Normal: 5504 pages in unavailable ranges
+[    0.000000] percpu: Embedded 5 pages/cpu s35672 r8192 d38056 u81920
+[    0.000000] pcpu-alloc: s35672 r8192 d38056 u81920 alloc=5*16384
+[    0.000000] pcpu-alloc: [0] 0 
+[    0.000000] Detected PIPT I-cache on CPU0
+[    0.000000] CPU features: SYS_ID_AA64ISAR2_EL1[3:0]: forced to 0
+[    0.000000] CPU features: CPU advertises Apple APFLG but it is broken, ignoring
+[    0.000000] CPU features: detected: Virtualization Host Extensions
+[    0.000000] CPU features: detected: Spectre-v4
+[    0.000000] CPU features: detected: Spectre-BHB
+[    0.000000] CPU features: kernel page table isolation disabled by kernel configuration
+[    0.000000] alternatives: applying boot alternatives
+[    0.000000] Apple: preserving registers across WFI
+[    0.000000] Kernel command line: maxcpus=1 keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 panic=0 initcall_debug ignore_loglevel m5_pmgr_ro m5_pmgr_allow=ans m5.esplog=1 m5.root=s5 m5.testmarker=N1-W12 m5.autoreboot=300 nr_cpus=1 nvme_apple.force_cold_reset=1 earlycon=m5fb,0x105d3110000,3024,1964,12096,30,1512
+[    0.000000] printk: log buffer data + meta data: 262144 + 917504 = 1179648 bytes
+[    0.000000] Dentry cache hash table entries: 4194304 (order: 11, 33554432 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 2097152 (order: 10, 16777216 bytes, linear)
+[    0.000000] software IO TLB: SWIOTLB bounce buffer size adjusted to 23MB
+[    0.000000] software IO TLB: area num 1.
+[    0.000000] software IO TLB: SWIOTLB bounce buffer size roundup to 32MB
+[    0.000000] software IO TLB: mapped [mem 0x000001058f350000-0x0000010591350000] (32MB)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 1512960
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=16 to nr_cpu_ids=1.
+[    0.000000] 	Trampoline variant of Tasks RCU enabled.
+[    0.000000] 	Tracing variant of Tasks RCU enabled.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 25 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.000000] RCU Tasks: Setting shift to 0 and lim to 1 rcu_task_cb_adjust=1 rcu_task_cpu_ids=1.
+[    0.000000] NR_IRQS: 64, nr_irqs: 64, preallocated irqs: 0
+[    0.000000] Root IRQ handler: aic_handle_irq
+[    0.000000] Root FIQ handler: aic_handle_fiq
+[    0.000000] irq_apple_aic: Using Fast IPIs
+[    0.000000] irq_apple_aic: Initialized with 3104/4096 IRQs * 1/4 die(s), 7 FIQs, 32 vIPIs
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.000000] arch_timer: cp15 timer running at 1000.00MHz (hyp-virt).
+[    0.000000] clocksource: arch_sys_counter: mask: 0x1fffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[    0.000000] sched_clock: 61 bits at 1000MHz, resolution 1ns, wraps every 4398046511103ns
+[    0.000689] Console: colour dummy device 80x25
+[    0.001203] printk: legacy console [tty0] enabled
+[    0.001736] Calibrating delay loop (skipped), value calculated using timer frequency.. 2000.00 BogoMIPS (lpj=4000000)
+[    0.002901] pid_max: default: 32768 minimum: 301
+[    0.003480] Mount-cache hash table entries: 65536 (order: 5, 524288 bytes, linear)
+[    0.004126] Mountpoint-cache hash table entries: 65536 (order: 5, 524288 bytes, linear)
+[    0.004840] VFS: Finished mounting rootfs on nullfs
+[    0.005595] entering initcall level: early
+[    0.006094] calling  asids_init+0x0/0xa8 @ 1
+[    0.006605] initcall asids_init+0x0/0xa8 returned 0 after 0 usecs
+[    0.007189] calling  spawn_ksoftirqd+0x0/0x68 @ 1
+[    0.007726] initcall spawn_ksoftirqd+0x0/0x68 returned 0 after 0 usecs
+[    0.008324] calling  init_signal_sysctls+0x0/0x54 @ 1
+[    0.008865] initcall init_signal_sysctls+0x0/0x54 returned 0 after 0 usecs
+[    0.009477] calling  init_umh_sysctls+0x0/0x34 @ 1
+[    0.010006] initcall init_umh_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.010607] calling  kthreads_init+0x0/0x34 @ 1
+[    0.011127] initcall kthreads_init+0x0/0x34 returned 0 after 0 usecs
+[    0.011719] calling  migration_init+0x0/0x44 @ 1
+[    0.012238] initcall migration_init+0x0/0x44 returned 0 after 0 usecs
+[    0.012832] calling  srcu_bootup_announce+0x0/0x8c @ 1
+[    0.013373] rcu: Hierarchical SRCU implementation.
+[    0.013900] rcu: 	Max phase no-delay instances is 1000.
+[    0.014443] initcall srcu_bootup_announce+0x0/0x8c returned 0 after 0 usecs
+[    0.015057] calling  rcu_spawn_gp_kthread+0x0/0x12c @ 1
+[    0.015627] initcall rcu_spawn_gp_kthread+0x0/0x12c returned 0 after 0 usecs
+[    0.016248] calling  check_cpu_stall_init+0x0/0x28 @ 1
+[    0.016789] initcall check_cpu_stall_init+0x0/0x28 returned 0 after 0 usecs
+[    0.017403] calling  rcu_sysrq_init+0x0/0x18 @ 1
+[    0.017741] initcall rcu_sysrq_init+0x0/0x18 returned 0 after 0 usecs
+[    0.018334] calling  cpu_stop_init+0x0/0xb4 @ 1
+[    0.018862] initcall cpu_stop_init+0x0/0xb4 returned 0 after 0 usecs
+[    0.019453] calling  irq_work_init_threads+0x0/0x8 @ 1
+[    0.019994] initcall irq_work_init_threads+0x0/0x8 returned 0 after 0 usecs
+[    0.020610] calling  jump_label_init_module+0x0/0x1c @ 1
+[    0.021159] initcall jump_label_init_module+0x0/0x1c returned 0 after 0 usecs
+[    0.021781] calling  init_fs_inode_sysctls+0x0/0x34 @ 1
+[    0.022328] initcall init_fs_inode_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.022945] calling  init_fs_locks_sysctls+0x0/0x34 @ 1
+[    0.023493] initcall init_fs_locks_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.024111] calling  init_fs_sysctls+0x0/0x34 @ 1
+[    0.024635] initcall init_fs_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.025233] calling  init_security_keys_sysctls+0x0/0x34 @ 1
+[    0.025797] initcall init_security_keys_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.026432] calling  m5fb_remap+0x0/0x94 @ 1
+[    0.026945] initcall m5fb_remap+0x0/0x94 returned 0 after 0 usecs
+[    0.026999] calling  dummy_timer_register+0x0/0x34 @ 1
+[    0.027047] initcall dummy_timer_register+0x0/0x34 returned 0 after 0 usecs
+[    0.027117] smp: Bringing up secondary CPUs ...
+[    0.027161] smp: Brought up 1 node, 1 CPU
+[    0.027200] SMP: Total of 1 processors activated.
+[    0.027243] CPU: All CPU(s) started at EL2
+[    0.027284] CPU features: detected: ARMv8.4 Translation Table Level
+[    0.027339] CPU features: detected: Data cache clean to the PoU not required for I/D coherence
+[    0.027409] CPU features: detected: CRC32 instructions
+[    0.027455] CPU features: detected: Data independent timing control (DIT)
+[    0.027513] CPU features: detected: Enhanced Counter Virtualization
+[    0.027567] CPU features: detected: Enhanced Virtualization Traps
+[    0.027620] CPU features: detected: Fine Grained Traps
+[    0.027666] CPU features: detected: RCpc load-acquire (LDAPR)
+[    0.027717] CPU features: detected: LSE atomic instructions
+[    0.027766] CPU features: detected: Privileged Access Never
+[    0.027816] CPU features: detected: Speculation barrier (SB)
+[    0.027866] CPU features: detected: Stage-2 Force Write-Back
+[    0.027916] CPU features: detected: Trap EL0 IMPLEMENTATION DEFINED functionality
+[    0.027978] CPU features: detected: TLB range maintenance instructions
+[    0.028034] CPU features: detected: XNX
+[    0.028078] alternatives: applying system-wide alternatives
+[    0.029193] CPU features: detected: ACTLR virtualization (architectural?)
+[    0.029282] Memory: 21021728K/24207360K available (6848K kernel code, 1190K rwdata, 2032K rodata, 768K init, 409K bss, 3181376K reserved, 0K cma-reserved)
+[    0.029554] devtmpfs: initialized
+[    0.030296] entering initcall level: pure
+[    0.030334] calling  param_sysfs_init+0x0/0x58 @ 1
+[    0.030381] initcall param_sysfs_init+0x0/0x58 returned 0 after 0 usecs
+[    0.030439] calling  ipc_ns_init+0x0/0x58 @ 1
+[    0.030484] initcall ipc_ns_init+0x0/0x58 returned 0 after 0 usecs
+[    0.030540] calling  mmap_min_addr_init+0x0/0x44 @ 1
+[    0.030586] initcall mmap_min_addr_init+0x0/0x44 returned 0 after 0 usecs
+[    0.030644] calling  pci_realloc_setup_params+0x0/0x64 @ 1
+[    0.030694] initcall pci_realloc_setup_params+0x0/0x64 returned 0 after 0 usecs
+[    0.030756] calling  inet_frag_wq_init+0x0/0x4c @ 1
+[    0.030811] initcall inet_frag_wq_init+0x0/0x4c returned 0 after 0 usecs
+[    0.030884] entering initcall level: core
+[    0.030923] calling  fpsimd_init+0x0/0x4c @ 1
+[    0.030964] initcall fpsimd_init+0x0/0x4c returned 0 after 0 usecs
+[    0.031018] calling  init_amu_fie+0x0/0x38 @ 1
+[    0.031060] initcall init_amu_fie+0x0/0x38 returned 0 after 0 usecs
+[    0.031115] calling  apple_amx_init+0x0/0x64 @ 1
+[    0.031159] initcall apple_amx_init+0x0/0x64 returned 0 after 0 usecs
+[    0.031205] calling  wq_sysfs_init+0x0/0x24 @ 1
+[    0.031256] initcall wq_sysfs_init+0x0/0x24 returned 0 after 0 usecs
+[    0.031312] calling  pm_init+0x0/0x60 @ 1
+[    0.031355] initcall pm_init+0x0/0x60 returned 0 after 0 usecs
+[    0.031406] calling  rcu_set_runtime_mode+0x0/0x24 @ 1
+[    0.031453] initcall rcu_set_runtime_mode+0x0/0x24 returned 0 after 0 usecs
+[    0.031512] calling  rcu_init_tasks_generic+0x0/0x18 @ 1
+[    0.031567] initcall rcu_init_tasks_generic+0x0/0x18 returned 0 after 0 usecs
+[    0.031628] calling  posixtimer_init+0x0/0xdc @ 1
+[    0.031674] posixtimers hash table entries: 512 (order: 0, 8192 bytes, linear)
+[    0.031736] initcall posixtimer_init+0x0/0xdc returned 0 after 0 usecs
+[    0.031793] calling  futex_init+0x0/0x2cc @ 1
+[    0.031840] futex hash table entries: 256 (16384 bytes on 1 NUMA nodes, total 16 KiB, linear).
+[    0.031911] initcall futex_init+0x0/0x2cc returned 0 after 0 usecs
+[    0.031965] calling  cgroup_wq_init+0x0/0x80 @ 1
+[    0.032010] initcall cgroup_wq_init+0x0/0x80 returned 0 after 0 usecs
+[    0.032066] calling  cgroup1_wq_init+0x0/0x38 @ 1
+[    0.032111] initcall cgroup1_wq_init+0x0/0x38 returned 0 after 0 usecs
+[    0.032168] calling  bpf_offload_init+0x0/0x2c @ 1
+[    0.032215] initcall bpf_offload_init+0x0/0x2c returned 0 after 0 usecs
+[    0.032273] calling  cgroup_bpf_wq_init+0x0/0x40 @ 1
+[    0.032320] initcall cgroup_bpf_wq_init+0x0/0x40 returned 0 after 0 usecs
+[    0.032379] calling  execmem_late_init+0x0/0x18 @ 1
+[    0.032425] 7472 pages in range for non-PLT usage
+[    0.032426] 130352 pages in range for PLT usage
+[    0.032469] initcall execmem_late_init+0x0/0x18 returned 0 after 0 usecs
+[    0.032568] calling  fsnotify_init+0x0/0x34 @ 1
+[    0.032613] initcall fsnotify_init+0x0/0x34 returned 0 after 0 usecs
+[    0.032669] calling  filelock_init+0x0/0x100 @ 1
+[    0.032715] initcall filelock_init+0x0/0x100 returned 0 after 0 usecs
+[    0.032772] calling  init_script_binfmt+0x0/0x24 @ 1
+[    0.032818] initcall init_script_binfmt+0x0/0x24 returned 0 after 0 usecs
+[    0.032877] calling  init_elf_binfmt+0x0/0x24 @ 1
+[    0.032922] initcall init_elf_binfmt+0x0/0x24 returned 0 after 0 usecs
+[    0.032979] calling  configfs_init+0x0/0xc4 @ 1
+[    0.033023] initcall configfs_init+0x0/0xc4 returned 0 after 0 usecs
+[    0.033079] calling  pinctrl_init+0x0/0x8 @ 1
+[    0.033121] initcall pinctrl_init+0x0/0x8 returned 0 after 0 usecs
+[    0.033176] calling  gpiolib_dev_init+0x0/0x1a4 @ 1
+[    0.033232] initcall gpiolib_dev_init+0x0/0x1a4 returned 0 after 0 usecs
+[    0.033290] calling  genpd_bus_init+0x0/0xb0 @ 1
+[    0.033343] initcall genpd_bus_init+0x0/0xb0 returned 0 after 0 usecs
+[    0.033399] calling  iommu_init+0x0/0x3c @ 1
+[    0.033442] initcall iommu_init+0x0/0x3c returned 0 after 0 usecs
+[    0.033496] calling  free_raw_capacity+0x0/0x30 @ 1
+[    0.033546] initcall free_raw_capacity+0x0/0x30 returned 0 after 0 usecs
+[    0.033604] calling  arch_timer_evtstrm_register+0x0/0x54 @ 1
+[    0.033655] initcall arch_timer_evtstrm_register+0x0/0x54 returned 0 after 0 usecs
+[    0.033718] calling  sock_init+0x0/0xbc @ 1
+[    0.033774] initcall sock_init+0x0/0xbc returned 0 after 0 usecs
+[    0.033827] calling  net_inuse_init+0x0/0x2c @ 1
+[    0.033872] initcall net_inuse_init+0x0/0x2c returned 0 after 0 usecs
+[    0.033928] calling  sock_struct_check+0x0/0x8 @ 1
+[    0.033972] initcall sock_struct_check+0x0/0x8 returned 0 after 0 usecs
+[    0.034030] calling  init_default_flow_dissectors+0x0/0x5c @ 1
+[    0.034083] initcall init_default_flow_dissectors+0x0/0x5c returned 0 after 0 usecs
+[    0.034147] calling  netlink_proto_init+0x0/0xec @ 1
+[    0.034234] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.034294] initcall netlink_proto_init+0x0/0xec returned 0 after 0 usecs
+[    0.034352] calling  genl_init+0x0/0x40 @ 1
+[    0.034396] initcall genl_init+0x0/0x40 returned 0 after 0 usecs
+[    0.034454] entering initcall level: postcore
+[    0.034495] calling  debug_monitors_init+0x0/0x34 @ 1
+[    0.034543] initcall debug_monitors_init+0x0/0x34 returned 0 after 0 usecs
+[    0.034602] calling  alloc_taint_buf+0x0/0x84 @ 1
+[    0.034648] initcall alloc_taint_buf+0x0/0x84 returned 0 after 0 usecs
+[    0.034705] calling  init_overflow_sysctl+0x0/0x34 @ 1
+[    0.034753] initcall init_overflow_sysctl+0x0/0x34 returned 0 after 0 usecs
+[    0.034814] calling  irq_sysfs_init+0x0/0xb8 @ 1
+[    0.034905] initcall irq_sysfs_init+0x0/0xb8 returned 0 after 0 usecs
+[    0.034961] calling  dma_atomic_pool_init+0x0/0xac @ 1
+[    0.035145] DMA: preallocated 4096 KiB GFP_KERNEL pool for atomic allocations
+[    0.035206] initcall dma_atomic_pool_init+0x0/0xac returned 0 after 0 usecs
+[    0.035266] calling  bdi_class_init+0x0/0x1c @ 1
+[    0.035311] initcall bdi_class_init+0x0/0x1c returned 0 after 0 usecs
+[    0.035367] calling  mm_sysfs_init+0x0/0x3c @ 1
+[    0.035411] initcall mm_sysfs_init+0x0/0x3c returned 0 after 0 usecs
+[    0.035468] calling  init_per_zone_wmark_min+0x0/0x24 @ 1
+[    0.035519] initcall init_per_zone_wmark_min+0x0/0x24 returned 0 after 0 usecs
+[    0.035580] calling  gpio_shared_init+0x0/0xec @ 1
+[    0.035667] initcall gpio_shared_init+0x0/0xec returned 0 after 0 usecs
+[    0.035724] calling  pcibus_class_init+0x0/0x1c @ 1
+[    0.035771] initcall pcibus_class_init+0x0/0x1c returned 0 after 0 usecs
+[    0.035829] calling  pci_driver_init+0x0/0x54 @ 1
+[    0.035879] initcall pci_driver_init+0x0/0x54 returned 0 after 0 usecs
+[    0.035935] calling  amba_init+0x0/0x1c @ 1
+[    0.035978] initcall amba_init+0x0/0x1c returned 0 after 0 usecs
+[    0.036031] calling  tty_class_init+0x0/0x1c @ 1
+[    0.036076] initcall tty_class_init+0x0/0x1c returned 0 after 0 usecs
+[    0.036132] calling  vtconsole_class_init+0x0/0xf8 @ 1
+[    0.036186] initcall vtconsole_class_init+0x0/0xf8 returned 0 after 0 usecs
+[    0.036246] calling  iommu_dev_init+0x0/0x1c @ 1
+[    0.036291] initcall iommu_dev_init+0x0/0x1c returned 0 after 0 usecs
+[    0.036349] calling  devlink_class_init+0x0/0x50 @ 1
+[    0.036397] initcall devlink_class_init+0x0/0x50 returned 0 after 0 usecs
+[    0.036456] calling  regmap_initcall+0x0/0x8 @ 1
+[    0.036500] initcall regmap_initcall+0x0/0x8 returned 0 after 0 usecs
+[    0.036556] calling  spmi_init+0x0/0x2c @ 1
+[    0.036600] initcall spmi_init+0x0/0x2c returned 0 after 0 usecs
+[    0.036654] calling  i2c_init+0x0/0xa4 @ 1
+[    0.036699] initcall i2c_init+0x0/0xa4 returned 0 after 0 usecs
+[    0.036753] calling  kobject_uevent_init+0x0/0x1c @ 1
+[    0.036801] initcall kobject_uevent_init+0x0/0x1c returned 0 after 0 usecs
+[    0.036875] entering initcall level: arch
+[    0.036913] calling  reserve_memblock_reserved_regions+0x0/0x110 @ 1
+[    0.036970] initcall reserve_memblock_reserved_regions+0x0/0x110 returned 0 after 0 usecs
+[    0.037038] calling  vdso_init+0x0/0x24 @ 1
+[    0.037078] initcall vdso_init+0x0/0x24 returned 0 after 0 usecs
+[    0.037131] calling  arm64_create_dummy_rsi_dev+0x0/0x38 @ 1
+[    0.037182] initcall arm64_create_dummy_rsi_dev+0x0/0x38 returned 0 after 0 usecs
+[    0.037247] calling  adjust_protection_map+0x0/0x8 @ 1
+[    0.037294] initcall adjust_protection_map+0x0/0x8 returned 0 after 0 usecs
+[    0.037354] calling  asids_update_limit+0x0/0x6c @ 1
+[    0.037401] ASID allocator initialised with 65536 entries
+[    0.037449] initcall asids_update_limit+0x0/0x6c returned 0 after 0 usecs
+[    0.037508] calling  kcmp_cookies_init+0x0/0x50 @ 1
+[    0.037555] initcall kcmp_cookies_init+0x0/0x50 returned 0 after 0 usecs
+[    0.037613] calling  serial_base_init+0x0/0x68 @ 1
+[    0.037669] initcall serial_base_init+0x0/0x68 returned 0 after 0 usecs
+[    0.037726] calling  iommu_dma_init+0x0/0x14 @ 1
+[    0.037773] initcall iommu_dma_init+0x0/0x14 returned 0 after 0 usecs
+[    0.037829] calling  of_platform_default_populate_init+0x0/0xf8 @ 1
+[    0.038302] initcall of_platform_default_populate_init+0x0/0xf8 returned 0 after 0 usecs
+[    0.038384] entering initcall level: subsys
+[    0.038424] calling  init_fork_sysctl+0x0/0x34 @ 1
+[    0.038470] initcall init_fork_sysctl+0x0/0x34 returned 0 after 0 usecs
+[    0.038528] calling  uid_cache_init+0x0/0xd8 @ 1
+[    0.038573] initcall uid_cache_init+0x0/0xd8 returned 0 after 0 usecs
+[    0.038630] calling  pid_namespace_sysctl_init+0x0/0x24 @ 1
+[    0.038683] initcall pid_namespace_sysctl_init+0x0/0x24 returned 0 after 0 usecs
+[    0.038746] calling  user_namespace_sysctl_init+0x0/0xd4 @ 1
+[    0.038800] initcall user_namespace_sysctl_init+0x0/0xd4 returned 0 after 0 usecs
+[    0.038863] calling  init_rtmutex_sysctl+0x0/0x34 @ 1
+[    0.038910] initcall init_rtmutex_sysctl+0x0/0x34 returned 0 after 0 usecs
+[    0.038969] calling  printk_set_kthreads_ready+0x0/0x50 @ 1
+[    0.039019] initcall printk_set_kthreads_ready+0x0/0x50 returned 0 after 0 usecs
+[    0.039082] calling  init_rcu_stall_sysctl+0x0/0x34 @ 1
+[    0.039130] initcall init_rcu_stall_sysctl+0x0/0x34 returned 0 after 0 usecs
+[    0.039190] calling  init_module_sysctl+0x0/0x34 @ 1
+[    0.039236] initcall init_module_sysctl+0x0/0x34 returned 0 after 0 usecs
+[    0.039295] calling  init_kexec_sysctl+0x0/0xb8 @ 1
+[    0.039342] initcall init_kexec_sysctl+0x0/0xb8 returned 0 after 0 usecs
+[    0.039400] calling  cgroup_sysfs_init+0x0/0x24 @ 1
+[    0.039447] initcall cgroup_sysfs_init+0x0/0x24 returned 0 after 0 usecs
+[    0.039505] calling  user_namespaces_init+0x0/0x7c @ 1
+[    0.039553] initcall user_namespaces_init+0x0/0x7c returned 0 after 0 usecs
+[    0.039613] calling  dev_map_init+0x0/0x20 @ 1
+[    0.039656] initcall dev_map_init+0x0/0x20 returned 0 after 0 usecs
+[    0.039711] calling  netns_bpf_init+0x0/0x1c @ 1
+[    0.039755] initcall netns_bpf_init+0x0/0x1c returned 0 after 0 usecs
+[    0.039812] calling  oom_init+0x0/0x74 @ 1
+[    0.039859] initcall oom_init+0x0/0x74 returned 0 after 0 usecs
+[    0.039913] calling  init_user_buckets+0x0/0x3c @ 1
+[    0.039959] initcall init_user_buckets+0x0/0x3c returned 0 after 0 usecs
+[    0.040017] calling  init_vm_util_sysctls+0x0/0x34 @ 1
+[    0.040066] initcall init_vm_util_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.040126] calling  default_bdi_init+0x0/0x3c @ 1
+[    0.040188] initcall default_bdi_init+0x0/0x3c returned 0 after 0 usecs
+[    0.040246] calling  cgwb_init+0x0/0x3c @ 1
+[    0.040287] initcall cgwb_init+0x0/0x3c returned 0 after 0 usecs
+[    0.040341] calling  percpu_enable_async+0x0/0x14 @ 1
+[    0.040387] initcall percpu_enable_async+0x0/0x14 returned 0 after 0 usecs
+[    0.040445] calling  init_mm_sysctl+0x0/0x34 @ 1
+[    0.040489] initcall init_mm_sysctl+0x0/0x34 returned 0 after 0 usecs
+[    0.040544] calling  init_user_reserve+0x0/0x30 @ 1
+[    0.040592] initcall init_user_reserve+0x0/0x30 returned 0 after 0 usecs
+[    0.040650] calling  init_admin_reserve+0x0/0x30 @ 1
+[    0.040696] initcall init_admin_reserve+0x0/0x30 returned 0 after 0 usecs
+[    0.040755] calling  init_reserve_notifier+0x0/0x8 @ 1
+[    0.040802] initcall init_reserve_notifier+0x0/0x8 returned 0 after 0 usecs
+[    0.040861] calling  init_msg_buckets+0x0/0x3c @ 1
+[    0.040907] initcall init_msg_buckets+0x0/0x3c returned 0 after 0 usecs
+[    0.040965] calling  init_bio+0x0/0x164 @ 1
+[    0.041031] initcall init_bio+0x0/0x164 returned 0 after 0 usecs
+[    0.041084] calling  blk_ioc_init+0x0/0x4c @ 1
+[    0.041126] initcall blk_ioc_init+0x0/0x4c returned 0 after 0 usecs
+[    0.041181] calling  blk_mq_init+0x0/0x13c @ 1
+[    0.041223] initcall blk_mq_init+0x0/0x13c returned 0 after 0 usecs
+[    0.041279] calling  genhd_device_init+0x0/0x5c @ 1
+[    0.041337] initcall genhd_device_init+0x0/0x5c returned 0 after 0 usecs
+[    0.041394] calling  bio_crypt_ctx_init+0x0/0x94 @ 1
+[    0.041443] initcall bio_crypt_ctx_init+0x0/0x94 returned 0 after 0 usecs
+[    0.041501] calling  blk_crypto_sysfs_init+0x0/0x58 @ 1
+[    0.041538] initcall blk_crypto_sysfs_init+0x0/0x58 returned 0 after 0 usecs
+[    0.041598] calling  aes_mod_init+0x0/0x44 @ 1
+[    0.041643] initcall aes_mod_init+0x0/0x44 returned 0 after 0 usecs
+[    0.041698] calling  sha1_mod_init+0x0/0x2c @ 1
+[    0.041741] initcall sha1_mod_init+0x0/0x2c returned 0 after 0 usecs
+[    0.041796] calling  sha256_mod_init+0x0/0x44 @ 1
+[    0.041841] initcall sha256_mod_init+0x0/0x44 returned 0 after 0 usecs
+[    0.041897] calling  pci_slot_init+0x0/0x58 @ 1
+[    0.041943] initcall pci_slot_init+0x0/0x58 returned 0 after 0 usecs
+[    0.041997] calling  fbmem_init+0x0/0x5c @ 1
+[    0.042045] initcall fbmem_init+0x0/0x5c returned 0 after 0 usecs
+[    0.042099] calling  misc_init+0x0/0xc8 @ 1
+[    0.042143] initcall misc_init+0x0/0xc8 returned 0 after 0 usecs
+[    0.042196] calling  iommu_subsys_init+0x0/0x130 @ 1
+[    0.042243] iommu: Default domain type: Translated
+[    0.042287] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.042340] initcall iommu_subsys_init+0x0/0x130 returned 0 after 0 usecs
+[    0.042399] calling  register_cpu_capacity_sysctl+0x0/0x3c @ 1
+[    0.042456] initcall register_cpu_capacity_sysctl+0x0/0x3c returned 0 after 0 usecs
+[    0.042521] calling  dma_buf_init+0x0/0x30 @ 1
+[    0.042568] initcall dma_buf_init+0x0/0x30 returned 0 after 0 usecs
+[    0.042624] calling  dma_fence_init_stub+0x0/0x90 @ 1
+[    0.042672] initcall dma_fence_init_stub+0x0/0x90 returned 0 after 0 usecs
+[    0.042731] calling  dma_heap_init+0x0/0x80 @ 1
+[    0.042775] initcall dma_heap_init+0x0/0x80 returned 0 after 0 usecs
+[    0.042831] calling  usb_common_init+0x0/0x14 @ 1
+[    0.042876] initcall usb_common_init+0x0/0x14 returned 0 after 0 usecs
+[    0.042933] calling  usb_udc_init+0x0/0x50 @ 1
+[    0.042980] initcall usb_udc_init+0x0/0x50 returned 0 after 0 usecs
+[    0.043036] calling  input_init+0x0/0x90 @ 1
+[    0.043080] initcall input_init+0x0/0x90 returned 0 after 0 usecs
+[    0.043134] calling  rtc_init+0x0/0x1c @ 1
+[    0.043175] initcall rtc_init+0x0/0x1c returned 0 after 0 usecs
+[    0.043229] calling  power_supply_class_init+0x0/0x20 @ 1
+[    0.043283] initcall power_supply_class_init+0x0/0x20 returned 0 after 0 usecs
+[    0.043343] calling  proto_init+0x0/0x1c @ 1
+[    0.043385] initcall proto_init+0x0/0x1c returned 0 after 0 usecs
+[    0.043438] calling  net_dev_init+0x0/0x2dc @ 1
+[    0.043542] initcall net_dev_init+0x0/0x2dc returned 0 after 0 usecs
+[    0.043598] calling  neigh_init+0x0/0x24 @ 1
+[    0.043639] initcall neigh_init+0x0/0x24 returned 0 after 0 usecs
+[    0.043693] calling  fib_notifier_init+0x0/0x1c @ 1
+[    0.043739] initcall fib_notifier_init+0x0/0x1c returned 0 after 0 usecs
+[    0.043797] calling  netdev_genl_init+0x0/0x50 @ 1
+[    0.043847] initcall netdev_genl_init+0x0/0x50 returned 0 after 0 usecs
+[    0.043904] calling  page_pool_user_init+0x0/0x1c @ 1
+[    0.043951] initcall page_pool_user_init+0x0/0x1c returned 0 after 0 usecs
+[    0.044010] calling  nexthop_init+0x0/0x64 @ 1
+[    0.044055] initcall nexthop_init+0x0/0x64 returned 0 after 0 usecs
+[    0.044110] calling  bt_init+0x0/0xb4 @ 1
+[    0.044151] Bluetooth: Core ver 2.22
+[    0.044189] NET: Registered PF_BLUETOOTH protocol family
+[    0.044236] Bluetooth: HCI device and connection manager initialized
+[    0.044292] Bluetooth: HCI socket layer initialized
+[    0.044337] Bluetooth: L2CAP socket layer initialized
+[    0.044383] Bluetooth: SCO socket layer initialized
+[    0.044428] initcall bt_init+0x0/0xb4 returned 0 after 0 usecs
+[    0.044481] calling  sys_info_sysctl_init+0x0/0x34 @ 1
+[    0.044529] initcall sys_info_sysctl_init+0x0/0x34 returned 0 after 0 usecs
+[    0.044589] calling  vsprintf_init_hashval+0x0/0x20 @ 1
+[    0.044638] initcall vsprintf_init_hashval+0x0/0x20 returned 0 after 0 usecs
+[    0.044689] calling  init_32bit_el0_mask+0x0/0x50 @ 1
+[    0.044735] initcall init_32bit_el0_mask+0x0/0x50 returned 0 after 0 usecs
+[    0.044794] calling  vga_arb_device_init+0x0/0xbc @ 1
+[    0.044862] vgaarb: loaded
+[    0.044891] initcall vga_arb_device_init+0x0/0xbc returned 0 after 0 usecs
+[    0.044951] calling  watchdog_init+0x0/0x24 @ 1
+[    0.045004] initcall watchdog_init+0x0/0x24 returned 0 after 0 usecs
+[    0.045073] entering initcall level: fs
+[    0.045111] calling  create_debug_debugfs_entry+0x0/0x8 @ 1
+[    0.045163] initcall create_debug_debugfs_entry+0x0/0x8 returned 0 after 0 usecs
+[    0.045227] calling  iomem_init_inode+0x0/0xa8 @ 1
+[    0.045276] initcall iomem_init_inode+0x0/0xa8 returned 0 after 0 usecs
+[    0.045335] calling  irq_proc_init+0x0/0x38 @ 1
+[    0.045378] initcall irq_proc_init+0x0/0x38 returned 0 after 0 usecs
+[    0.045433] calling  clocksource_done_booting+0x0/0x54 @ 1
+[    0.045485] clocksource: Switched to clocksource arch_sys_counter
+[    0.045538] initcall clocksource_done_booting+0x0/0x54 returned 0 after 53 usecs
+[    0.045601] calling  bpf_init+0x0/0xb4 @ 1
+[    0.045643] initcall bpf_init+0x0/0xb4 returned 0 after 1 usecs
+[    0.045696] calling  init_fs_stat_sysctls+0x0/0x34 @ 1
+[    0.045744] initcall init_fs_stat_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.045804] calling  init_fs_exec_sysctls+0x0/0x34 @ 1
+[    0.045852] initcall init_fs_exec_sysctls+0x0/0x34 returned 0 after 1 usecs
+[    0.045912] calling  init_pipe_fs+0x0/0x84 @ 1
+[    0.045957] initcall init_pipe_fs+0x0/0x84 returned 0 after 3 usecs
+[    0.046012] calling  init_fs_namei_sysctls+0x0/0x34 @ 1
+[    0.046062] initcall init_fs_namei_sysctls+0x0/0x34 returned 0 after 1 usecs
+[    0.046122] calling  init_fs_dcache_sysctls+0x0/0x54 @ 1
+[    0.046172] initcall init_fs_dcache_sysctls+0x0/0x54 returned 0 after 1 usecs
+[    0.046233] calling  init_fs_namespace_sysctls+0x0/0x34 @ 1
+[    0.046283] initcall init_fs_namespace_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.046346] calling  cgroup_writeback_init+0x0/0x3c @ 1
+[    0.046395] initcall cgroup_writeback_init+0x0/0x3c returned 0 after 0 usecs
+[    0.046455] calling  fserror_init+0x0/0x34 @ 1
+[    0.046498] initcall fserror_init+0x0/0x34 returned 0 after 0 usecs
+[    0.046553] calling  inotify_user_setup+0x0/0x10c @ 1
+[    0.046602] initcall inotify_user_setup+0x0/0x10c returned 0 after 2 usecs
+[    0.046662] calling  eventpoll_init+0x0/0x124 @ 1
+[    0.046708] initcall eventpoll_init+0x0/0x124 returned 0 after 2 usecs
+[    0.046765] calling  anon_inode_init+0x0/0x74 @ 1
+[    0.046811] initcall anon_inode_init+0x0/0x74 returned 0 after 2 usecs
+[    0.046869] calling  proc_locks_init+0x0/0x38 @ 1
+[    0.046913] initcall proc_locks_init+0x0/0x38 returned 0 after 0 usecs
+[    0.046970] calling  init_vm_drop_caches_sysctls+0x0/0x34 @ 1
+[    0.047023] initcall init_vm_drop_caches_sysctls+0x0/0x34 returned 0 after 0 usecs
+[    0.047087] calling  iomap_dio_init+0x0/0x28 @ 1
+[    0.047133] initcall iomap_dio_init+0x0/0x28 returned 0 after 2 usecs
+[    0.047190] calling  iomap_ioend_init+0x0/0x68 @ 1
+[    0.047251] initcall iomap_ioend_init+0x0/0x68 returned 0 after 16 usecs
+[    0.047310] calling  proc_cmdline_init+0x0/0x54 @ 1
+[    0.047357] initcall proc_cmdline_init+0x0/0x54 returned 0 after 0 usecs
+[    0.047415] calling  proc_consoles_init+0x0/0x38 @ 1
+[    0.047461] initcall proc_consoles_init+0x0/0x38 returned 0 after 0 usecs
+[    0.047520] calling  proc_cpuinfo_init+0x0/0x30 @ 1
+[    0.047566] initcall proc_cpuinfo_init+0x0/0x30 returned 0 after 0 usecs
+[    0.047624] calling  proc_devices_init+0x0/0x48 @ 1
+[    0.047670] initcall proc_devices_init+0x0/0x48 returned 0 after 0 usecs
+[    0.047729] calling  proc_loadavg_init+0x0/0x44 @ 1
+[    0.047774] initcall proc_loadavg_init+0x0/0x44 returned 0 after 0 usecs
+[    0.047832] calling  proc_meminfo_init+0x0/0x44 @ 1
+[    0.047879] initcall proc_meminfo_init+0x0/0x44 returned 0 after 0 usecs
+[    0.047927] calling  proc_stat_init+0x0/0x30 @ 1
+[    0.047971] initcall proc_stat_init+0x0/0x30 returned 0 after 0 usecs
+[    0.048028] calling  proc_uptime_init+0x0/0x44 @ 1
+[    0.048074] initcall proc_uptime_init+0x0/0x44 returned 0 after 0 usecs
+[    0.048131] calling  proc_version_init+0x0/0x44 @ 1
+[    0.048177] initcall proc_version_init+0x0/0x44 returned 0 after 0 usecs
+[    0.048235] calling  proc_softirqs_init+0x0/0x44 @ 1
+[    0.048282] initcall proc_softirqs_init+0x0/0x44 returned 0 after 0 usecs
+[    0.048341] calling  proc_kmsg_init+0x0/0x30 @ 1
+[    0.048386] initcall proc_kmsg_init+0x0/0x30 returned 0 after 0 usecs
+[    0.048442] calling  init_ramfs_fs+0x0/0x1c @ 1
+[    0.048487] initcall init_ramfs_fs+0x0/0x1c returned 0 after 0 usecs
+[    0.048543] calling  chr_dev_init+0x0/0xb8 @ 1
+[    0.049129] initcall chr_dev_init+0x0/0xb8 returned 0 after 543 usecs
+[    0.049187] calling  firmware_class_init+0x0/0x38 @ 1
+[    0.049234] initcall firmware_class_init+0x0/0x38 returned 0 after 0 usecs
+[    0.049299] calling  sysctl_core_init+0x0/0x3c @ 1
+[    0.049354] initcall sysctl_core_init+0x0/0x3c returned 0 after 9 usecs
+[    0.049411] calling  eth_offload_init+0x0/0x20 @ 1
+[    0.049457] initcall eth_offload_init+0x0/0x20 returned 0 after 0 usecs
+[    0.049514] calling  ipv4_offload_init+0x0/0xb4 @ 1
+[    0.049561] initcall ipv4_offload_init+0x0/0xb4 returned 0 after 1 usecs
+[    0.049619] calling  inet_init+0x0/0x264 @ 1
+[    0.049665] NET: Registered PF_INET protocol family
+[    0.049767] IP idents hash table entries: 262144 (order: 7, 2097152 bytes, linear)
+[    0.052346] tcp_listen_portaddr_hash hash table entries: 16384 (order: 4, 262144 bytes, linear)
+[    0.052432] Table-perturb hash table entries: 65536 (order: 4, 262144 bytes, linear)
+[    0.052499] TCP established hash table entries: 262144 (order: 7, 2097152 bytes, linear)
+[    0.052722] TCP bind hash table entries: 65536 (order: 7, 2097152 bytes, linear)
+[    0.052877] TCP: Hash tables configured (established 262144 bind 65536)
+[    0.052943] UDP hash table entries: 16384 (order: 6, 1048576 bytes, linear)
+[    0.053104] initcall inet_init+0x0/0x264 returned 0 after 3443 usecs
+[    0.053161] calling  af_unix_init+0x0/0xd0 @ 1
+[    0.053205] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.053259] initcall af_unix_init+0x0/0xd0 returned 0 after 55 usecs
+[    0.053315] calling  ipv6_offload_init+0x0/0xe4 @ 1
+[    0.053363] initcall ipv6_offload_init+0x0/0xe4 returned 0 after 2 usecs
+[    0.053421] calling  cfg80211_init+0x0/0xc4 @ 1
+[    0.053558] probe of regulatory with driver faux_driver returned 0 after 5 usecs
+[    0.053631] initcall cfg80211_init+0x0/0xc4 returned 0 after 166 usecs
+[    0.053689] calling  pci_apply_final_quirks+0x0/0x140 @ 1
+[    0.053740] PCI: CLS 0 bytes, default 64
+[    0.053778] initcall pci_apply_final_quirks+0x0/0x140 returned 0 after 39 usecs
+[    0.053841] calling  populate_rootfs+0x0/0x50 @ 1
+[    0.053887] initcall populate_rootfs+0x0/0x50 returned 0 after 2 usecs
+[    0.053959] entering initcall level: device
+[    0.053998] calling  register_arm64_panic_block+0x0/0x28 @ 1
+[    0.054049] initcall register_arm64_panic_block+0x0/0x28 returned 0 after 0 usecs
+[    0.054112] calling  cpuinfo_regs_init+0x0/0xcc @ 1
+[    0.054196] Unpacking initramfs...
+[    0.061487] initcall cpuinfo_regs_init+0x0/0xcc returned 0 after 7330 usecs
+[    0.061549] calling  aarch32_el0_sysfs_init+0x0/0x5c @ 1
+[    0.061598] initcall aarch32_el0_sysfs_init+0x0/0x5c returned 0 after 0 usecs
+[    0.061659] calling  proc_execdomains_init+0x0/0x34 @ 1
+[    0.061709] initcall proc_execdomains_init+0x0/0x34 returned 0 after 2 usecs
+[    0.061770] calling  register_warn_debugfs+0x0/0x8 @ 1
+[    0.061817] initcall register_warn_debugfs+0x0/0x8 returned 0 after 0 usecs
+[    0.061877] calling  ioresources_init+0x0/0x6c @ 1
+[    0.061925] initcall ioresources_init+0x0/0x6c returned 0 after 2 usecs
+[    0.061982] calling  psi_proc_init+0x0/0x84 @ 1
+[    0.062027] initcall psi_proc_init+0x0/0x84 returned 0 after 2 usecs
+[    0.062072] calling  proc_modules_init+0x0/0x30 @ 1
+[    0.062119] initcall proc_modules_init+0x0/0x30 returned 0 after 0 usecs
+[    0.062177] calling  timekeeping_init_ops+0x0/0x20 @ 1
+[    0.062225] initcall timekeeping_init_ops+0x0/0x20 returned 0 after 0 usecs
+[    0.062284] calling  init_clocksource_sysfs+0x0/0x54 @ 1
+[    0.062345] initcall init_clocksource_sysfs+0x0/0x54 returned 0 after 12 usecs
+[    0.062407] calling  init_timer_list_procfs+0x0/0x40 @ 1
+[    0.062456] initcall init_timer_list_procfs+0x0/0x40 returned 0 after 0 usecs
+[    0.062517] calling  alarmtimer_init+0x0/0xc8 @ 1
+[    0.062576] initcall alarmtimer_init+0x0/0xc8 returned 0 after 14 usecs
+[    0.062634] calling  clockevents_init_sysfs+0x0/0x2c @ 1
+[    0.062698] initcall clockevents_init_sysfs+0x0/0x2c returned 0 after 16 usecs
+[    0.062760] calling  sched_clock_syscore_init+0x0/0x20 @ 1
+[    0.062810] initcall sched_clock_syscore_init+0x0/0x20 returned 0 after 0 usecs
+[    0.062872] calling  kallsyms_init+0x0/0x30 @ 1
+[    0.062916] initcall kallsyms_init+0x0/0x30 returned 0 after 1 usecs
+[    0.062972] calling  pid_namespaces_init+0x0/0xb4 @ 1
+[    0.063025] initcall pid_namespaces_init+0x0/0xb4 returned 0 after 6 usecs
+[    0.063084] calling  seccomp_sysctl_init+0x0/0x34 @ 1
+[    0.063135] initcall seccomp_sysctl_init+0x0/0x34 returned 0 after 3 usecs
+[    0.063194] calling  utsname_sysctl_init+0x0/0x2c @ 1
+[    0.063243] initcall utsname_sysctl_init+0x0/0x2c returned 0 after 2 usecs
+[    0.063303] calling  system_trusted_keyring_init+0x0/0x68 @ 1
+[    0.063355] Initialise system trusted keyrings
+[    0.063404] initcall system_trusted_keyring_init+0x0/0x68 returned 0 after 49 usecs
+[    0.063469] calling  kswapd_init+0x0/0x3c @ 1
+[    0.063524] initcall kswapd_init+0x0/0x3c returned 0 after 12 usecs
+[    0.063579] calling  mm_compute_batch_init+0x0/0x80 @ 1
+[    0.063628] initcall mm_compute_batch_init+0x0/0x80 returned 0 after 0 usecs
+[    0.063689] calling  workingset_init+0x0/0xf4 @ 1
+[    0.063733] workingset: timestamp_bits=46 (anon: 41) max_order=21 bucket_order=0 (anon: 0)
+[    0.063802] initcall workingset_init+0x0/0xf4 returned 0 after 69 usecs
+[    0.063859] calling  proc_vmalloc_init+0x0/0x34 @ 1
+[    0.063904] initcall proc_vmalloc_init+0x0/0x34 returned 0 after 0 usecs
+[    0.063961] calling  fcntl_init+0x0/0x4c @ 1
+[    0.064004] initcall fcntl_init+0x0/0x4c returned 0 after 1 usecs
+[    0.064058] calling  proc_filesystems_init+0x0/0x44 @ 1
+[    0.064107] initcall proc_filesystems_init+0x0/0x44 returned 0 after 1 usecs
+[    0.064167] calling  start_dirtytime_writeback+0x0/0x68 @ 1
+[    0.064220] initcall start_dirtytime_writeback+0x0/0x68 returned 0 after 2 usecs
+[    0.064283] calling  dio_init+0x0/0x54 @ 1
+[    0.064324] initcall dio_init+0x0/0x54 returned 0 after 0 usecs
+[    0.064377] calling  fanotify_user_setup+0x0/0x198 @ 1
+[    0.064431] initcall fanotify_user_setup+0x0/0x198 returned 0 after 6 usecs
+[    0.064491] calling  aio_setup+0x0/0x104 @ 1
+[    0.064543] initcall aio_setup+0x0/0x104 returned 0 after 10 usecs
+[    0.064597] calling  mbcache_init+0x0/0x5c @ 1
+[    0.064641] initcall mbcache_init+0x0/0x5c returned 0 after 0 usecs
+[    0.064696] calling  init_devpts_fs+0x0/0x48 @ 1
+[    0.064743] initcall init_devpts_fs+0x0/0x48 returned 0 after 2 usecs
+[    0.064799] calling  ext4_init_fs+0x0/0x120 @ 1
+[    0.064857] initcall ext4_init_fs+0x0/0x120 returned 0 after 14 usecs
+[    0.064915] calling  journal_init+0x0/0x48 @ 1
+[    0.064962] initcall journal_init+0x0/0x48 returned 0 after 3 usecs
+[    0.065017] calling  init_fat_fs+0x0/0x3c @ 1
+[    0.065061] initcall init_fat_fs+0x0/0x3c returned 0 after 1 usecs
+[    0.065116] calling  init_vfat_fs+0x0/0x1c @ 1
+[    0.065160] initcall init_vfat_fs+0x0/0x1c returned 0 after 0 usecs
+[    0.065215] calling  init_nls_cp437+0x0/0x20 @ 1
+[    0.065260] initcall init_nls_cp437+0x0/0x20 returned 0 after 0 usecs
+[    0.065316] calling  init_nls_iso8859_1+0x0/0x20 @ 1
+[    0.065353] initcall init_nls_iso8859_1+0x0/0x20 returned 0 after 0 usecs
+[    0.065412] calling  init_autofs_fs+0x0/0x38 @ 1
+[    0.069492] initcall init_autofs_fs+0x0/0x38 returned 0 after 4035 usecs
+[    0.069552] calling  ipc_init+0x0/0x30 @ 1
+[    0.069603] initcall ipc_init+0x0/0x30 returned 0 after 10 usecs
+[    0.069657] calling  ipc_sysctl_init+0x0/0x38 @ 1
+[    0.069709] initcall ipc_sysctl_init+0x0/0x38 returned 0 after 7 usecs
+[    0.069767] calling  init_mqueue_fs+0x0/0xd8 @ 1
+[    0.069821] initcall init_mqueue_fs+0x0/0xd8 returned 0 after 9 usecs
+[    0.069878] calling  key_proc_init+0x0/0x7c @ 1
+[    0.069922] initcall key_proc_init+0x0/0x7c returned 0 after 1 usecs
+[    0.069977] calling  rsa_init+0x0/0x70 @ 1
+[    0.070019] initcall rsa_init+0x0/0x70 returned 0 after 2 usecs
+[    0.070071] calling  cryptomgr_init+0x0/0x1c @ 1
+[    0.070114] initcall cryptomgr_init+0x0/0x1c returned 0 after 0 usecs
+[    0.070169] calling  crypto_sha256_mod_init+0x0/0x20 @ 1
+[    0.070220] initcall crypto_sha256_mod_init+0x0/0x20 returned 0 after 2 usecs
+[    0.070280] calling  ecdh_init+0x0/0x80 @ 1
+[    0.070321] initcall ecdh_init+0x0/0x80 returned 0 after 1 usecs
+[    0.070373] calling  asymmetric_key_init+0x0/0x1c @ 1
+[    0.070420] Key type asymmetric registered
+[    0.070459] initcall asymmetric_key_init+0x0/0x1c returned 0 after 39 usecs
+[    0.070518] calling  x509_key_init+0x0/0x1c @ 1
+[    0.070561] Asymmetric key parser 'x509' registered
+[    0.070605] initcall x509_key_init+0x0/0x1c returned 0 after 44 usecs
+[    0.070661] calling  blkdev_init+0x0/0x28 @ 1
+[    0.070707] initcall blkdev_init+0x0/0x28 returned 0 after 5 usecs
+[    0.070761] calling  proc_genhd_init+0x0/0x5c @ 1
+[    0.070805] initcall proc_genhd_init+0x0/0x5c returned 0 after 1 usecs
+[    0.070861] calling  percpu_counter_startup+0x0/0x74 @ 1
+[    0.070912] initcall percpu_counter_startup+0x0/0x74 returned 0 after 2 usecs
+[    0.070972] calling  gicv5_iwb_platform_driver_init+0x0/0x28 @ 1
+[    0.071051] initcall gicv5_iwb_platform_driver_init+0x0/0x28 returned 0 after 25 usecs
+[    0.071118] calling  simple_pm_bus_driver_init+0x0/0x28 @ 1
+[    0.071180] CLIDR_EL1.LoC == 0, treating devices not marked dma-noncoherent as DMA coherent
+[    0.071276] probe of soc@200000000 with driver simple-pm-bus returned 0 after 100 usecs
+[    0.071350] probe of 280600000.power-management with driver simple-pm-bus returned 19 after 5 usecs
+[    0.071435] probe of 280900000.power-management with driver simple-pm-bus returned 19 after 5 usecs
+[    0.071525] probe of 288300000.power-management with driver simple-pm-bus returned 19 after 5 usecs
+[    0.071621] initcall simple_pm_bus_driver_init+0x0/0x28 returned 0 after 453 usecs
+[    0.071686] calling  apple_gpio_pinctrl_driver_init+0x0/0x28 @ 1
+[    0.072074] probe of 29c000000.pinctrl with driver apple-gpio-pinctrl returned 0 after 320 usecs
+[    0.072148] initcall apple_gpio_pinctrl_driver_init+0x0/0x28 returned 0 after 409 usecs
+[    0.072215] calling  pcie_portdrv_init+0x0/0x44 @ 1
+[    0.072271] initcall pcie_portdrv_init+0x0/0x44 returned 0 after 10 usecs
+[    0.072330] calling  pci_proc_init+0x0/0xbc @ 1
+[    0.072375] initcall pci_proc_init+0x0/0xbc returned 0 after 1 usecs
+[    0.072430] calling  apple_pcie_driver_init+0x0/0x28 @ 1
+[    0.072505] initcall apple_pcie_driver_init+0x0/0x28 returned 0 after 26 usecs
+[    0.072566] calling  of_fixed_factor_clk_driver_init+0x0/0x28 @ 1
+[    0.072628] initcall of_fixed_factor_clk_driver_init+0x0/0x28 returned 0 after 7 usecs
+[    0.072694] calling  of_fixed_clk_driver_init+0x0/0x28 @ 1
+[    0.072750] initcall of_fixed_clk_driver_init+0x0/0x28 returned 0 after 5 usecs
+[    0.072812] calling  gpio_clk_driver_init+0x0/0x28 @ 1
+[    0.072867] initcall gpio_clk_driver_init+0x0/0x28 returned 0 after 7 usecs
+[    0.072927] calling  gated_fixed_clk_driver_init+0x0/0x28 @ 1
+[    0.072984] initcall gated_fixed_clk_driver_init+0x0/0x28 returned 0 after 4 usecs
+[    0.073048] calling  dockchannel_driver_init+0x0/0x28 @ 1
+[    0.073104] initcall dockchannel_driver_init+0x0/0x28 returned 0 after 6 usecs
+[    0.073166] calling  apple_mbox_driver_init+0x0/0x28 @ 1
+[    0.073272] probe of 28c608000.mailbox with driver apple-mailbox returned 0 after 34 usecs
+[    0.073354] probe of 419608000.mailbox with driver apple-mailbox returned 0 after 19 usecs
+[    0.073428] initcall apple_mbox_driver_init+0x0/0x28 returned 0 after 213 usecs
+[    0.073493] calling  apple_rtkit_helper_driver_init+0x0/0x28 @ 1
+[    0.073554] initcall apple_rtkit_helper_driver_init+0x0/0x28 returned 0 after 7 usecs
+[    0.073620] calling  apple_sart_driver_init+0x0/0x28 @ 1
+[    0.073681] probe of 41dc50000.iommu with driver apple-sart returned -517 after 1 usecs
+[    0.073752] initcall apple_sart_driver_init+0x0/0x28 returned 0 after 82 usecs
+[    0.073813] calling  apple_mcc_driver_init+0x0/0x28 @ 1
+[    0.073870] initcall apple_mcc_driver_init+0x0/0x28 returned 0 after 8 usecs
+[    0.073930] calling  apple_pmgr_ps_driver_init+0x0/0x28 @ 1
+[    0.074011] probe of atc1_common with driver genpd_provider returned 0 after 2 usecs
+[    0.074081] probe of 280600000.power-management:power-controller@210 with driver apple-pmgr-pwrstate returned 0 after 98 usecs
+[    0.074204] probe of atc3_common with driver genpd_provider returned 0 after 1 usecs
+[    0.074271] probe of 280600000.power-management:power-controller@240 with driver apple-pmgr-pwrstate returned 0 after 80 usecs
+[    0.074399] probe of i2c1 with driver genpd_provider returned 0 after 1 usecs
+[    0.074462] probe of 280900000.power-management:power-controller@2c8 with driver apple-pmgr-pwrstate returned 0 after 80 usecs
+[    0.074587] probe of i2c2 with driver genpd_provider returned 0 after 1 usecs
+[    0.074649] probe of 280900000.power-management:power-controller@2d0 with driver apple-pmgr-pwrstate returned 0 after 76 usecs
+[    0.074771] probe of spi_p with driver genpd_provider returned 0 after 1 usecs
+[    0.074835] probe of 280900000.power-management:power-controller@308 with driver apple-pmgr-pwrstate returned 0 after 76 usecs
+[    0.074963] probe of qspi with driver genpd_provider returned 0 after 2 usecs
+[    0.075027] probe of 280900000.power-management:power-controller@350 with driver apple-pmgr-pwrstate returned 0 after 81 usecs
+[    0.075148] probe of fab6_soc with driver genpd_provider returned 0 after 2 usecs
+[    0.075213] probe of 280900000.power-management:power-controller@138 with driver apple-pmgr-pwrstate returned 0 after 76 usecs
+[    0.075339] probe of ans with driver genpd_provider returned 0 after 2 usecs
+[    0.075402] probe of 280900000.power-management:power-controller@140 with driver apple-pmgr-pwrstate returned 0 after 79 usecs
+[    0.075531] probe of atc1_usb_aon with driver genpd_provider returned 0 after 1 usecs
+[    0.075599] probe of 288300000.power-management:power-controller@160 with driver apple-pmgr-pwrstate returned 0 after 87 usecs
+[    0.075726] probe of atc1_usb with driver genpd_provider returned 0 after 1 usecs
+[    0.075793] probe of 288300000.power-management:power-controller@168 with driver apple-pmgr-pwrstate returned 0 after 83 usecs
+[    0.075914] probe of atc1_phymxwrap with driver genpd_provider returned 0 after 1 usecs
+[    0.075983] probe of 288300000.power-management:power-controller@170 with driver apple-pmgr-pwrstate returned 0 after 79 usecs
+[    0.076109] probe of atc3_usb_aon with driver genpd_provider returned 0 after 1 usecs
+[    0.076177] probe of 288300000.power-management:power-controller@190 with driver apple-pmgr-pwrstate returned 0 after 84 usecs
+[    0.076304] probe of atc3_usb with driver genpd_provider returned 0 after 2 usecs
+[    0.076370] probe of 288300000.power-management:power-controller@198 with driver apple-pmgr-pwrstate returned 0 after 82 usecs
+[    0.076497] probe of atc3_phymxwrap with driver genpd_provider returned 0 after 1 usecs
+[    0.076565] probe of 288300000.power-management:power-controller@1a0 with driver apple-pmgr-pwrstate returned 0 after 85 usecs
+[    0.076679] initcall apple_pmgr_ps_driver_init+0x0/0x28 returned 0 after 2698 usecs
+[    0.076745] calling  apple_gfx_tvm_driver_init+0x0/0x28 @ 1
+[    0.076804] initcall apple_gfx_tvm_driver_init+0x0/0x28 returned 0 after 8 usecs
+[    0.076867] calling  apple_pmc_init+0x0/0x28 @ 1
+[    0.076922] initcall apple_pmc_init+0x0/0x28 returned 0 after 10 usecs
+[    0.076979] calling  n_null_init+0x0/0x24 @ 1
+[    0.077022] initcall n_null_init+0x0/0x24 returned 0 after 1 usecs
+[    0.077077] calling  pty_init+0x0/0x18 @ 1
+[    0.085492] initcall pty_init+0x0/0x18 returned 0 after 8374 usecs
+[    0.085538] calling  random_sysctls_init+0x0/0x3c @ 1
+[    0.085589] initcall random_sysctls_init+0x0/0x3c returned 0 after 2 usecs
+[    0.085649] calling  apple_dart_driver_init+0x0/0x28 @ 1
+[    0.085716] initcall apple_dart_driver_init+0x0/0x28 returned 0 after 18 usecs
+[    0.085778] calling  drm_core_init+0x0/0xcc @ 1
+[    0.085828] initcall drm_core_init+0x0/0xcc returned 0 after 5 usecs
+[    0.085884] calling  simpledrm_platform_driver_init+0x0/0x28 @ 1
+[    0.086013] [drm] Initialized simpledrm 1.0.0 for 105d3110000.framebuffer on minor 0
+[    0.101018] Freeing initrd memory: 2752K
+[    0.103881] Console: switching to colour frame buffer device 189x61
+[    0.134792] simple-framebuffer 105d3110000.framebuffer: [drm] fb0: simpledrmdrmfb frame buffer device
+[    0.134928] probe of 105d3110000.framebuffer with driver simple-framebuffer returned 0 after 48989 usecs
+[    0.135090] initcall simpledrm_platform_driver_init+0x0/0x28 returned 0 after 49152 usecs
+[    0.135198] calling  topology_sysfs_init+0x0/0x38 @ 1
+[    0.135279] initcall topology_sysfs_init+0x0/0x38 returned 0 after 10 usecs
+[    0.135373] calling  cacheinfo_sysfs_init+0x0/0x38 @ 1
+[    0.135476] initcall cacheinfo_sysfs_init+0x0/0x38 returned 0 after 29 usecs
+[    0.135570] calling  udmabuf_dev_init+0x0/0x98 @ 1
+[    0.135678] initcall udmabuf_dev_init+0x0/0x98 returned 0 after 40 usecs
+[    0.135769] calling  nvme_core_init+0x0/0x178 @ 1
+[    0.135930] initcall nvme_core_init+0x0/0x178 returned 0 after 93 usecs
+[    0.136019] calling  apple_nvme_driver_init+0x0/0x28 @ 1
+[    0.136177] probe of 45dcc0000.nvme with driver nvme-apple returned 517 after 56 usecs
+[    0.136283] initcall apple_nvme_driver_init+0x0/0x28 returned 0 after 189 usecs
+[    0.136376] calling  apple_spmi_driver_init+0x0/0x28 @ 1
+[    0.136462] initcall apple_spmi_driver_init+0x0/0x28 returned 0 after 13 usecs
+[    0.136556] calling  blackhole_netdev_init+0x0/0x80 @ 1
+[    0.136637] initcall blackhole_netdev_init+0x0/0x80 returned 0 after 9 usecs
+[    0.136727] calling  dwc3_driver_init+0x0/0x28 @ 1
+[    0.136802] initcall dwc3_driver_init+0x0/0x28 returned 0 after 9 usecs
+[    0.136898] calling  dwc3_haps_driver_init+0x0/0x28 @ 1
+[    0.136976] initcall dwc3_haps_driver_init+0x0/0x28 returned 0 after 8 usecs
+[    0.137073] calling  gadget_cfs_init+0x0/0x30 @ 1
+[    0.137159] initcall gadget_cfs_init+0x0/0x30 returned 0 after 20 usecs
+[    0.137250] calling  eemmod_init+0x0/0x1c @ 1
+[    0.137309] initcall eemmod_init+0x0/0x1c returned 0 after 0 usecs
+[    0.137389] calling  evdev_init+0x0/0x1c @ 1
+[    0.137446] initcall evdev_init+0x0/0x1c returned 0 after 1 usecs
+[    0.137530] calling  apple_wdt_driver_init+0x0/0x28 @ 1
+[    0.144813] probe of 28836c000.watchdog with driver apple-watchdog returned 0 after 7211 usecs
+[    0.144930] initcall apple_wdt_driver_init+0x0/0x28 returned 0 after 7337 usecs
+[    0.145007] calling  smccc_devices_init+0x0/0x84 @ 1
+[    0.145060] initcall smccc_devices_init+0x0/0x84 returned 0 after 0 usecs
+[    0.145127] calling  arch_timer_mmio_drv_init+0x0/0x28 @ 1
+[    0.145218] initcall arch_timer_mmio_drv_init+0x0/0x28 returned 0 after 34 usecs
+[    0.146475] calling  arch_timer_mmio_acpi_drv_init+0x0/0x28 @ 1
+[    0.147855] initcall arch_timer_mmio_acpi_drv_init+0x0/0x28 returned 0 after 26 usecs
+[    0.149233] calling  hid_init+0x0/0x40 @ 1
+[    0.150501] initcall hid_init+0x0/0x40 returned 0 after 18 usecs
+[    0.151751] calling  uhid_misc_init+0x0/0x1c @ 1
+[    0.161506] initcall uhid_misc_init+0x0/0x1c returned 0 after 8559 usecs
+[    0.162776] calling  hid_generic_init+0x0/0x28 @ 1
+[    0.164097] initcall hid_generic_init+0x0/0x28 returned 0 after 32 usecs
+[    0.165376] calling  magicmouse_driver_init+0x0/0x28 @ 1
+[    0.166610] initcall magicmouse_driver_init+0x0/0x28 returned 0 after 32 usecs
+[    0.167774] calling  dockchannel_hid_driver_init+0x0/0x28 @ 1
+[    0.169000] initcall dockchannel_hid_driver_init+0x0/0x28 returned 0 after 56 usecs
+[    0.177492] calling  sock_diag_init+0x0/0x40 @ 1
+[    0.178573] initcall sock_diag_init+0x0/0x40 returned 0 after 16 usecs
+[    0.179881] calling  gre_offload_init+0x0/0x5c @ 1
+[    0.181162] initcall gre_offload_init+0x0/0x5c returned 0 after 0 usecs
+[    0.182419] calling  sysctl_ipv4_init+0x0/0x5c @ 1
+[    0.183640] initcall sysctl_ipv4_init+0x0/0x5c returned 0 after 43 usecs
+[    0.184792] calling  cubictcp_register+0x0/0x90 @ 1
+[    0.193492] initcall cubictcp_register+0x0/0x90 returned 0 after 3 usecs
+[    0.194753] calling  inet6_init+0x0/0x2d0 @ 1
+[    0.196027] NET: Registered PF_INET6 protocol family
+[    0.197391] Segment Routing with IPv6
+[    0.205517] In-situ OAM (IOAM) with IPv6
+[    0.206736] initcall inet6_init+0x0/0x2d0 returned 0 after 10726 usecs
+[    0.208005] calling  packet_init+0x0/0x94 @ 1
+[    0.209119] NET: Registered PF_PACKET protocol family
+[    0.210198] initcall packet_init+0x0/0x94 returned 0 after 1087 usecs
+[    0.211264] calling  check_mmu_enabled_at_boot+0x0/0x28 @ 1
+[    0.212287] initcall check_mmu_enabled_at_boot+0x0/0x28 returned 0 after 0 usecs
+[    0.213294] entering initcall level: late
+[    0.221494] calling  cpuinfo_model_name_init+0x0/0x8 @ 1
+[    0.222536] initcall cpuinfo_model_name_init+0x0/0x8 returned 0 after 0 usecs
+[    0.223716] calling  kernel_panic_sysctls_init+0x0/0x34 @ 1
+[    0.224754] initcall kernel_panic_sysctls_init+0x0/0x34 returned 0 after 11 usecs
+[    0.225802] calling  kernel_panic_sysfs_init+0x0/0x2c @ 1
+[    0.226829] initcall kernel_panic_sysfs_init+0x0/0x2c returned 0 after 6 usecs
+[    0.227807] calling  kernel_exit_sysctls_init+0x0/0x34 @ 1
+[    0.228782] initcall kernel_exit_sysctls_init+0x0/0x34 returned 0 after 6 usecs
+[    0.237490] calling  kernel_exit_sysfs_init+0x0/0x2c @ 1
+[    0.238637] initcall kernel_exit_sysfs_init+0x0/0x2c returned 0 after 5 usecs
+[    0.239729] calling  param_sysfs_builtin_init+0x0/0x30 @ 1
+[    0.241432] initcall param_sysfs_builtin_init+0x0/0x30 returned 0 after 647 usecs
+[    0.242511] calling  reboot_ksysfs_init+0x0/0x80 @ 1
+[    0.243534] initcall reboot_ksysfs_init+0x0/0x80 returned 0 after 20 usecs
+[    0.244549] calling  sched_core_sysctl_init+0x0/0x34 @ 1
+[    0.245479] initcall sched_core_sysctl_init+0x0/0x34 returned 0 after 3 usecs
+[    0.253564] calling  sched_fair_sysctl_init+0x0/0x34 @ 1
+[    0.254637] initcall sched_fair_sysctl_init+0x0/0x34 returned 0 after 2 usecs
+[    0.255753] calling  sched_rt_sysctl_init+0x0/0x34 @ 1
+[    0.256782] initcall sched_rt_sysctl_init+0x0/0x34 returned 0 after 6 usecs
+[    0.257795] calling  sched_dl_sysctl_init+0x0/0x34 @ 1
+[    0.258772] initcall sched_dl_sysctl_init+0x0/0x34 returned 0 after 4 usecs
+[    0.259739] calling  sched_init_debug+0x0/0xa4 @ 1
+[    0.260612] initcall sched_init_debug+0x0/0xa4 returned 0 after 0 usecs
+[    0.269492] calling  printk_late_init+0x0/0x178 @ 1
+[    0.270521] initcall printk_late_init+0x0/0x178 returned 0 after 12 usecs
+[    0.271599] calling  init_srcu_module_notifier+0x0/0x40 @ 1
+[    0.272586] initcall init_srcu_module_notifier+0x0/0x40 returned 0 after 2 usecs
+[    0.273529] calling  kernel_rcu_stall_sysfs_init+0x0/0x2c @ 1
+[    0.274442] initcall kernel_rcu_stall_sysfs_init+0x0/0x2c returned 0 after 6 usecs
+[    0.275435] calling  bpf_ksym_iter_register+0x0/0x20 @ 1
+[    0.276344] initcall bpf_ksym_iter_register+0x0/0x20 returned 0 after 2 usecs
+[    0.277258] calling  kexec_core_sysctl_init+0x0/0x34 @ 1
+[    0.285497] initcall kexec_core_sysctl_init+0x0/0x34 returned 0 after 8 usecs
+[    0.286630] calling  bpf_rstat_kfunc_init+0x0/0x20 @ 1
+[    0.287775] initcall bpf_rstat_kfunc_init+0x0/0x20 returned 0 after 1 usecs
+[    0.288874] calling  bpf_global_ma_init+0x0/0x34 @ 1
+[    0.289946] initcall bpf_global_ma_init+0x0/0x34 returned 0 after 20 usecs
+[    0.290918] calling  bpf_syscall_sysctl_init+0x0/0x34 @ 1
+[    0.291829] initcall bpf_syscall_sysctl_init+0x0/0x34 returned 0 after 9 usecs
+[    0.292711] calling  kfunc_init+0x0/0xb4 @ 1
+[    0.301501] initcall kfunc_init+0x0/0xb4 returned 0 after 2 usecs
+[    0.302499] calling  bpf_map_iter_init+0x0/0x38 @ 1
+[    0.303608] initcall bpf_map_iter_init+0x0/0x38 returned 0 after 1 usecs
+[    0.304626] calling  init_subsystem+0x0/0x20 @ 1
+[    0.305617] initcall init_subsystem+0x0/0x20 returned 0 after 1 usecs
+[    0.306555] calling  task_iter_init+0x0/0xd0 @ 1
+[    0.307417] initcall task_iter_init+0x0/0xd0 returned 0 after 1 usecs
+[    0.308279] calling  bpf_prog_iter_init+0x0/0x20 @ 1
+[    0.309092] initcall bpf_prog_iter_init+0x0/0x20 returned 0 after 0 usecs
+[    0.317492] calling  bpf_link_iter_init+0x0/0x20 @ 1
+[    0.318562] initcall bpf_link_iter_init+0x0/0x20 returned 0 after 0 usecs
+[    0.319635] calling  unbound_reg_init+0x0/0x20 @ 1
+[    0.320565] initcall unbound_reg_init+0x0/0x20 returned 0 after 0 usecs
+[    0.321507] calling  rqspinlock_register_kfuncs+0x0/0x20 @ 1
+[    0.322407] initcall rqspinlock_register_kfuncs+0x0/0x20 returned 0 after 0 usecs
+[    0.323374] calling  kfunc_init+0x0/0x20 @ 1
+[    0.324197] initcall kfunc_init+0x0/0x20 returned 0 after 0 usecs
+[    0.325066] calling  bpf_cgroup_iter_init+0x0/0x28 @ 1
+[    0.341493] initcall bpf_cgroup_iter_init+0x0/0x28 returned 0 after 1 usecs
+[    0.342484] calling  crypto_kfunc_init+0x0/0x7c @ 1
+[    0.343523] initcall crypto_kfunc_init+0x0/0x7c returned 0 after 0 usecs
+[    0.344531] calling  bpf_kmem_cache_iter_init+0x0/0x28 @ 1
+[    0.345526] initcall bpf_kmem_cache_iter_init+0x0/0x28 returned 0 after 1 usecs
+[    0.346476] calling  dmabuf_iter_init+0x0/0x20 @ 1
+[    0.347371] initcall dmabuf_iter_init+0x0/0x20 returned 0 after 0 usecs
+[    0.348328] calling  load_system_certificate_list+0x0/0x48 @ 1
+[    0.349217] Loading compiled-in X.509 certificates
+[    0.357492] initcall load_system_certificate_list+0x0/0x48 returned 0 after 8275 usecs
+[    0.358599] calling  mempool_faul_inject_init+0x0/0x8 @ 1
+[    0.359716] initcall mempool_faul_inject_init+0x0/0x8 returned -19 after 0 usecs
+[    0.360719] calling  vmstat_late_init+0x0/0x24 @ 1
+[    0.361706] initcall vmstat_late_init+0x0/0x24 returned 0 after 2 usecs
+[    0.362645] calling  slab_late_init+0x0/0xa4 @ 1
+[    0.364304] initcall slab_late_init+0x0/0xa4 returned 0 after 725 usecs
+[    0.365336] calling  bpf_memcontrol_init+0x0/0x48 @ 1
+[    0.373491] initcall bpf_memcontrol_init+0x0/0x48 returned 0 after 1 usecs
+[    0.374633] calling  check_early_ioremap_leak+0x0/0x64 @ 1
+[    0.375686] initcall check_early_ioremap_leak+0x0/0x64 returned 0 after 0 usecs
+[    0.376694] calling  init_root_keyring+0x0/0x1c @ 1
+[    0.377732] initcall init_root_keyring+0x0/0x1c returned 0 after 19 usecs
+[    0.378757] calling  crypto_algapi_init+0x0/0x18 @ 1
+[    0.379752] initcall crypto_algapi_init+0x0/0x18 returned 0 after 8 usecs
+[    0.380711] calling  blk_timeout_init+0x0/0x14 @ 1
+[    0.389491] initcall blk_timeout_init+0x0/0x14 returned 0 after 0 usecs
+[    0.390502] calling  pci_resource_alignment_sysfs_init+0x0/0x24 @ 1
+[    0.391674] initcall pci_resource_alignment_sysfs_init+0x0/0x24 returned 0 after 8 usecs
+[    0.392716] calling  sync_state_resume_initcall+0x0/0x18 @ 1
+[    0.393758] initcall sync_state_resume_initcall+0x0/0x18 returned 0 after 1 usecs
+[    0.394764] calling  deferred_probe_initcall+0x0/0x84 @ 1
+[    0.395827] probe of 41dc50000.iommu with driver apple-sart returned 0 after 65 usecs
+[    0.397140] probe of 45dcc0000.nvme with driver nvme-apple returned 0 after 249 usecs
+[    0.398298] m5 pmgr: ans reset-assert off=0x140 val=0x0
+[    0.399395] m5 pmgr: ans reset-deassert off=0x140 val=0x0
+[    0.405542] nvme-apple 45dcc0000.nvme: RTKit: Initializing (protocol version 12)
+[    0.406849] initcall deferred_probe_initcall+0x0/0x84 returned 0 after 11112 usecs
+[    0.408092] calling  of_fdt_raw_init+0x0/0x80 @ 1
+[    0.409379] initcall of_fdt_raw_init+0x0/0x80 returned 0 after 142 usecs
+[    0.413495] calling  bpf_kfunc_init+0x0/0x174 @ 1
+[    0.414715] initcall bpf_kfunc_init+0x0/0x174 returned 0 after 1 usecs
+[    0.415951] calling  init_subsystem+0x0/0x20 @ 1
+[    0.417053] initcall init_subsystem+0x0/0x20 returned 0 after 0 usecs
+[    0.421490] calling  xdp_metadata_init+0x0/0x20 @ 1
+[    0.422631] initcall xdp_metadata_init+0x0/0x20 returned 0 after 0 usecs
+[    0.423862] calling  bpf_sockmap_iter_init+0x0/0x2c @ 1
+[    0.424958] initcall bpf_sockmap_iter_init+0x0/0x2c returned 0 after 2 usecs
+[    0.433492] calling  bpf_sk_storage_map_iter_init+0x0/0x2c @ 1
+[    0.434688] initcall bpf_sk_storage_map_iter_init+0x0/0x2c returned 0 after 1 usecs
+[    0.435925] calling  bpf_ksock_kfunc_init+0x0/0x68 @ 1
+[    0.436986] initcall bpf_ksock_kfunc_init+0x0/0x68 returned 0 after 0 usecs
+[    0.441494] calling  bpf_prog_test_run_init+0x0/0x78 @ 1
+[    0.442644] initcall bpf_prog_test_run_init+0x0/0x78 returned 0 after 1 usecs
+[    0.443867] calling  tcp_congestion_default+0x0/0x24 @ 1
+[    0.444962] initcall tcp_congestion_default+0x0/0x24 returned 0 after 1 usecs
+[    0.449490] calling  inet_blackhole_dev_init+0x0/0x38 @ 1
+[    0.450711] initcall inet_blackhole_dev_init+0x0/0x38 returned 0 after 10 usecs
+[    0.452010] calling  tcp_bpf_v4_build_proto+0x0/0xc0 @ 1
+[    0.453193] initcall tcp_bpf_v4_build_proto+0x0/0xc0 returned 0 after 0 usecs
+[    0.461496] calling  udp_bpf_v4_build_proto+0x0/0x68 @ 1
+[    0.462629] initcall udp_bpf_v4_build_proto+0x0/0x68 returned 0 after 0 usecs
+[    0.463880] calling  regulatory_init_db+0x0/0xb0 @ 1
+[    0.465031] cfg80211: Loading compiled-in X.509 certificates for regulatory database
+[    0.469769] Loaded X.509 cert 'sforshee: 00b28ddf47aef9cea7'
+[    0.471065] Loaded X.509 cert 'wens: 61c038651aabdcf94bd0ac7ff06c7248db18c600'
+[    0.472355] initcall regulatory_init_db+0x0/0xb0 returned 0 after 7333 usecs
+[    0.477509] calling  amba_stub_drv_init+0x0/0x3c @ 1
+[    0.478788] initcall amba_stub_drv_init+0x0/0x3c returned 0 after 23 usecs
+[    0.480034] calling  clk_disable_unused+0x0/0x1cc @ 1
+[    0.481205] clk: Not disabling unused clocks
+[    0.485508] initcall clk_disable_unused+0x0/0x1cc returned 0 after 4301 usecs
+[    0.486805] calling  genpd_power_off_unused+0x0/0x98 @ 1
+[    0.488028] PM: genpd: Not disabling unused power domains
+[    0.489106] initcall genpd_power_off_unused+0x0/0x98 returned 0 after 1078 usecs
+[    0.497499] calling  of_platform_sync_state_init+0x0/0x18 @ 1
+[    0.498698] m5 pmgr: i2c1 SKIP(ro) set off=0x2c8 val=0x0
+[    0.499879] m5 pmgr: i2c2 SKIP(ro) set off=0x2d0 val=0x0
+[    0.500973] m5 pmgr: qspi SKIP(ro) set off=0x350 val=0x0
+[    0.502005] m5 pmgr: spi_p SKIP(ro) set off=0x308 val=0x0
+[    0.509503] m5 pmgr: atc1_usb_aon SKIP(ro) set off=0x160 val=0x0
+[    0.510622] m5 pmgr: atc3_usb_aon SKIP(ro) set off=0x190 val=0x0
+[    0.511792] initcall of_platform_sync_state_init+0x0/0x18 returned 0 after 13109 usecs
+[    0.523231] faux_driver regulatory: Direct firmware load for regulatory.db failed with error -2
+[    0.524430] cfg80211: failed to load regulatory.db
+[    0.769851] nvme-apple 45dcc0000.nvme: RTKit: syslog message: apcie.c:1035: power up done[0]: PMU=Kazoo, PWR=0
+[    0.771082] nvme-apple 45dcc0000.nvme: RTKit: syslog message: apcie.c:1035: power up done[1]: PMU=Undefined, PWR=0
+[    0.772415] nvme-apple 45dcc0000.nvme: RTKit: syslog message: apcie.c:1514: APCIe 1 is configured as unused.
+[    0.773631] nvme-apple 45dcc0000.nvme: RTKit: syslog message: asi.c:180: asi0: asi CMD size chosen is: 1
+[    0.774709] nvme-apple 45dcc0000.nvme: RTKit: syslog message: asi.c:180: asi1: asi CMD size chosen is: 1
+[    0.775756] nvme-apple 45dcc0000.nvme: RTKit: syslog message: asi.c:180: asi2: asi CMD size chosen is: 1
+[    0.776769] nvme-apple 45dcc0000.nvme: RTKit: syslog message: asi.c:180: asi3: asi CMD size chosen is: 1
+[    0.789425] nvme-apple 45dcc0000.nvme: RTKit: syslog message: cmd.c:8304: boot: mode normal
+[    0.790589] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:886: PowerBudget: set on boot setByHost=1, is_warm_boot=0
+[    0.791736] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:130: PowerBudget bu=200 pc=1 rc=1 ppm=0 pbio=0 ess=0
+[    0.792736] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:144: e=100 p=100/0/100 rmp=100 rsp=25/0/25 ressmp=0 ressspn=0/0 sio=0 comp=0
+[    0.793825] nvme nvme0: passthrough uses implicit buffer lengths
+[    0.794806] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:231: PowerBudget: num dies horizontal change 1 -> 1
+[    0.795872] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:130: PowerBudget bu=0 pc=0 rc=0 ppm=0 pbio=0 ess=0
+[    0.796921] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:144: e=0 p=0/0/0 rmp=0 rsp=0/0/0 ressmp=0 ressspn=0/0 sio=0 comp=0
+[    0.810607]  nvme0n1: p1 p2 p3 p4 p5 p6
+[    0.829725] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    0.842328] Freeing unused kernel memory: 768K
+[    0.843528] Run /init as init process
+[    0.844798]   with arguments:
+[    0.845972]     /init
+[    0.847054]   with environment:
+[    0.848121]     HOME=/
+[    0.849178]     TERM=linux
+[    0.865412] m5init: === m5 initramfs ===
+[    0.868087] m5init: Linux (none) 7.3.0-m5n1+ #4 SMP PREEMPT Thu Nov  5 06:39:15 EST 2026 aarch64 Linux
+[    0.878844] m5init: nproc: 1
+[    0.881535] m5init: compatible: apple,j714s apple,t6050 apple,arm-platform 
+[    0.884159] m5init: model: Apple MacBook Pro (14-inch, M5 Pro, 2026)
+[    0.891188] m5init: console: tty0  fb: fbcon 
+[    0.893620] m5log: v4 start, disk=nvme0n1
+[    0.901874] m5log: /dev/nvme0n1 present after 0 s
+[    0.903151] m5wdt: daemon started on /dev/watchdog (-t 10 -T 60), pid 65
+[    0.913744] m5autoreboot: armed: reboot in 300 s (final ESP snapshot first)
+[    1.910266] m5log: 6 partitions; logical block size 4096
+[    1.919470] m5log: GPT: entries at LBA 2, 128 x 128 bytes
+[    1.934592] m5log: part nvme0n1p1 type=<uuid> bytes=576716800
+[    1.938488] m5autoreboot: ESP /dev/nvme0n1p4 = 259:4
+[    1.940460] m5log: part nvme0n1p2 type=<uuid> bytes=868042670080
+[    1.951617] m5log: part nvme0n1p3 type=<uuid> bytes=5999996928
+[    1.954692] m5log: part nvme0n1p4 type=<uuid> bytes=499998720
+[    1.962315] m5next: live FDT saved to m5log/live-fdt.dtb (48142 B)
+[    1.965123] m5log: part nvme0n1p5 type=<uuid> bytes=120000000000
+[    1.997778] m5log: part nvme0n1p6 type=<uuid> bytes=5368664064
+[    2.021670] m5log: REFUSE raw /dev/nvme0n1p5: first 4 MiB neither zero nor M5LOG
+[    2.023429] m5log: boot=1 raw=none esp=/dev/nvme0n1p4
+[    2.053772] m5next: kexec syscalls: sys_kexec_file_load sys_kexec_load 
+[    2.056264] m5next: no m5next/ on the ESP: default boot
+[    2.069604] m5log: esp write ok: m5log/test-N1-W12-boot-1.txt 78111 bytes on /dev/nvme0n1p4 (vfat, verified mounted)
+[    3.078336] EXT4-fs (nvme0n1p5): Supports (experimental) DIO atomic writes awu_min: 4096, awu_max: 4096
+[    3.094324] EXT4-fs (nvme0n1p5): mounted filesystem <uuid> r/w with ordered data mode. Quota mode: disabled.
+[    3.108924] m5root: root /dev/nvme0n1p5 (label omarchy) mounted on /newroot
+[    4.136828] m5drop: copied usr/local/bin/m5-guard (mode 755) (1175 B, sha256 ca7eb95b755564b2)
+[    4.158182] m5drop: copied usr/local/bin/m5-exp (mode 755) (3918 B, sha256 b11acc12e82adc4c)
+[    4.166101] m5drop: copied usr/local/bin/m5-esplog-rootfs (mode 755) (2947 B, sha256 bfe0c8142148f2e2)
+[    4.178232] m5drop: copied usr/local/lib/m5/mfd-core.ko (mode 644) (11760 B, sha256 4f262d81f4c8a181)
+[    4.186192] m5drop: copied usr/local/lib/m5/macsmc.ko (mode 644) (21168 B, sha256 98739bf4f787505d)
+[    4.194448] m5drop: copied usr/local/lib/m5/m5_n1.ko (mode 644) (64816 B, sha256 04bc9e8a04ed8061)
+[    4.214095] m5drop: copied etc/systemd/system.conf.d/m5-watchdog.conf (mode 644) (257 B, sha256 9335fc3b1d4b1317)
+[    4.231030] m5drop: copied etc/systemd/system/m5-esplog.service.d/m5-timeout.conf (mode 644) (225 B, sha256 ed4551d756f31fa9)
+[    4.242169] m5drop: copied etc/systemd/system/sddm.service.d/m5-guard.conf (mode 644) (101 B, sha256 573c04b20af2ceeb)
+[    4.263156] m5drop: done: 9 copied, 0 rejected/failed
+[    4.378387] m5wdt: daemon 65 stopped (magic close) after 100 ms
+[    5.382817] m5init: initramfs logger stopped, ESP released (rootfs logger takes over)
+[    5.420585] systemd[1]: System time advanced to timestamp on /var/lib/systemd/timesync/clock: Sun 2026-10-18 19:34:35 UTC
+[    5.444087] systemd[1]: systemd 262.1-1-arch running in system mode (+PAM +AUDIT -SELINUX +APPARMOR -IMA +IPE +SMACK +SECCOMP +GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK -BTF +XKBCOMMON +UTMP +LIBARCHIVE)
+[    5.453552] systemd[1]: Detected architecture arm64.
+[    5.477543] systemd[1]: Hostname set to <m5-j714s>.
+[    5.519783] systemd[1]: bpf-restrict-fs: BPF LSM hook not enabled in the kernel, BPF LSM not supported.
+[    5.531861] systemd[1]: Using hardware watchdog /dev/watchdog0: 'Apple SoC Watchdog', version 0.
+[    5.533039] systemd[1]: Watchdog running with a hardware timeout of 1min.
+[    5.590968] systemd[1]: Configuration file /etc/systemd/system/sddm.service.d/m5-exp.conf is marked executable. Please remove executable permission bits. Proceeding anyway.
+[    5.601647] systemd[1]: Configuration file /etc/systemd/system/m5-exp.service is marked executable. Please remove executable permission bits. Proceeding anyway.
+[    5.662517] systemd[1]: Queued start job for default target Graphical Interface.
+[    5.674288] systemd[1]: Created slice CUPS Slice.
+[    5.677397] systemd[1]: Created slice Slice /system/dirmngr.
+[    5.683341] systemd[1]: Created slice Slice /system/getty.
+[    5.694013] systemd[1]: Created slice Slice /system/gpg-agent.
+[    5.696999] systemd[1]: Created slice Slice /system/gpg-agent-browser.
+[    5.707164] systemd[1]: Created slice Slice /system/gpg-agent-extra.
+[    5.710288] systemd[1]: Created slice Slice /system/gpg-agent-ssh.
+[    5.713471] systemd[1]: Created slice Slice /system/keyboxd.
+[    5.723251] systemd[1]: Created slice Slice /system/modprobe.
+[    5.733785] systemd[1]: Created slice User and Session Slice.
+[    5.736352] systemd[1]: Started Forward Password Requests to Wall Directory Watch.
+[    5.739115] systemd[1]: Started m5: ESP log every 30 s.
+[    5.749601] systemd[1]: Arbitrary Executable File Formats File System Automount Point skipped, unmet condition check ConditionPathExists=/proc/sys/fs/binfmt_misc
+[    5.751105] systemd[1]: Reached target Local dm-clone Devices.
+[    5.754127] systemd[1]: Reached target Login Prompts.
+[    5.757162] systemd[1]: Reached target Image Downloads.
+[    5.766948] systemd[1]: Reached target Local Integrity Protected Volumes.
+[    5.777576] systemd[1]: Reached target Remote File Systems.
+[    5.780334] systemd[1]: Reached target Slice Units.
+[    5.783530] systemd[1]: Reached target Swaps.
+[    5.793566] systemd[1]: Reached target Local Verity Protected Volumes.
+[    5.796902] systemd[1]: Listening on Device-mapper event daemon FIFOs.
+[    5.814054] systemd[1]: Listening on Query the User Interactively for a Password.
+[    5.822251] systemd[1]: Listening on Process Core Dump Socket.
+[    5.829906] systemd[1]: Listening on Credential Encryption/Decryption.
+[    5.833822] systemd[1]: Listening on Disk Encryption Enrollment Service Socket.
+[    5.837921] systemd[1]: Listening on Factory Reset Management.
+[    5.841156] systemd[1]: Listening on Hostname Service Socket.
+[    5.850969] systemd[1]: Listening on Journal Socket (/dev/log).
+[    5.861689] systemd[1]: Listening on Journal Sockets.
+[    5.869719] systemd[1]: Listening on Console Output Muting Service Socket.
+[    5.872657] systemd[1]: Listening on Userspace Out-Of-Memory (OOM) Killer Socket.
+[    5.875586] systemd[1]: TPM PCR Measurements skipped, unmet condition check ConditionSecurity=measured-os
+[    5.877052] systemd[1]: Make TPM PCR Policy skipped, unmet condition check ConditionSecurity=measured-uki
+[    5.889925] systemd[1]: Listening on Disk Repartitioning Service Socket.
+[    5.892888] systemd[1]: Listening on Resolve Monitor Varlink Socket.
+[    5.896034] systemd[1]: Listening on Resolve Service Varlink Socket.
+[    5.905999] systemd[1]: Listening on Simple Block Device Backed Storage Provider.
+[    5.909955] systemd[1]: Listening on Simple File System Backed Storage Provider.
+[    5.917930] systemd[1]: Listening on System Install Tool.
+[    5.926140] systemd[1]: Listening on System Updates.
+[    5.929190] systemd[1]: Listening on udev Kernel Socket.
+[    5.938923] systemd[1]: Listening on udev Varlink Socket.
+[    5.942007] systemd[1]: Listening on User Database Manager Socket.
+[    5.945038] systemd[1]: Huge Pages File System skipped, unmet condition check ConditionPathExists=/sys/kernel/mm/hugepages
+[    5.957678] systemd[1]: Mounting POSIX Message Queue File System...
+[    5.962703] systemd[1]: Kernel Debug File System skipped, unmet condition check ConditionPathExists=/sys/kernel/debug
+[    5.964400] systemd[1]: Kernel Trace File System skipped, unmet condition check ConditionPathExists=/sys/kernel/tracing
+[    5.977624] systemd[1]: tmp.mount: x-systemd.graceful-option=usrquota specified, but option is not available, suppressing.
+[    5.981568] systemd[1]: Mounting Temporary Directory /tmp...
+[    5.987126] systemd[1]: Create List of Static Device Nodes skipped, unmet condition check ConditionFileNotEmpty=/lib/modules/7.3.0-m5n1+/modules.devname
+[    5.988919] systemd[1]: Load Kernel Module configfs skipped, unmet condition check ConditionKernelModuleLoaded=!configfs
+[    6.001608] systemd[1]: Load Kernel Module drm skipped, unmet condition check ConditionKernelModuleLoaded=!drm
+[    6.004096] systemd[1]: Starting Load Kernel Module fuse...
+[    6.007462] systemd[1]: File System Check on Root Device skipped, unmet condition check ConditionPathIsReadWrite=!/
+[    6.009241] systemd[1]: Clear Stale Hibernate Storage Info skipped, unmet condition check ConditionPathExists=/sys/firmware/efi/efivars/HibernateLocation-<uuid>
+[    6.025813] systemd[1]: Starting Journal Service...
+[    6.034608] systemd[1]: Starting Load Kernel Modules...
+[    6.049572] systemd[1]: TPM PCR Machine ID Measurement skipped, unmet condition check ConditionSecurity=measured-os
+[    6.051151] systemd[1]: TPM PCR OS Separator skipped, unmet condition check ConditionSecurity=measured-os
+[    6.054185] systemd[1]: Starting Remount Root and Kernel File Systems...
+[    6.076093] systemd[1]: Starting Create Static Device Nodes in /dev gracefully...
+[    6.080578] systemd[1]: Early TPM SRK Setup skipped, unmet condition check ConditionSecurity=measured-os
+[    6.091780] systemd[1]: TPM PCR NvPCR Initialization Separator skipped, unmet condition check ConditionPathExists=/etc/initrd-release
+[    6.095702] systemd[1]: TPM NvPCR Product ID Measurement skipped, unmet condition check ConditionSecurity=measured-os
+[    6.113374] systemd[1]: Starting Load udev Rules from Credentials...
+[    6.121624] systemd-journald[657]: Collecting audit messages is disabled.
+[    6.140222] systemd[1]: Starting Coldplug All udev Devices...
+[    6.166587] systemd[1]: Starting Virtual Console Setup...
+[    6.179313] systemd[1]: Mounted POSIX Message Queue File System.
+[    6.197808] systemd[1]: Mounted Temporary Directory /tmp.
+[    6.201442] systemd[1]: modprobe@fuse.service: Deactivated successfully.
+[    6.209918] systemd[1]: Finished Load Kernel Module fuse.
+[    6.232796] systemd[1]: Finished Load Kernel Modules.
+[    6.236807] systemd[1]: Finished Load udev Rules from Credentials.
+[    6.246210] systemd[1]: Started Journal Service.
+[    6.269567] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.271336] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.273160] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.275771] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.277700] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.279494] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.281238] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.283032] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.284737] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.286576] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.288250] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.290007] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.291575] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.295859] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.297448] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.305675] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.306946] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.308319] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.309629] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.310928] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.313796] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    6.346317] EXT4-fs (nvme0n1p5): re-mounted <uuid>.
+[    6.449573] systemd-journald[657]: Received client request to flush runtime journal.
+[    7.040790] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.071506] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.072005] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.072159] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.072846] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.073000] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.075671] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.081941] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.082096] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.082748] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.082900] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.083498] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.083650] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.084220] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.084373] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.084946] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.085092] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.087355] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.098042] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    7.098608] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    8.889491] random: crng init done
+[    9.374797] m5exp-n1w12: start n1w12 (N1 W2: rc read, port0 PHY lane, core RUN (skip if running), port0 enable+config; no train)
+[    9.547580] m5exp-n1w12: insmod mfd-core
+[    9.621802] m5exp-n1w12: insmod mfd-core rc=0
+[   10.721529] apple-pmgr-pwrstate 280600000.power-management:power-controller@210: sync_state() pending due to 288300000.power-management
+[   10.721659] apple-pmgr-pwrstate 280600000.power-management:power-controller@240: sync_state() pending due to 288300000.power-management
+[   11.709989] m5exp-n1w12: insmod macsmc
+[   11.750853] calling  init_module+0x0/0x3fdc [macsmc] @ 1144
+[   11.753528] macsmc 28c600000.smc: RTKit: Initializing (protocol version 12)
+[   11.759865] macsmc-gpio: Failed to locate of_node [id: -1]
+[   11.759958] probe of 28c600000.smc with driver macsmc returned 0 after 8990 usecs
+[   11.760036] initcall init_module+0x0/0x3fdc [macsmc] returned 0 after 9115 usecs
+[   11.762161] m5exp-n1w12: insmod macsmc rc=0
+[   13.801229] m5exp-n1w12: insmod m5_n1
+[   13.841155] m5_n1: loading out-of-tree module taints kernel.
+[   13.841372] calling  init_module+0x0/0x3fac [m5_n1] @ 1442
+[   13.853609] m5_n1: bound; stages: pmgr power rc phy corerun enable config train perst
+[   13.853737] probe of m5-n1-w1 with driver m5_n1 returned 0 after 12254 usecs
+[   13.853813] m5_n1: DT node m5,n1-w1 present
+[   13.853855] initcall init_module+0x0/0x3fac [m5_n1] returned 0 after 12427 usecs
+[   13.856181] m5exp-n1w12: insmod rc=0
+[   14.913912] m5exp-n1w12: stage pmgr
+[   14.965380] m5_n1: === stage pmgr
+[   14.965431] m5_n1: PS APCIE_GP         +0x118 = 0x000000ff target f actual f
+[   14.965518] m5_n1: PS APCIE_GE         +0x120 = 0x00000200 target 0 actual 0
+[   14.965581] m5_n1: PS APCIE_ST0        +0x128 = 0x000002ff target f actual f
+[   14.965643] m5_n1: PS APCIE_ST1        +0x130 = 0x000002ff target f actual f
+[   14.965706] m5_n1: PS FAB6_SOC         +0x138 = 0x0f0000ff target f actual f
+[   14.965768] m5_n1: PS ANS              +0x140 = 0x1f0003ff target f actual f
+[   14.965830] m5_n1: PS APCIE_SYS_GP     +0x148 = 0x1000030f target f actual 0
+[   14.965892] m5_n1: PS APCIE_SYS_ST0    +0x150 = 0x1000030f target f actual 0
+[   14.965955] m5_n1: PS APCIE_SYS_ST1    +0x158 = 0x1000030f target f actual 0
+[   14.966017] m5_n1: PS APCIE_SYS_GE     +0x188 = 0x0f000300 target 0 actual 0
+[   14.966080] m5_n1: PS APCIE_PHY_SW     +0x1b0 = 0x1400024f target f actual 4
+[   14.966142] m5_n1: PS APHY_ST0_AUS5_A  +0x240 = 0x000002ff target f actual f
+[   14.966204] m5_n1: PS APHY_ST1_AUS5_A  +0x248 = 0x000002ff target f actual f
+[   14.966266] m5_n1: PS APHY_GE_AUS5_A   +0x250 = 0x00000200 target 0 actual 0
+[   14.966328] m5_n1: PS APHY_GP_AUS5_A   +0x258 = 0x000002ff target f actual f
+[   14.966391] m5_n1: PS APHY_ST0_AUS5    +0x268 = 0x1000030f target f actual 0
+[   14.966453] m5_n1: PS APHY_ST1_AUS5    +0x270 = 0x1000030f target f actual 0
+[   14.966515] m5_n1: PS APHY_GE_AUS5     +0x278 = 0x0f000300 target 0 actual 0
+[   14.966576] m5_n1: PS APHY_GP_AUS5     +0x280 = 0x1000030f target f actual 0
+[   14.966636] m5_n1: === stage pmgr: 0
+[   14.977584] m5exp-n1w12: stage pmgr rc=0
+[   15.024323] m5exp-n1w12: stage power
+[   15.072807] m5_n1: === stage power
+[   15.072856] m5_n1: pm_runtime_resume_and_get = 0
+[   15.072903] m5_n1: PS APCIE_GP         +0x118 = 0x000000ff target f actual f
+[   15.072967] m5_n1: PS APCIE_GE         +0x120 = 0x00000200 target 0 actual 0
+[   15.073029] m5_n1: PS APCIE_ST0        +0x128 = 0x000002ff target f actual f
+[   15.073092] m5_n1: PS APCIE_ST1        +0x130 = 0x000002ff target f actual f
+[   15.073154] m5_n1: PS FAB6_SOC         +0x138 = 0x0f0000ff target f actual f
+[   15.073216] m5_n1: PS ANS              +0x140 = 0x1f0003ff target f actual f
+[   15.073279] m5_n1: PS APCIE_SYS_GP     +0x148 = 0x1000030f target f actual 0
+[   15.073341] m5_n1: PS APCIE_SYS_ST0    +0x150 = 0x1000030f target f actual 0
+[   15.073403] m5_n1: PS APCIE_SYS_ST1    +0x158 = 0x1000030f target f actual 0
+[   15.073465] m5_n1: PS APCIE_SYS_GE     +0x188 = 0x0f000300 target 0 actual 0
+[   15.077598] m5_n1: PS APCIE_PHY_SW     +0x1b0 = 0x1f0002ff target f actual f
+[   15.077671] m5_n1: PS APHY_ST0_AUS5_A  +0x240 = 0x000002ff target f actual f
+[   15.077724] m5_n1: PS APHY_ST1_AUS5_A  +0x248 = 0x000002ff target f actual f
+[   15.077788] m5_n1: PS APHY_GE_AUS5_A   +0x250 = 0x00000200 target 0 actual 0
+[   15.077850] m5_n1: PS APHY_GP_AUS5_A   +0x258 = 0x000002ff target f actual f
+[   15.077912] m5_n1: PS APHY_ST0_AUS5    +0x268 = 0x1f0003ff target f actual f
+[   15.077975] m5_n1: PS APHY_ST1_AUS5    +0x270 = 0x1000030f target f actual 0
+[   15.078037] m5_n1: PS APHY_GE_AUS5     +0x278 = 0x0f000300 target 0 actual 0
+[   15.078099] m5_n1: PS APHY_GP_AUS5     +0x280 = 0x1000030f target f actual 0
+[   15.078170] m5_n1: === stage power: 0
+[   15.089713] m5exp-n1w12: stage power rc=0
+[   15.130925] m5exp-n1w12: stage rc
+[   15.160993] m5_n1: === stage rc
+[   15.161039] m5_n1: rd CORE_RC_CTL 0x414000050
+[   15.161088] m5_n1:    = 0x00000000
+[   15.161122] m5_n1: rd CORE_RC_STAT 0x414000058
+[   15.161170] m5_n1:    = 0x00000001
+[   15.161205] m5_n1: rd PORT_STATUS 0x410028804
+[   15.161251] m5_n1:    = 0x00000006
+[   15.161286] m5_n1: rd PORT_LINKSTS 0x410028208
+[   15.161333] m5_n1:    = 0xc300220c
+[   15.161367] m5_n1: rd PORT_LTSSMCTL 0x410028080
+[   15.161416] m5_n1:    = 0x00000000
+[   15.161451] m5_n1: rd PORT_APPCLK 0x410028800
+[   15.165674] m5_n1:    = 0x00100100
+[   15.165712] m5_n1: rd PORT_PERST 0x41002882c
+[   15.165758] m5_n1:    = 0x00010000
+[   15.165793] m5_n1: rd PORT_0xa8 0x4100280a8
+[   15.165844] m5_n1:    = 0x00000000
+[   15.165879] m5_n1: rd PORT_0x820 0x410028820
+[   15.165925] m5_n1:    = 0x00000000
+[   15.165959] m5_n1: rd PHY_LANE_CFG 0x417010000
+[   15.166007] m5_n1:    = 0x33000070
+[   15.166041] m5_n1: rd INTR2AXI_CTRL 0x410024080
+[   15.166089] m5_n1:    = 0x00000000
+[   15.166132] m5_n1: perst gpio value (logical, 1 = asserted) = 1
+[   15.166183] m5_n1: rd phy@reg2 0x417020000
+[   15.166239] m5_n1:    = 0xf7c030d0 want 0x00000000/0x04000000 differs
+[   15.166295] m5_n1: rd phy@reg2 0x417010000
+[   15.166350] m5_n1:    = 0x33000070 want 0x00000000/0x10000000 differs
+[   15.166405] m5_n1: rd phy@reg2 0x417014000
+[   15.166460] m5_n1:    = 0x33000070 want 0x00000000/0x10000000 differs
+[   15.166515] m5_n1: rd phy@reg2 0x417018000
+[   15.166570] m5_n1:    = 0x33000070 want 0x00000000/0x10000000 differs
+[   15.166625] m5_n1: rd phy@reg2 0x41701c000
+[   15.166679] m5_n1:    = 0x33000070 want 0x00000000/0x10000000 differs
+[   15.166734] m5_n1: phy@reg2: 0/5 entries already hold the ADT value
+[   15.166792] m5_n1: APCIE_PHY_SW not actual f (0x1400024f): PLL/AUSPMA blocks NOT read (W2 SError)
+[   15.166870] m5_n1: rd RP id 0x1cb0000000
+[   15.166913] m5_n1:    = 0xffffffff
+[   15.166948] m5_n1: rd RP buses 0x1cb0000018
+[   15.166993] m5_n1:    = 0xffffffff
+[   15.167033] m5_n1: RP LTSSM state 0x3f
+[   15.167070] m5_n1: === stage rc: 0
+[   15.178246] m5exp-n1w12: stage rc rc=0
+[   15.220665] m5exp-n1w12: stage rd:1cb0000018
+[   15.274363] m5_n1: rd 0x1cb0000018
+[   15.274416] m5_n1:    = 0xffffffff
+[   15.279008] m5exp-n1w12: stage rd:1cb0000018 rc=0
+[   15.319546] m5exp-n1w12: stage rd:1cb0000728
+[   15.381656] m5_n1: rd 0x1cb0000728
+[   15.381710] m5_n1:    = 0xffffffff
+[   15.382948] m5exp-n1w12: stage rd:1cb0000728 rc=0
+[   15.432345] m5exp-n1w12: stage corerun
+[   15.482080] m5_n1: === stage corerun
+[   15.482128] m5_n1: rd CORE_RC_CTL 0x414000050
+[   15.482177] m5_n1:    = 0x00000000
+[   15.482212] m5_n1: rd CORE_RC_STAT 0x414000058
+[   15.482259] m5_n1:    = 0x00000001
+[   15.482294] m5_n1: core RC already RUN or READY (shared with storage): no write
+[   15.482362] m5_n1: poll CORE_RC_STAT.READY 0x414000058 mask 0x1 want 0x1: ok (0x00000001)
+[   15.482430] m5_n1: === stage corerun: 0
+[   15.483851] m5exp-n1w12: stage corerun rc=0
+[   15.530736] m5exp-n1w12: stage en1
+[   15.574408] m5_n1: === stage en1
+[   15.574455] m5_n1: wr reset-table 0x410028088 old=0x00000000 new=0x00000110
+[   15.574522] m5_n1:    readback 0x00000000
+[   15.574561] m5_n1: wr reset-table 0x410028100 old=0x00000000 new=0xffffffff
+[   15.574627] m5_n1:    readback 0x00000000
+[   15.574665] m5_n1: wr reset-table 0x410028148 old=0x00000000 new=0xffffffff
+[   15.574730] m5_n1:    readback 0x00000000
+[   15.574769] m5_n1: wr reset-table 0x410028210 old=0x00000000 new=0xffffffff
+[   15.574833] m5_n1:    readback 0x00000000
+[   15.574872] m5_n1: wr reset-table 0x410028080 old=0x00000000 new=0x00000000
+[   15.574938] m5_n1:    readback 0x00000000
+[   15.574976] m5_n1: wr reset-table 0x410028084 old=0x00000000 new=0x00000000
+[   15.575041] m5_n1:    readback 0x00000000
+[   15.575080] m5_n1: wr reset-table 0x410028104 old=0x00000000 new=0xfffffff0
+[   15.575145] m5_n1:    readback 0xfffffff0
+[   15.575183] m5_n1: wr reset-table 0x410028124 old=0x00000000 new=0x00000100
+[   15.575248] m5_n1:    readback 0x00000100
+[   15.575286] m5_n1: wr reset-table 0x41002816c old=0x00000000 new=0x00000000
+[   15.575351] m5_n1:    readback 0x00000000
+[   15.575389] m5_n1: wr reset-table 0x41002813c old=0x00000000 new=0x00000000
+[   15.575455] m5_n1:    readback 0x00000000
+[   15.575493] m5_n1: wr reset-table 0x410028800 old=0x00000000 new=0x00100100
+[   15.575558] m5_n1:    readback 0x00100100
+[   15.575597] m5_n1: wr reset-table 0x410028808 old=0x00000000 new=0x001001ff
+[   15.575662] m5_n1:    readback 0x001001ff
+[   15.575701] m5_n1: wr reset-table 0x41002882c old=0x00000000 new=0x00010000
+[   15.575766] m5_n1:    readback 0x00010000
+[   15.575804] m5_n1: === stage en1: 0
+[   15.578000] m5exp-n1w12: stage en1 rc=0
+[   15.643870] m5exp-n1w12: stage en2
+[   15.677582] m5_n1: === stage en2
+[   15.677626] m5_n1: clearing RID2SID[0..63] and MSIMAP[0..255] (not logged per word)
+[   15.677815] m5_n1: wr reset-late 0x410028130 old=0x00000000 new=0x03020000
+[   15.677880] m5_n1:    readback 0x03020000
+[   15.677919] m5_n1: wr reset-late 0x410028140 old=0x00000000 new=0x00000010
+[   15.677984] m5_n1:    readback 0x00000010
+[   15.678022] m5_n1: wr reset-late 0x410028144 old=0x00000000 new=0x00253770
+[   15.678088] m5_n1:    readback 0x00253770
+[   15.678127] m5_n1: wr reset-late 0x41002821c old=0x00000000 new=0x00000000
+[   15.678191] m5_n1:    readback 0x00000000
+[   15.678230] m5_n1: wr reset-late 0x410028834 old=0x00000000 new=0x00000000
+[   15.678295] m5_n1:    readback 0x00000000
+[   15.678334] m5_n1: wr reset-late 0x41002883c old=0x00000000 new=0x00000000
+[   15.678399] m5_n1:    readback 0x00000000
+[   15.678437] m5_n1: rd PORT_PERST 0x41002882c
+[   15.678484] m5_n1:    = 0x00010000
+[   15.678525] m5_n1: wr apcie-config-tunable 0x410028140 old=0x00000010 new=0x00000011
+[   15.678595] m5_n1:    readback 0x00000011
+[   15.678640] m5_n1: wr apcie-config-tunable 0x410028144 old=0x00253770 new=0x00253770
+[   15.678710] m5_n1:    readback 0x00253770
+[   15.678744] m5_n1: wr apcie-config-tunable 0x4100288a8 old=0x00000000 new=0x00000001
+[   15.678815] m5_n1:    readback 0x00000001
+[   15.678860] m5_n1: wr apcie-config-tunable 0x4100288ac old=0x00000000 new=0x00000001
+[   15.678930] m5_n1:    readback 0x00000001
+[   15.678969] m5_n1: === stage en2: 0
+[   15.681755] m5exp-n1w12: stage en2 rc=0
+[   15.714363] m5exp-n1w12: stage physw
+[   15.754614] m5_n1: === stage physw
+[   15.754664] m5_n1: PHY_SW hold-on: wr 0x2809001b0 old=0x1400024f new=0x0400004f
+[   15.757501] m5_n1: PHY_SW readback 0x0f0002ff: actual f
+[   15.757550] m5_n1: === stage physw: 0
+[   15.758883] m5exp-n1w12: stage physw rc=0
+[   15.791476] m5exp-n1w12: stage pmgr
+[   15.834101] m5_n1: === stage pmgr
+[   15.834150] m5_n1: PS APCIE_GP         +0x118 = 0x000000ff target f actual f
+[   15.834214] m5_n1: PS APCIE_GE         +0x120 = 0x00000200 target 0 actual 0
+[   15.834277] m5_n1: PS APCIE_ST0        +0x128 = 0x000002ff target f actual f
+[   15.834339] m5_n1: PS APCIE_ST1        +0x130 = 0x000002ff target f actual f
+[   15.834402] m5_n1: PS FAB6_SOC         +0x138 = 0x0f0000ff target f actual f
+[   15.834465] m5_n1: PS ANS              +0x140 = 0x1f0003ff target f actual f
+[   15.834527] m5_n1: PS APCIE_SYS_GP     +0x148 = 0x1000030f target f actual 0
+[   15.834590] m5_n1: PS APCIE_SYS_ST0    +0x150 = 0x1000030f target f actual 0
+[   15.834651] m5_n1: PS APCIE_SYS_ST1    +0x158 = 0x1000030f target f actual 0
+[   15.834714] m5_n1: PS APCIE_SYS_GE     +0x188 = 0x0f000300 target 0 actual 0
+[   15.834776] m5_n1: PS APCIE_PHY_SW     +0x1b0 = 0x0f0002ff target f actual f
+[   15.834839] m5_n1: PS APHY_ST0_AUS5_A  +0x240 = 0x000002ff target f actual f
+[   15.834901] m5_n1: PS APHY_ST1_AUS5_A  +0x248 = 0x000002ff target f actual f
+[   15.834963] m5_n1: PS APHY_GE_AUS5_A   +0x250 = 0x00000200 target 0 actual 0
+[   15.835025] m5_n1: PS APHY_GP_AUS5_A   +0x258 = 0x000002ff target f actual f
+[   15.835088] m5_n1: PS APHY_ST0_AUS5    +0x268 = 0x1000030f target f actual 0
+[   15.835149] m5_n1: PS APHY_ST1_AUS5    +0x270 = 0x1000030f target f actual 0
+[   15.835211] m5_n1: PS APHY_GE_AUS5     +0x278 = 0x0f000300 target 0 actual 0
+[   15.835273] m5_n1: PS APHY_GP_AUS5     +0x280 = 0x1000030f target f actual 0
+[   15.835333] m5_n1: === stage pmgr: 0
+[   15.837569] m5exp-n1w12: stage pmgr rc=0
+[   15.890171] m5exp-n1w12: stage tuncmp
+[   15.947577] m5_n1: === stage tuncmp
+[   15.947628] m5_n1: rd reg4 0x417980838
+[   15.947679] m5_n1:    = 0x00007802 want 0x00000002/0x00000002 MATCH
+[   15.947735] m5_n1: rd reg4 0x417980828
+[   15.947778] m5_n1:    = 0x00000b44 want 0x00000b44/0x0000ffff MATCH
+[   15.947833] m5_n1: rd reg4 0x417980c1c
+[   15.947876] m5_n1:    = 0x28011fc0 want 0x000007c0/0x000007e0 MATCH
+[   15.947930] m5_n1: rd reg4 0x417980e10
+[   15.947980] m5_n1:    = 0x00000240 want 0x00000240/0x000003e0 MATCH
+[   15.948034] m5_n1: rd reg4 0x4179820a4
+[   15.948077] m5_n1:    = 0x66120280 want 0x01010000/0x03c3c000 differs
+[   15.948133] m5_n1: rd reg4 0x417982200
+[   15.948178] m5_n1:    = 0x0008375e want 0x00000008/0x00000008 MATCH
+[   15.948232] m5_n1: rd reg4 0x41798221c
+[   15.948282] m5_n1:    = 0x00002528 want 0x00000500/0x000007c0 MATCH
+[   15.948336] m5_n1: rd reg4 0x417982224
+[   15.948380] m5_n1:    = 0x00000818 want 0x00000800/0x00000c00 MATCH
+[   15.948434] m5_n1: rd reg4 0x417982228
+[   15.948477] m5_n1:    = 0x00000b18 want 0x00000b00/0x00000f00 MATCH
+[   15.948531] m5_n1: rd reg4 0x417982230
+[   15.948581] m5_n1:    = 0x0001e834 want 0x00000034/0x0000003f MATCH
+[   15.948636] m5_n1: rd reg4 0x41798224c
+[   15.948680] m5_n1:    = 0x060c4613 want 0x00004613/0x0000fe7f MATCH
+[   15.948734] m5_n1: rd reg4 0x4179822b0
+[   15.948778] m5_n1:    = 0x18300811 want 0x00300000/0x00700000 MATCH
+[   15.948821] m5_n1: rd reg4 0x417982338
+[   15.948872] m5_n1:    = 0x379a7700 want 0x00001700/0x00001f00 MATCH
+[   15.948927] m5_n1: rd reg4 0x417983000
+[   15.948970] m5_n1:    = 0x207c0400 want 0x201c0400/0x301fbf00 MATCH
+[   15.949024] m5_n1: rd reg4 0x417983004
+[   15.949067] m5_n1:    = 0x0008bf9b want 0x0008bf9b/0x001fffff MATCH
+[   15.949122] m5_n1: rd reg4 0x417983014
+[   15.949172] m5_n1:    = 0x40ff0180 want 0x40000080/0xff0000ff MATCH
+[   15.949226] m5_n1: rd reg4 0x417983008
+[   15.949269] m5_n1:    = 0x0015930a want 0x0015930a/0x001fffff MATCH
+[   15.949324] m5_n1: rd reg4 0x41798300c
+[   15.949367] m5_n1:    = 0x001a2548 want 0x001a2548/0x001fffff MATCH
+[   15.949421] m5_n1: rd reg4 0x417983010
+[   15.949471] m5_n1:    = 0x001baaa8 want 0x001baaa8/0x001fffff MATCH
+[   15.949549] m5_n1: rd reg4 0x417984008
+[   15.949592] m5_n1:    = 0x0000000b want 0x0000000b/0xffffffff MATCH
+[   15.949647] m5_n1: rd reg4 0x4179860c8
+[   15.949690] m5_n1:    = 0x00000000 want 0x00000000/0x000000ff MATCH
+[   15.949744] m5_n1: rd reg4 0x4179884c0
+[   15.949794] m5_n1:    = 0xf020c150 want 0x00004150/0x000043f0 MATCH
+[   15.949848] m5_n1: rd reg4 0x417988574
+[   15.949892] m5_n1:    = 0x01000000 want 0x00000000/0x007f8000 MATCH
+[   15.949955] m5_n1: rd reg4 0x417989814
+[   15.949999] m5_n1:    = 0x00018c20 want 0x00000c00/0x00007e00 MATCH
+[   15.950053] m5_n1: rd reg4 0x417989838
+[   15.950103] m5_n1:    = 0x05e68d20 want 0x05e00000/0x0fe00000 MATCH
+[   15.950157] m5_n1: rd reg4 0x4179898b4
+[   15.950201] m5_n1:    = 0x0a30c30c want 0x0a000000/0x3f000000 MATCH
+[   15.950255] m5_n1: rd reg4 0x41798a050
+[   15.950299] m5_n1:    = 0x0a000106 want 0x08000000/0x08000000 MATCH
+[   15.950353] m5_n1: rd reg4 0x41798a140
+[   15.950403] m5_n1:    = 0x00fa07d0 want 0x000007d0/0x0000ffff MATCH
+[   15.950457] m5_n1: rd reg4 0x41798a154
+[   15.950501] m5_n1:    = 0x00001c1e want 0x00001c00/0x00001f00 MATCH
+[   15.950554] m5_n1: rd reg4 0x41798a2c0
+[   15.950598] m5_n1:    = 0x00e101c8 want 0x00010008/0x001f803f MATCH
+[   15.950651] m5_n1: rd reg4 0x41798a2c8
+[   15.950700] m5_n1:    = 0x7de203d1 want 0x00020011/0x001f803f MATCH
+[   15.950754] m5_n1: rd reg4 0x41798a2d0
+[   15.950797] m5_n1:    = 0x7de403e2 want 0x00000022/0x0000003f MATCH
+[   15.950851] m5_n1: rd reg4 0x41798a31c
+[   15.950894] m5_n1:    = 0x07071f1f want 0x07071010/0x0f0ff0f0 MATCH
+[   15.950947] m5_n1: rd reg4 0x41798a338
+[   15.950997] m5_n1:    = 0x00000a0a want 0x00000a0a/0x0000ffff MATCH
+[   15.951051] m5_n1: rd reg4 0x41798a33c
+[   15.951094] m5_n1:    = 0x00002428 want 0x00002408/0x00007f0f MATCH
+[   15.951147] m5_n1: rd reg4 0x41798a340
+[   15.951190] m5_n1:    = 0x07071f18 want 0x00000008/0x0000000f MATCH
+[   15.951244] m5_n1: rd reg4 0x41798a378
+[   15.951294] m5_n1:    = 0x00110600 want 0x00000600/0x0000ff00 MATCH
+[   15.951347] m5_n1: rd reg4 0x41798a37c
+[   15.951390] m5_n1:    = 0x00010600 want 0x00000600/0x0000ff00 MATCH
+[   15.951444] m5_n1: rd reg4 0x41798a380
+[   15.951487] m5_n1:    = 0x00110f05 want 0x00000f00/0x0000ff00 MATCH
+[   15.951540] m5_n1: rd reg4 0x41798a384
+[   15.951590] m5_n1:    = 0x00110f05 want 0x00000f00/0x0000ff00 MATCH
+[   15.951643] m5_n1: rd reg4 0x41798a3b8
+[   15.951687] m5_n1:    = 0x0085e000 want 0x0085e000/0xffffffff MATCH
+[   15.951740] m5_n1: rd reg4 0x41798a3c8
+[   15.951783] m5_n1:    = 0x00000300 want 0x00000300/0xffffffff MATCH
+[   15.951837] m5_n1: rd reg4 0x41798c410
+[   15.951876] m5_n1:    = 0x00015000 want 0x00000000/0x00100000 MATCH
+[   15.951930] m5_n1: rd reg4 0x41798c438
+[   15.951973] m5_n1:    = 0x02000000 want 0x00000000/0x01800000 MATCH
+[   15.952026] m5_n1: rd reg4 0x41798c4a4
+[   15.952070] m5_n1:    = 0x00000010 want 0x00000010/0x00000010 MATCH
+[   15.952123] m5_n1: reg4 PLL+port0 AUSPMA: 44/45 already hold the ADT value
+[   15.952181] m5_n1: === stage tuncmp: 0
+[   15.961591] m5exp-n1w12: stage tuncmp rc=0
+[   16.036713] m5exp-n1w12: stage smc
+[   16.105424] m5_n1: === stage smc
+[   16.105684] m5_n1: smc node found, device found, bound yes
+[   16.106239] m5_n1: SMC read gP13 = 4, value 0x00000000
+[   16.106287] m5_n1: === stage smc: 0
+[   16.111460] m5exp-n1w12: stage smc rc=0
+[   16.166739] m5exp-n1w12: stage clkreq
+[   16.245678] m5_n1: === stage clkreq
+[   16.245734] m5_n1: CLKREQ# (pin 76, logical, 1 = asserted) = 0
+[   16.245785] m5_n1: === stage clkreq: 0
+[   16.255100] m5exp-n1w12: stage clkreq rc=0
+[   16.322894] m5exp-n1w12: stage gp13
+[   16.373878] m5_n1: === stage gp13
+[   16.373945] m5_n1: smc node found, device found, bound yes
+[   16.373995] m5_n1: SMC WRITE gP13 := 0x00800001 (N1 reset release / power, PM-approved)
+[   16.375764] m5_n1:    write = 0
+[   16.376243] m5_n1:    readback = 4, 0x00000000
+[   16.477525] m5_n1: === stage gp13: 0
+[   16.477994] m5exp-n1w12: stage gp13 rc=0
+[   16.516557] m5exp-n1w12: stage clkreq
+[   16.542890] m5_n1: === stage clkreq
+[   16.542945] m5_n1: CLKREQ# (pin 76, logical, 1 = asserted) = 1
+[   16.542997] m5_n1: === stage clkreq: 0
+[   16.544571] m5exp-n1w12: stage clkreq rc=0
+[   16.585071] m5exp-n1w12: stage smc
+[   16.641878] m5_n1: === stage smc
+[   16.641952] m5_n1: smc node found, device found, bound yes
+[   16.642868] m5_n1: SMC read gP13 = 4, value 0x00000000
+[   16.642917] m5_n1: === stage smc: 0
+[   16.643963] m5exp-n1w12: stage smc rc=0
+[   16.714851] m5exp-n1w12: stage phy
+[   16.749595] m5_n1: === stage phy
+[   16.749649] m5_n1: wr phy-tunable(port0) 0x417010000 old=0x33000070 new=0x23000070
+[   16.749721] m5_n1:    readback 0x23000070
+[   16.749759] m5_n1: === stage phy: 0
+[   16.750892] m5exp-n1w12: stage phy rc=0
+[   16.808471] m5exp-n1w12: stage rd:417010000
+[   16.847123] m5_n1: rd 0x417010000
+[   16.847176] m5_n1:    = 0x23000070
+[   16.847792] m5exp-n1w12: stage rd:417010000 rc=0
+[   16.907639] m5exp-n1w12: stage refreq
+[   16.962664] m5_n1: === stage refreq
+[   16.962717] m5_n1: wr LANE REFCLK0REQ (early) 0x417010000 old=0x23000070 new=0x23000071
+[   16.962792] m5_n1:    readback 0x23000075
+[   16.962838] m5_n1: poll LANE REFCLK0ACK 0x417010000 mask 0x4 want 0x4: ok (0x23000075)
+[   16.962912] m5_n1: wr LANE REFCLK1REQ (early) 0x417010000 old=0x23000075 new=0x23000077
+[   16.962985] m5_n1:    readback 0x2300007f
+[   16.963029] m5_n1: poll LANE REFCLK1ACK 0x417010000 mask 0x8 want 0x8: ok (0x2300007f)
+[   16.963095] m5_n1: === stage refreq: 0
+[   16.965314] m5exp-n1w12: stage refreq rc=0
+[   17.016386] m5exp-n1w12: stage rd:417010000
+[   17.061712] m5_n1: rd 0x417010000
+[   17.061782] m5_n1:    = 0x2300007f
+[   17.063024] m5exp-n1w12: stage rd:417010000 rc=0
+[   17.165648] m5exp-n1w12: stage rd:4100280a8
+[   17.221151] m5_n1: rd 0x4100280a8
+[   17.221204] m5_n1:    = 0x00000000
+[   17.222738] m5exp-n1w12: stage rd:4100280a8 rc=0
+[   17.303378] m5exp-n1w12: stage asahien
+[   17.360973] m5_n1: === stage asahien
+[   17.361027] m5_n1: wr APPCLK_EN 0x410028800 old=0x00100100 new=0x00100101
+[   17.361092] m5_n1:    readback 0x00100101
+[   17.361132] m5_n1: wr LANE REFCLKEN 0x417010000 old=0x2300007f new=0x2300067f
+[   17.361195] m5_n1:    readback 0x2300067f
+[   17.362631] m5_n1: wr PERST_OFF 0x41002882c old=0x00010000 new=0x00010001
+[   17.362692] m5_n1:    readback 0x00010001
+[   17.362742] m5_n1: PERST# GPIO now 0
+[   17.465630] m5_n1: rd PORT_0xa8 0x4100280a8
+[   17.465684] m5_n1:    = 0x00000000
+[   17.465729] m5_n1: poll PORT_STATUS.READY 0x410028804 mask 0x1 want 0x1: ok (0x00000005)
+[   17.465803] m5_n1: === stage asahien: 0
+[   17.468050] m5exp-n1w12: stage asahien rc=0
+[   17.537661] m5exp-n1w12: stage config
+[   17.653210] m5_n1: === stage config
+[   17.653259] m5_n1: rd RP id 0x1cb0000000
+[   17.653300] m5_n1:    = 0x100c106b
+[   17.653335] m5_n1: wr RP DBI_RO_WR_EN 0x1cb00008bc old=0x000bff48 new=0x000bff49
+[   17.653399] m5_n1:    readback 0x000bff49
+[   17.653440] m5_n1: wr pcie-rc-tunable 0x1cb0000078 old=0x00102810 new=0x00100810
+[   17.653519] m5_n1:    readback 0x00100810
+[   17.653558] m5_n1: wr pcie-rc-tunable 0x1cb0000194 old=0x00000000 new=0x00000002
+[   17.653622] m5_n1:    readback 0x00000002
+[   17.653661] m5_n1: wr pcie-rc-tunable 0x1cb0000b80 old=0x1d203220 new=0x1d7f1e1e
+[   17.653724] m5_n1:    readback 0x1d7f1e1e
+[   17.653764] m5_n1: wr pcie-rc-tunable 0x1cb0000b88 old=0x1d203220 new=0x1d7f1e1e
+[   17.653827] m5_n1:    readback 0x1d7f1e1e
+[   17.653867] m5_n1: wr RP rate shadow select 0x1cb0000890 old=0x00002000 new=0x00002000
+[   17.653935] m5_n1:    readback 0x00002000
+[   17.653974] m5_n1: wr rc-shadow-tunable 0x1cb0000154 old=0x74747474 new=0x75757575
+[   17.654038] m5_n1:    readback 0x75757575
+[   17.654078] m5_n1: wr rc-shadow-tunable 0x1cb0000890 old=0x00002000 new=0x00002000
+[   17.654142] m5_n1:    readback 0x00002000
+[   17.654182] m5_n1: wr rc-shadow-tunable 0x1cb00008a8 old=0x0c001061 new=0x0c000061
+[   17.654246] m5_n1:    readback 0x0c000061
+[   17.654285] m5_n1: wr RP rate shadow select 0x1cb0000890 old=0x00002000 new=0x01002000
+[   17.654352] m5_n1:    readback 0x01402000
+[   17.654391] m5_n1: wr rc-shadow-tunable 0x1cb0000178 old=0x00004444 new=0x00005555
+[   17.654456] m5_n1:    readback 0x00005555
+[   17.654495] m5_n1: wr rc-shadow-tunable 0x1cb0000890 old=0x01402000 new=0x01402000
+[   17.654560] m5_n1:    readback 0x01402000
+[   17.654599] m5_n1: wr rc-shadow-tunable 0x1cb00008a8 old=0x04001021 new=0x04000021
+[   17.654664] m5_n1:    readback 0x04000021
+[   17.654703] m5_n1: wr RP rate shadow select 0x1cb0000890 old=0x01402000 new=0x00402000
+[   17.654770] m5_n1:    readback 0x00002000
+[   17.654809] m5_n1: wr rc-shadow-tunable 0x1cb00001ac old=0x00004444 new=0x00005555
+[   17.654874] m5_n1:    readback 0x00005555
+[   17.654913] m5_n1: wr rc-shadow-tunable 0x1cb0000890 old=0x00002000 new=0x02002000
+[   17.654978] m5_n1:    readback 0x02002000
+[   17.655017] m5_n1: wr rc-shadow-tunable 0x1cb00008a8 old=0x04059f21 new=0x04000021
+[   17.655081] m5_n1:    readback 0x04000021
+[   17.655120] m5_n1: wr RP 0x194.0 0x1cb0000194 old=0x00000002 new=0x00000003
+[   17.655181] m5_n1:    readback 0x00000003
+[   17.655224] m5_n1: RP PCIe capability at 0x70
+[   17.655266] m5_n1: wr RP LNKCTL2.TLS=Gen1 0x1cb00000a0 old=0x02010045 new=0x02010041
+[   17.655321] m5_n1:    readback 0x02010041
+[   17.655361] m5_n1: wr RP PORT_LINK_CTRL x1 0x1cb0000710 old=0x00030120 new=0x00010120
+[   17.655428] m5_n1:    readback 0x00010120
+[   17.655467] m5_n1: wr RP LINK_WIDTH_SPEED x1 0x1cb000080c old=0x301302ff new=0x301301ff
+[   17.655535] m5_n1:    readback 0x301301ff
+[   17.655575] m5_n1: wr RP LNKCAP.MLW x1 0x1cb000007c old=0x00737825 new=0x00737815
+[   17.655639] m5_n1:    readback 0x00737815
+[   17.655678] m5_n1: wr RP DBI_RO_WR_EN off 0x1cb00008bc old=0x000bff49 new=0x000bff48
+[   17.655744] m5_n1:    readback 0x000bff48
+[   17.655783] m5_n1: wr INTR2AXI enable 0x410024080 old=0x00000000 new=0x00000001
+[   17.655845] m5_n1:    readback 0x00000000
+[   17.655883] m5_n1: === stage config: 0
+[   17.663101] m5exp-n1w12: stage config rc=0
+[   17.809737] m5exp-n1w12: stage asahiprep
+[   17.928438] m5_n1: === stage asahiprep
+[   17.928488] m5_n1: wr LANE REFCLKCGEN 0x417010000 old=0x2300067f new=0xe300067f
+[   17.928553] m5_n1:    readback 0xe300067f
+[   17.928592] m5_n1: wr APPCLK_CGDIS clear 0x410028800 old=0x00100101 new=0x00100001
+[   17.928656] m5_n1:    readback 0x00100001
+[   17.928694] m5_n1: === stage asahiprep: 0
+[   17.931009] m5exp-n1w12: stage asahiprep rc=0
+[   18.037890] m5exp-n1w12: stage gp13
+[   18.098819] m5_n1: === stage gp13
+[   18.098887] m5_n1: smc node found, device found, bound yes
+[   18.098936] m5_n1: SMC WRITE gP13 := 0x00800001 (N1 reset release / power, PM-approved)
+[   18.100110] m5_n1:    write = 0
+[   18.101698] m5_n1:    readback = 4, 0x00000000
+[   18.207404] m5_n1: === stage gp13: 0
+[   18.207925] m5exp-n1w12: stage gp13 rc=0
+[   18.249452] m5exp-n1w12: stage clkreq
+[   18.298445] m5_n1: === stage clkreq
+[   18.298501] m5_n1: CLKREQ# (pin 76, logical, 1 = asserted) = 1
+[   18.298552] m5_n1: === stage clkreq: 0
+[   18.305909] m5exp-n1w12: stage clkreq rc=0
+[   18.365294] m5exp-n1w12: stage dumprp
+[   18.407101] m5_n1: === stage dumprp
+[   18.407150] m5_n1: dump RP 0x1cb0000000..0x1cb0000100
+[   18.407200] m5_n1:   RP+000: 100c106b 00100000 06040001 00010000
+[   18.407256] m5_n1:   RP+010: 00000000 00000000 00000000 00000000
+[   18.407312] m5_n1:   RP+020: 00000000 00010001 00000000 00000000
+[   18.407367] m5_n1:   RP+030: 00000000 00000040 00000000 000001ff
+[   18.407423] m5_n1:   RP+040: c9c35001 00000008 00000000 00000000
+[   18.407478] m5_n1:   RP+050: 00807005 00000000 00000000 00000000
+[   18.407533] m5_n1:   RP+060: 00000000 00000000 00000000 00000000
+[   18.407588] m5_n1:   RP+070: 00420010 00008001 00100810 00737815
+[   18.407643] m5_n1:   RP+080: 10110000 00000000 004003c0 00010000
+[   18.407699] m5_n1:   RP+090: 00000000 00010c1f 00000000 0180003e
+[   18.407754] m5_n1:   RP+0a0: 02010041 00000000 00000000 00000000
+[   18.407809] m5_n1:   RP+0b0: 00000000 00000000 00000000 00000000
+[   18.407864] m5_n1:   RP+0c0: 00000000 00000000 00000000 00000000
+[   18.407919] m5_n1:   RP+0d0: 00000000 00000000 00000000 00000000
+[   18.407974] m5_n1:   RP+0e0: 00000000 00000000 00000000 00000000
+[   18.408029] m5_n1:   RP+0f0: 00000000 00000000 00000000 00000000
+[   18.408081] m5_n1: dump RP-portlogic 0x1cb0000700..0x1cb0000740
+[   18.408136] m5_n1:   RP-portlogic+700: 06110205 ffffffff 00800000 98ffff00
+[   18.408197] m5_n1:   RP-portlogic+710: 00010120 08000000 00010000 00000140
+[   18.408259] m5_n1:   RP-portlogic+720: 00000000 00000000 00000000 08200000
+[   18.408321] m5_n1:   RP-portlogic+730: 00000000 00000000 00000000 00000000
+[   18.408379] m5_n1: dump RP-portlogic 0x1cb0000800..0x1cb0000830
+[   18.408433] m5_n1:   RP-portlogic+800: 00000000 00000000 00000000 301301ff
+[   18.408495] m5_n1:   RP-portlogic+810: 00000000 00000000 00000000 0000007f
+[   18.408545] m5_n1:   RP-portlogic+820: 00000000 00000000 00000000 00000000
+[   18.408604] m5_n1: dump RP-portlogic 0x1cb0000880..0x1cb00008c0
+[   18.408658] m5_n1:   RP-portlogic+880: 00000000 00000000 00000000 00000001
+[   18.408719] m5_n1:   RP-portlogic+890: 02002000 00000000 00000000 00000000
+[   18.408780] m5_n1:   RP-portlogic+8a0: 00000000 00000000 04000021 00000040
+[   18.408841] m5_n1:   RP-portlogic+8b0: 00000000 00000000 00000003 000bff48
+[   18.408908] m5_n1: RP PCIe cap @0x70: LNKCAP 0x00737815 LNKCTL 0x0000 (LinkDisable=0, RetrainLink=0) LNKSTA 0x1011 (speed 1 width 1 training=0 DLLActive=0) LNKCAP2 0x0180003e LNKCTL2 0x0041 SLTSTA 0x0040
+[   18.409087] m5_n1: RP DW PORT_DEBUG0 (0x728) 0x00000000 LTSSM 0x00, PORT_DEBUG1 (0x72c) 0x08200000
+[   18.409160] m5_n1: === stage dumprp: 0
+[   18.414663] m5exp-n1w12: stage dumprp rc=0
+[   18.488174] m5exp-n1w12: stage dumpport
+[   18.518118] m5_n1: === stage dumpport
+[   18.518166] m5_n1: dump PORT 0x410028000..0x410028300
+[   18.518215] m5_n1:   PORT+000: 00000000 00000000 00000000 00000000
+[   18.518271] m5_n1:   PORT+010: 00000000 00000000 00000000 00000000
+[   18.518326] m5_n1:   PORT+020: 00000000 00000000 00000000 00000000
+[   18.518381] m5_n1:   PORT+030: 00000000 00000000 00000000 00000000
+[   18.518436] m5_n1:   PORT+040: 00000000 00000000 00000000 00000000
+[   18.518491] m5_n1:   PORT+050: 00000000 00000000 00000000 00000000
+[   18.518546] m5_n1:   PORT+060: 00000000 00000000 00000000 00000000
+[   18.518601] m5_n1:   PORT+070: 00000000 00000000 00000000 00000000
+[   18.518656] m5_n1:   PORT+080: 00000000 00000000 00000000 00000000
+[   18.518711] m5_n1:   PORT+090: 00000000 00000000 00000000 00000000
+[   18.518767] m5_n1:   PORT+0a0: 00000000 00000000 00000000 00000000
+[   18.518822] m5_n1:   PORT+0b0: 00000000 00000000 00000000 00000000
+[   18.518877] m5_n1:   PORT+0c0: 00000000 00000000 00000000 00000000
+[   18.518931] m5_n1:   PORT+0d0: 00000000 00000000 00000000 00000000
+[   18.518987] m5_n1:   PORT+0e0: 00000000 00000000 00000000 00000000
+[   18.519042] m5_n1:   PORT+0f0: 00000000 00000000 00000000 00000000
+[   18.519097] m5_n1:   PORT+100: 00000000 fffffff0 00000000 00000000
+[   18.519152] m5_n1:   PORT+110: 00000000 00000000 00000000 00000000
+[   18.519207] m5_n1:   PORT+120: 00000000 00000100 00000000 00000000
+[   18.519262] m5_n1:   PORT+130: 03020000 00000000 00000000 00000000
+[   18.519318] m5_n1:   PORT+140: 00000011 00253770 00000000 00000003
+[   18.519372] m5_n1:   PORT+150: 00000002 00000000 00000000 00000000
+[   18.519428] m5_n1:   PORT+160: 00000000 00000000 00000000 00000000
+[   18.519482] m5_n1:   PORT+170: 00000000 00000000 00000000 00000000
+[   18.519538] m5_n1:   PORT+180: 00000000 00000000 00000000 00000000
+[   18.519593] m5_n1:   PORT+190: 00000000 00000000 00000000 00000000
+[   18.519648] m5_n1:   PORT+1a0: 00000000 00000000 00000000 00000000
+[   18.519703] m5_n1:   PORT+1b0: 00000000 00000000 00000000 00000000
+[   18.519758] m5_n1:   PORT+1c0: 00000000 00000000 00000000 00000000
+[   18.519813] m5_n1:   PORT+1d0: 00000000 00000000 00000000 00000000
+[   18.519869] m5_n1:   PORT+1e0: 00000000 00000000 00000000 00000000
+[   18.519924] m5_n1:   PORT+1f0: 00000000 00000000 00000000 00000000
+[   18.519979] m5_n1:   PORT+200: 00000000 00000000 c3002204 00000000
+[   18.520034] m5_n1:   PORT+210: 00000000 00000000 00000000 00000000
+[   18.520089] m5_n1:   PORT+220: 00000000 00000000 00000000 00000000
+[   18.520144] m5_n1:   PORT+230: 00000000 00000000 00000000 00000000
+[   18.520198] m5_n1:   PORT+240: 00000000 00000000 00000000 00000000
+[   18.520254] m5_n1:   PORT+250: 00000000 00000000 00000000 00000000
+[   18.520309] m5_n1:   PORT+260: 00000000 00000000 00000000 00000000
+[   18.520364] m5_n1:   PORT+270: 00000000 00000000 00000000 00000000
+[   18.520419] m5_n1:   PORT+280: 00000000 01000000 00000000 00000000
+[   18.520474] m5_n1:   PORT+290: 00000000 00000000 00000000 00000000
+[   18.520529] m5_n1:   PORT+2a0: 40000000 00000000 00000000 00000000
+[   18.520584] m5_n1:   PORT+2b0: 00000000 00000007 00000000 00000000
+[   18.520639] m5_n1:   PORT+2c0: 00000000 00000000 00000000 00000000
+[   18.520694] m5_n1:   PORT+2d0: 00000000 00000000 00000000 00000000
+[   18.520739] m5_n1:   PORT+2e0: 00000000 00000000 00000000 00000000
+[   18.520795] m5_n1:   PORT+2f0: 00000000 00000000 00000000 00000000
+[   18.520848] m5_n1: dump PORT 0x410028800..0x410028900
+[   18.520895] m5_n1:   PORT+800: 00100001 00000005 001001ff 00000000
+[   18.520950] m5_n1:   PORT+810: 00000000 00000000 00000000 00000000
+[   18.521005] m5_n1:   PORT+820: 00000000 00000000 00000000 00010001
+[   18.521060] m5_n1:   PORT+830: 00000000 00000000 00000032 00000000
+[   18.521115] m5_n1:   PORT+840: 00000000 00000000 00000000 00000000
+[   18.521170] m5_n1:   PORT+850: 00000000 00000000 00000000 00000000
+[   18.521225] m5_n1:   PORT+860: 00000000 00000000 00000000 00000000
+[   18.521280] m5_n1:   PORT+870: 00000000 00000000 00000000 00000000
+[   18.521334] m5_n1:   PORT+880: 00000000 01010101 00000000 00000000
+[   18.521388] m5_n1:   PORT+890: 00000000 00000000 00000000 00000000
+[   18.521443] m5_n1:   PORT+8a0: 00000000 00000000 00000001 00000001
+[   18.533530] m5_n1:   PORT+8b0: 00000000 00000000 00000000 00000000
+[   18.533594] m5_n1:   PORT+8c0: 00000000 00000000 00000000 00000000
+[   18.533649] m5_n1:   PORT+8d0: 00000000 00000000 00000000 00000000
+[   18.533703] m5_n1:   PORT+8e0: 00000000 00000000 00000000 00000000
+[   18.533758] m5_n1:   PORT+8f0: 00000000 00000000 00000000 00000000
+[   18.533812] m5_n1: dump LANE 0x417010000..0x417010040
+[   18.533862] m5_n1:   LANE+000: e300067f 00000030 000000c8 00000002
+[   18.533919] m5_n1:   LANE+010: 00300c03 00300c03 00000000 00000000
+[   18.533976] m5_n1:   LANE+020: 00000000 00000000 00000000 00000000
+[   18.534032] m5_n1:   LANE+030: 00000000 00000000 00000000 00000000
+[   18.534085] m5_n1: dump I2A 0x410024000..0x410024100
+[   18.534132] m5_n1:   I2A+000: 00000000 00000000 00000000 00000000
+[   18.534187] m5_n1:   I2A+010: 00000000 00000000 00000000 00000000
+[   18.534241] m5_n1:   I2A+020: 00000000 00000000 00000000 00000000
+[   18.534295] m5_n1:   I2A+030: 00000000 00000000 00000000 00000000
+[   18.534350] m5_n1:   I2A+040: 00000000 00000000 00000000 00000000
+[   18.534404] m5_n1:   I2A+050: 00000000 00000000 00000000 00000000
+[   18.534458] m5_n1:   I2A+060: 00000000 00000000 00000000 00000000
+[   18.534513] m5_n1:   I2A+070: 00000000 00000000 00000000 00000000
+[   18.534567] m5_n1:   I2A+080: 00000000 00000001 00000000 00000000
+[   18.534621] m5_n1:   I2A+090: 00000000 00000000 00000000 00000000
+[   18.534676] m5_n1:   I2A+0a0: 00000000 00000000 00000000 00000000
+[   18.534730] m5_n1:   I2A+0b0: 00000000 00000000 00000000 00000000
+[   18.534785] m5_n1:   I2A+0c0: 00000000 00000000 00000000 00000000
+[   18.534839] m5_n1:   I2A+0d0: 00000000 00000000 00000000 00000000
+[   18.534893] m5_n1:   I2A+0e0: 00000000 00000000 00000000 00000000
+[   18.534948] m5_n1:   I2A+0f0: 00000000 00000000 00000000 00000000
+[   18.535001] m5_n1: === stage dumpport: 0
+[   18.542111] m5exp-n1w12: stage dumpport rc=0
+[   18.597294] m5exp-n1w12: stage tuncmp
+[   18.647010] m5_n1: === stage tuncmp
+[   18.647061] m5_n1: rd reg4 0x417980838
+[   18.647107] m5_n1:    = 0x00007802 want 0x00000002/0x00000002 MATCH
+[   18.647162] m5_n1: rd reg4 0x417980828
+[   18.647201] m5_n1:    = 0x00000b44 want 0x00000b44/0x0000ffff MATCH
+[   18.647255] m5_n1: rd reg4 0x417980c1c
+[   18.647294] m5_n1:    = 0x28011fc0 want 0x000007c0/0x000007e0 MATCH
+[   18.647348] m5_n1: rd reg4 0x417980e10
+[   18.647393] m5_n1:    = 0x00000240 want 0x00000240/0x000003e0 MATCH
+[   18.647447] m5_n1: rd reg4 0x4179820a4
+[   18.647486] m5_n1:    = 0x66120280 want 0x01010000/0x03c3c000 differs
+[   18.647541] m5_n1: rd reg4 0x417982200
+[   18.647580] m5_n1:    = 0x0008375e want 0x00000008/0x00000008 MATCH
+[   18.647634] m5_n1: rd reg4 0x41798221c
+[   18.647679] m5_n1:    = 0x00002528 want 0x00000500/0x000007c0 MATCH
+[   18.647732] m5_n1: rd reg4 0x417982224
+[   18.647771] m5_n1:    = 0x00000818 want 0x00000800/0x00000c00 MATCH
+[   18.647815] m5_n1: rd reg4 0x417982228
+[   18.647854] m5_n1:    = 0x00000b18 want 0x00000b00/0x00000f00 MATCH
+[   18.647909] m5_n1: rd reg4 0x417982230
+[   18.647955] m5_n1:    = 0x0001e834 want 0x00000034/0x0000003f MATCH
+[   18.648009] m5_n1: rd reg4 0x41798224c
+[   18.648048] m5_n1:    = 0x060c4613 want 0x00004613/0x0000fe7f MATCH
+[   18.648102] m5_n1: rd reg4 0x4179822b0
+[   18.648141] m5_n1:    = 0x18300811 want 0x00300000/0x00700000 MATCH
+[   18.648195] m5_n1: rd reg4 0x417982338
+[   18.648240] m5_n1:    = 0x379a7700 want 0x00001700/0x00001f00 MATCH
+[   18.648295] m5_n1: rd reg4 0x417983000
+[   18.648333] m5_n1:    = 0x207c0400 want 0x201c0400/0x301fbf00 MATCH
+[   18.648388] m5_n1: rd reg4 0x417983004
+[   18.648426] m5_n1:    = 0x0008bf9b want 0x0008bf9b/0x001fffff MATCH
+[   18.648481] m5_n1: rd reg4 0x417983014
+[   18.648526] m5_n1:    = 0x40ff0180 want 0x40000080/0xff0000ff MATCH
+[   18.648580] m5_n1: rd reg4 0x417983008
+[   18.648618] m5_n1:    = 0x0015930a want 0x0015930a/0x001fffff MATCH
+[   18.648673] m5_n1: rd reg4 0x41798300c
+[   18.648711] m5_n1:    = 0x001a2548 want 0x001a2548/0x001fffff MATCH
+[   18.648766] m5_n1: rd reg4 0x417983010
+[   18.648811] m5_n1:    = 0x001baaa8 want 0x001baaa8/0x001fffff MATCH
+[   18.648865] m5_n1: rd reg4 0x417984008
+[   18.648904] m5_n1:    = 0x0000000b want 0x0000000b/0xffffffff MATCH
+[   18.648958] m5_n1: rd reg4 0x4179860c8
+[   18.648996] m5_n1:    = 0x00000000 want 0x00000000/0x000000ff MATCH
+[   18.649050] m5_n1: rd reg4 0x4179884c0
+[   18.649095] m5_n1:    = 0xf020c150 want 0x00004150/0x000043f0 MATCH
+[   18.649149] m5_n1: rd reg4 0x417988574
+[   18.649187] m5_n1:    = 0x01000000 want 0x00000000/0x007f8000 MATCH
+[   18.649241] m5_n1: rd reg4 0x417989814
+[   18.649280] m5_n1:    = 0x00018c20 want 0x00000c00/0x00007e00 MATCH
+[   18.649334] m5_n1: rd reg4 0x417989838
+[   18.649379] m5_n1:    = 0x05e68d20 want 0x05e00000/0x0fe00000 MATCH
+[   18.649433] m5_n1: rd reg4 0x4179898b4
+[   18.649472] m5_n1:    = 0x0a30c30c want 0x0a000000/0x3f000000 MATCH
+[   18.657542] m5_n1: rd reg4 0x41798a050
+[   18.657599] m5_n1:    = 0x0a000106 want 0x08000000/0x08000000 MATCH
+[   18.657654] m5_n1: rd reg4 0x41798a140
+[   18.657693] m5_n1:    = 0x00fa07d0 want 0x000007d0/0x0000ffff MATCH
+[   18.657747] m5_n1: rd reg4 0x41798a154
+[   18.657786] m5_n1:    = 0x00001c1e want 0x00001c00/0x00001f00 MATCH
+[   18.657840] m5_n1: rd reg4 0x41798a2c0
+[   18.657885] m5_n1:    = 0x00e101c8 want 0x00010008/0x001f803f MATCH
+[   18.657939] m5_n1: rd reg4 0x41798a2c8
+[   18.657977] m5_n1:    = 0x7de203d1 want 0x00020011/0x001f803f MATCH
+[   18.658032] m5_n1: rd reg4 0x41798a2d0
+[   18.658070] m5_n1:    = 0x7de403e2 want 0x00000022/0x0000003f MATCH
+[   18.658125] m5_n1: rd reg4 0x41798a31c
+[   18.658170] m5_n1:    = 0x07071f1f want 0x07071010/0x0f0ff0f0 MATCH
+[   18.658225] m5_n1: rd reg4 0x41798a338
+[   18.658264] m5_n1:    = 0x00000a0a want 0x00000a0a/0x0000ffff MATCH
+[   18.658317] m5_n1: rd reg4 0x41798a33c
+[   18.658356] m5_n1:    = 0x00002428 want 0x00002408/0x00007f0f MATCH
+[   18.658410] m5_n1: rd reg4 0x41798a340
+[   18.658455] m5_n1:    = 0x07071f18 want 0x00000008/0x0000000f MATCH
+[   18.658509] m5_n1: rd reg4 0x41798a378
+[   18.658548] m5_n1:    = 0x00110600 want 0x00000600/0x0000ff00 MATCH
+[   18.658603] m5_n1: rd reg4 0x41798a37c
+[   18.658641] m5_n1:    = 0x00010600 want 0x00000600/0x0000ff00 MATCH
+[   18.658695] m5_n1: rd reg4 0x41798a380
+[   18.658730] m5_n1:    = 0x00110f05 want 0x00000f00/0x0000ff00 MATCH
+[   18.658785] m5_n1: rd reg4 0x41798a384
+[   18.658823] m5_n1:    = 0x00110f05 want 0x00000f00/0x0000ff00 MATCH
+[   18.658877] m5_n1: rd reg4 0x41798a3b8
+[   18.658916] m5_n1:    = 0x0085e000 want 0x0085e000/0xffffffff MATCH
+[   18.658970] m5_n1: rd reg4 0x41798a3c8
+[   18.659015] m5_n1:    = 0x00000300 want 0x00000300/0xffffffff MATCH
+[   18.659070] m5_n1: rd reg4 0x41798c410
+[   18.659108] m5_n1:    = 0x00015000 want 0x00000000/0x00100000 MATCH
+[   18.659162] m5_n1: rd reg4 0x41798c438
+[   18.659201] m5_n1:    = 0x02000000 want 0x00000000/0x01800000 MATCH
+[   18.659255] m5_n1: rd reg4 0x41798c4a4
+[   18.659300] m5_n1:    = 0x00000010 want 0x00000010/0x00000010 MATCH
+[   18.659354] m5_n1: reg4 PLL+port0 AUSPMA: 44/45 already hold the ADT value
+[   18.659413] m5_n1: === stage tuncmp: 0
+[   18.661674] m5exp-n1w12: stage tuncmp rc=0
+[   18.745930] m5exp-n1w12: stage ltssmgo
+[   18.781601] m5_n1: === stage ltssmgo
+[   18.781663] m5_n1: PERST# deasserted (0); CLKREQ# 1
+[   18.985510] m5_n1: LTSSMCTL := 1, reads 0x00000001
+[   18.985572] m5_n1:   t=   0 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.041516] m5_n1:   t=  50 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.097511] m5_n1:   t= 100 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.153510] m5_n1:   t= 150 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.209510] m5_n1:   t= 200 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.265505] m5_n1:   t= 250 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.321500] m5_n1:   t= 300 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.377500] m5_n1:   t= 350 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.433503] m5_n1:   t= 400 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.489517] m5_n1:   t= 450 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.545512] m5_n1:   t= 500 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.601504] m5_n1:   t= 550 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.657508] m5_n1:   t= 600 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.713506] m5_n1:   t= 650 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.769506] m5_n1:   t= 700 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.825513] m5_n1:   t= 750 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.881502] m5_n1:   t= 800 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.937508] m5_n1:   t= 850 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   19.993500] m5_n1:   t= 900 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   20.049500] m5_n1:   t= 950 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   20.105498] m5_n1:   t=1000 ms LTSSMCTL 0x00000001 LINKSTS 0xc3002204 DEBUG0 0x00000000 DEBUG1 0x08200000 lane 0xe300067f
+[   20.161504] m5_n1: === stage ltssmgo: -67
+[   20.162503] m5exp-n1w12: stage ltssmgo rc=1
+[   20.202040] m5exp-n1w12: stage dumprp
+[   20.244480] m5_n1: === stage dumprp
+[   20.244529] m5_n1: dump RP 0x1cb0000000..0x1cb0000100
+[   20.244580] m5_n1:   RP+000: 100c106b 00100000 06040001 00010000
+[   20.244636] m5_n1:   RP+010: 00000000 00000000 00000000 00000000
+[   20.244692] m5_n1:   RP+020: 00000000 00010001 00000000 00000000
+[   20.244747] m5_n1:   RP+030: 00000000 00000040 00000000 000001ff
+[   20.244803] m5_n1:   RP+040: c9c35001 00000008 00000000 00000000
+[   20.244858] m5_n1:   RP+050: 00807005 00000000 00000000 00000000
+[   20.244913] m5_n1:   RP+060: 00000000 00000000 00000000 00000000
+[   20.244968] m5_n1:   RP+070: 00420010 00008001 00100810 00737815
+[   20.245025] m5_n1:   RP+080: 10110000 00000000 004003c0 00010000
+[   20.245080] m5_n1:   RP+090: 00000000 00010c1f 00000000 0180003e
+[   20.245135] m5_n1:   RP+0a0: 02010041 00000000 00000000 00000000
+[   20.245190] m5_n1:   RP+0b0: 00000000 00000000 00000000 00000000
+[   20.245246] m5_n1:   RP+0c0: 00000000 00000000 00000000 00000000
+[   20.245301] m5_n1:   RP+0d0: 00000000 00000000 00000000 00000000
+[   20.245356] m5_n1:   RP+0e0: 00000000 00000000 00000000 00000000
+[   20.245412] m5_n1:   RP+0f0: 00000000 00000000 00000000 00000000
+[   20.245464] m5_n1: dump RP-portlogic 0x1cb0000700..0x1cb0000740
+[   20.245609] m5_n1:   RP-portlogic+700: 06110205 ffffffff 00800000 98ffff00
+[   20.245671] m5_n1:   RP-portlogic+710: 00010120 08000000 00010000 00000140
+[   20.245733] m5_n1:   RP-portlogic+720: 00000000 00000000 00000000 08200000
+[   20.245794] m5_n1:   RP-portlogic+730: 00000000 00000000 00000000 00000000
+[   20.245852] m5_n1: dump RP-portlogic 0x1cb0000800..0x1cb0000830
+[   20.245906] m5_n1:   RP-portlogic+800: 00000000 00000000 00000000 301301ff
+[   20.245968] m5_n1:   RP-portlogic+810: 00000000 00000000 00000000 0000007f
+[   20.246029] m5_n1:   RP-portlogic+820: 00000000 00000000 00000000 00000000
+[   20.246087] m5_n1: dump RP-portlogic 0x1cb0000880..0x1cb00008c0
+[   20.246142] m5_n1:   RP-portlogic+880: 00000000 00000000 00000000 00000001
+[   20.246203] m5_n1:   RP-portlogic+890: 02002000 00000000 00000000 00000000
+[   20.246264] m5_n1:   RP-portlogic+8a0: 00000000 00000000 04000021 00000040
+[   20.246325] m5_n1:   RP-portlogic+8b0: 00000000 00000000 00000003 000bff48
+[   20.246391] m5_n1: RP PCIe cap @0x70: LNKCAP 0x00737815 LNKCTL 0x0000 (LinkDisable=0, RetrainLink=0) LNKSTA 0x1011 (speed 1 width 1 training=0 DLLActive=0) LNKCAP2 0x0180003e LNKCTL2 0x0041 SLTSTA 0x0040
+[   20.246572] m5_n1: RP DW PORT_DEBUG0 (0x728) 0x00000000 LTSSM 0x00, PORT_DEBUG1 (0x72c) 0x08200000
+[   20.246644] m5_n1: === stage dumprp: 0
+[   20.251732] m5exp-n1w12: stage dumprp rc=0
+[   20.295178] m5exp-n1w12: stage dumpport
+[   20.330504] m5_n1: === stage dumpport
+[   20.330552] m5_n1: dump PORT 0x410028000..0x410028300
+[   20.330600] m5_n1:   PORT+000: 00000000 00000000 00000000 00000000
+[   20.330656] m5_n1:   PORT+010: 00000000 00000000 00000000 00000000
+[   20.330712] m5_n1:   PORT+020: 00000000 00000000 00000000 00000000
+[   20.330767] m5_n1:   PORT+030: 00000000 00000000 00000000 00000000
+[   20.330821] m5_n1:   PORT+040: 00000000 00000000 00000000 00000000
+[   20.330877] m5_n1:   PORT+050: 00000000 00000000 00000000 00000000
+[   20.330932] m5_n1:   PORT+060: 00000000 00000000 00000000 00000000
+[   20.330987] m5_n1:   PORT+070: 00000000 00000000 00000000 00000000
+[   20.331042] m5_n1:   PORT+080: 00000001 00000000 00000000 00000000
+[   20.331097] m5_n1:   PORT+090: 00000000 00000000 00000000 00000000
+[   20.331152] m5_n1:   PORT+0a0: 00000000 00000000 00000000 00000000
+[   20.331207] m5_n1:   PORT+0b0: 00000000 00000000 00000000 00000000
+[   20.331262] m5_n1:   PORT+0c0: 00000000 00000000 00000000 00000000
+[   20.331317] m5_n1:   PORT+0d0: 00000000 00000000 00000000 00000000
+[   20.331372] m5_n1:   PORT+0e0: 00000000 00000000 00000000 00000000
+[   20.331427] m5_n1:   PORT+0f0: 00000000 00000000 00000000 00000000
+[   20.331471] m5_n1:   PORT+100: 00000000 fffffff0 00000000 00000000
+[   20.331528] m5_n1:   PORT+110: 00000000 00000000 00000000 00000000
+[   20.331583] m5_n1:   PORT+120: 00000000 00000100 00000000 00000000
+[   20.331637] m5_n1:   PORT+130: 03020000 00000000 00000000 00000000
+[   20.331693] m5_n1:   PORT+140: 00000011 00253770 00000000 00000003
+[   20.331748] m5_n1:   PORT+150: 00000002 00000000 00000000 00000000
+[   20.331803] m5_n1:   PORT+160: 00000000 00000000 00000000 00000000
+[   20.331858] m5_n1:   PORT+170: 00000000 00000000 00000000 00000000
+[   20.331913] m5_n1:   PORT+180: 00000000 00000000 00000000 00000000
+[   20.331967] m5_n1:   PORT+190: 00000000 00000000 00000000 00000000
+[   20.332023] m5_n1:   PORT+1a0: 00000000 00000000 00000000 00000000
+[   20.332077] m5_n1:   PORT+1b0: 00000000 00000000 00000000 00000000
+[   20.332132] m5_n1:   PORT+1c0: 00000000 00000000 00000000 00000000
+[   20.332187] m5_n1:   PORT+1d0: 00000000 00000000 00000000 00000000
+[   20.332242] m5_n1:   PORT+1e0: 00000000 00000000 00000000 00000000
+[   20.332297] m5_n1:   PORT+1f0: 00000000 00000000 00000000 00000000
+[   20.332352] m5_n1:   PORT+200: 00000000 00000000 c3002204 00000000
+[   20.332407] m5_n1:   PORT+210: 00000000 00000000 00000000 00000000
+[   20.332462] m5_n1:   PORT+220: 00000000 00000000 00000000 00000000
+[   20.332516] m5_n1:   PORT+230: 00000000 00000000 00000000 00000000
+[   20.332571] m5_n1:   PORT+240: 00000000 00000000 00000000 00000000
+[   20.332626] m5_n1:   PORT+250: 00000000 00000000 00000000 00000000
+[   20.332680] m5_n1:   PORT+260: 00000000 00000000 00000000 00000000
+[   20.332736] m5_n1:   PORT+270: 00000000 00000000 00000000 00000000
+[   20.332790] m5_n1:   PORT+280: 00000000 01000000 00000000 00000000
+[   20.332846] m5_n1:   PORT+290: 00000000 00000000 00000000 00000000
+[   20.332901] m5_n1:   PORT+2a0: 40000000 00000000 00000000 00000000
+[   20.332956] m5_n1:   PORT+2b0: 00000000 00000007 00000000 00000000
+[   20.333011] m5_n1:   PORT+2c0: 00000000 00000000 00000000 00000000
+[   20.333066] m5_n1:   PORT+2d0: 00000000 00000000 00000000 00000000
+[   20.333121] m5_n1:   PORT+2e0: 00000000 00000000 00000000 00000000
+[   20.333176] m5_n1:   PORT+2f0: 00000000 00000000 00000000 00000000
+[   20.333229] m5_n1: dump PORT 0x410028800..0x410028900
+[   20.333277] m5_n1:   PORT+800: 00100001 00000005 001001ff 00000000
+[   20.333332] m5_n1:   PORT+810: 00000000 00000000 00000000 00000000
+[   20.333387] m5_n1:   PORT+820: 00000000 00000000 00000000 00010001
+[   20.333441] m5_n1:   PORT+830: 00000000 00000000 00000032 00000000
+[   20.345534] m5_n1:   PORT+840: 00000000 00000000 00000000 00000000
+[   20.345600] m5_n1:   PORT+850: 00000000 00000000 00000000 00000000
+[   20.345655] m5_n1:   PORT+860: 00000000 00000000 00000000 00000000
+[   20.345710] m5_n1:   PORT+870: 00000000 00000000 00000000 00000000
+[   20.345765] m5_n1:   PORT+880: 00000000 01010101 00000000 00000000
+[   20.345820] m5_n1:   PORT+890: 00000000 00000000 00000000 00000000
+[   20.345875] m5_n1:   PORT+8a0: 00000000 00000000 00000001 00000001
+[   20.345930] m5_n1:   PORT+8b0: 00000000 00000000 00000000 00000000
+[   20.345985] m5_n1:   PORT+8c0: 00000000 00000000 00000000 00000000
+[   20.346040] m5_n1:   PORT+8d0: 00000000 00000000 00000000 00000000
+[   20.346095] m5_n1:   PORT+8e0: 00000000 00000000 00000000 00000000
+[   20.346151] m5_n1:   PORT+8f0: 00000000 00000000 00000000 00000000
+[   20.346205] m5_n1: dump LANE 0x417010000..0x417010040
+[   20.346255] m5_n1:   LANE+000: e300067f 00000030 000000c8 00000002
+[   20.346311] m5_n1:   LANE+010: 00300c03 00300c03 00000000 00000000
+[   20.346368] m5_n1:   LANE+020: 00000000 00000000 00000000 00000000
+[   20.346424] m5_n1:   LANE+030: 00000000 00000000 00000000 00000000
+[   20.346478] m5_n1: dump I2A 0x410024000..0x410024100
+[   20.346525] m5_n1:   I2A+000: 00000000 00000000 00000000 00000000
+[   20.346580] m5_n1:   I2A+010: 00000000 00000000 00000000 00000000
+[   20.346634] m5_n1:   I2A+020: 00000000 00000000 00000000 00000000
+[   20.346689] m5_n1:   I2A+030: 00000000 00000000 00000000 00000000
+[   20.346743] m5_n1:   I2A+040: 00000000 00000000 00000000 00000000
+[   20.346797] m5_n1:   I2A+050: 00000000 00000000 00000000 00000000
+[   20.346841] m5_n1:   I2A+060: 00000000 00000000 00000000 00000000
+[   20.346896] m5_n1:   I2A+070: 00000000 00000000 00000000 00000000
+[   20.346951] m5_n1:   I2A+080: 00000000 00000001 00000000 00000000
+[   20.347005] m5_n1:   I2A+090: 00000000 00000000 00000000 00000000
+[   20.347060] m5_n1:   I2A+0a0: 00000000 00000000 00000000 00000000
+[   20.347114] m5_n1:   I2A+0b0: 00000000 00000000 00000000 00000000
+[   20.347169] m5_n1:   I2A+0c0: 00000000 00000000 00000000 00000000
+[   20.347223] m5_n1:   I2A+0d0: 00000000 00000000 00000000 00000000
+[   20.347277] m5_n1:   I2A+0e0: 00000000 00000000 00000000 00000000
+[   20.347331] m5_n1:   I2A+0f0: 00000000 00000000 00000000 00000000
+[   20.347384] m5_n1: === stage dumpport: 0
+[   20.353817] m5exp-n1w12: stage dumpport rc=0
+[   20.406145] m5exp-n1w12: stage tuncmp
+[   20.441595] m5_n1: === stage tuncmp
+[   20.441645] m5_n1: rd reg4 0x417980838
+[   20.441692] m5_n1:    = 0x00007802 want 0x00000002/0x00000002 MATCH
+[   20.441748] m5_n1: rd reg4 0x417980828
+[   20.441787] m5_n1:    = 0x00000b44 want 0x00000b44/0x0000ffff MATCH
+[   20.441841] m5_n1: rd reg4 0x417980c1c
+[   20.441880] m5_n1:    = 0x28011fc0 want 0x000007c0/0x000007e0 MATCH
+[   20.441934] m5_n1: rd reg4 0x417980e10
+[   20.441979] m5_n1:    = 0x00000240 want 0x00000240/0x000003e0 MATCH
+[   20.442033] m5_n1: rd reg4 0x4179820a4
+[   20.442073] m5_n1:    = 0x66120280 want 0x01010000/0x03c3c000 differs
+[   20.442128] m5_n1: rd reg4 0x417982200
+[   20.442166] m5_n1:    = 0x0008375e want 0x00000008/0x00000008 MATCH
+[   20.442221] m5_n1: rd reg4 0x41798221c
+[   20.442266] m5_n1:    = 0x00002528 want 0x00000500/0x000007c0 MATCH
+[   20.442319] m5_n1: rd reg4 0x417982224
+[   20.442358] m5_n1:    = 0x00000818 want 0x00000800/0x00000c00 MATCH
+[   20.442412] m5_n1: rd reg4 0x417982228
+[   20.442451] m5_n1:    = 0x00000b18 want 0x00000b00/0x00000f00 MATCH
+[   20.442505] m5_n1: rd reg4 0x417982230
+[   20.442550] m5_n1:    = 0x0001e834 want 0x00000034/0x0000003f MATCH
+[   20.442604] m5_n1: rd reg4 0x41798224c
+[   20.442643] m5_n1:    = 0x060c4613 want 0x00004613/0x0000fe7f MATCH
+[   20.442696] m5_n1: rd reg4 0x4179822b0
+[   20.442735] m5_n1:    = 0x18300811 want 0x00300000/0x00700000 MATCH
+[   20.442789] m5_n1: rd reg4 0x417982338
+[   20.442834] m5_n1:    = 0x379a7700 want 0x00001700/0x00001f00 MATCH
+[   20.442888] m5_n1: rd reg4 0x417983000
+[   20.442927] m5_n1:    = 0x207c0400 want 0x201c0400/0x301fbf00 MATCH
+[   20.442981] m5_n1: rd reg4 0x417983004
+[   20.443020] m5_n1:    = 0x0008bf9b want 0x0008bf9b/0x001fffff MATCH
+[   20.443074] m5_n1: rd reg4 0x417983014
+[   20.443119] m5_n1:    = 0x40ff0180 want 0x40000080/0xff0000ff MATCH
+[   20.443173] m5_n1: rd reg4 0x417983008
+[   20.443211] m5_n1:    = 0x0015930a want 0x0015930a/0x001fffff MATCH
+[   20.443265] m5_n1: rd reg4 0x41798300c
+[   20.443304] m5_n1:    = 0x001a2548 want 0x001a2548/0x001fffff MATCH
+[   20.443358] m5_n1: rd reg4 0x417983010
+[   20.443403] m5_n1:    = 0x001baaa8 want 0x001baaa8/0x001fffff MATCH
+[   20.443457] m5_n1: rd reg4 0x417984008
+[   20.443495] m5_n1:    = 0x0000000b want 0x0000000b/0xffffffff MATCH
+[   20.443549] m5_n1: rd reg4 0x4179860c8
+[   20.443588] m5_n1:    = 0x00000000 want 0x00000000/0x000000ff MATCH
+[   20.443642] m5_n1: rd reg4 0x4179884c0
+[   20.443686] m5_n1:    = 0xf020c150 want 0x00004150/0x000043f0 MATCH
+[   20.443741] m5_n1: rd reg4 0x417988574
+[   20.443779] m5_n1:    = 0x01000000 want 0x00000000/0x007f8000 MATCH
+[   20.443833] m5_n1: rd reg4 0x417989814
+[   20.443861] m5_n1:    = 0x00018c20 want 0x00000c00/0x00007e00 MATCH
+[   20.443917] m5_n1: rd reg4 0x417989838
+[   20.443962] m5_n1:    = 0x05e68d20 want 0x05e00000/0x0fe00000 MATCH
+[   20.444016] m5_n1: rd reg4 0x4179898b4
+[   20.444055] m5_n1:    = 0x0a30c30c want 0x0a000000/0x3f000000 MATCH
+[   20.444109] m5_n1: rd reg4 0x41798a050
+[   20.444148] m5_n1:    = 0x0a000106 want 0x08000000/0x08000000 MATCH
+[   20.444202] m5_n1: rd reg4 0x41798a140
+[   20.444247] m5_n1:    = 0x00fa07d0 want 0x000007d0/0x0000ffff MATCH
+[   20.444302] m5_n1: rd reg4 0x41798a154
+[   20.444340] m5_n1:    = 0x00001c1e want 0x00001c00/0x00001f00 MATCH
+[   20.444394] m5_n1: rd reg4 0x41798a2c0
+[   20.444432] m5_n1:    = 0x00e101c8 want 0x00010008/0x001f803f MATCH
+[   20.444485] m5_n1: rd reg4 0x41798a2c8
+[   20.444530] m5_n1:    = 0x7de203d1 want 0x00020011/0x001f803f MATCH
+[   20.444583] m5_n1: rd reg4 0x41798a2d0
+[   20.444621] m5_n1:    = 0x7de403e2 want 0x00000022/0x0000003f MATCH
+[   20.444675] m5_n1: rd reg4 0x41798a31c
+[   20.444713] m5_n1:    = 0x07071f1f want 0x07071010/0x0f0ff0f0 MATCH
+[   20.444766] m5_n1: rd reg4 0x41798a338
+[   20.444810] m5_n1:    = 0x00000a0a want 0x00000a0a/0x0000ffff MATCH
+[   20.444864] m5_n1: rd reg4 0x41798a33c
+[   20.444902] m5_n1:    = 0x00002428 want 0x00002408/0x00007f0f MATCH
+[   20.444955] m5_n1: rd reg4 0x41798a340
+[   20.444993] m5_n1:    = 0x07071f18 want 0x00000008/0x0000000f MATCH
+[   20.445046] m5_n1: rd reg4 0x41798a378
+[   20.445091] m5_n1:    = 0x00110600 want 0x00000600/0x0000ff00 MATCH
+[   20.445144] m5_n1: rd reg4 0x41798a37c
+[   20.445182] m5_n1:    = 0x00010600 want 0x00000600/0x0000ff00 MATCH
+[   20.445235] m5_n1: rd reg4 0x41798a380
+[   20.445273] m5_n1:    = 0x00110f05 want 0x00000f00/0x0000ff00 MATCH
+[   20.445326] m5_n1: rd reg4 0x41798a384
+[   20.445371] m5_n1:    = 0x00110f05 want 0x00000f00/0x0000ff00 MATCH
+[   20.445424] m5_n1: rd reg4 0x41798a3b8
+[   20.445463] m5_n1:    = 0x0085e000 want 0x0085e000/0xffffffff MATCH
+[   20.457600] m5_n1: rd reg4 0x41798a3c8
+[   20.457655] m5_n1:    = 0x00000300 want 0x00000300/0xffffffff MATCH
+[   20.457709] m5_n1: rd reg4 0x41798c410
+[   20.457748] m5_n1:    = 0x00015000 want 0x00000000/0x00100000 MATCH
+[   20.457802] m5_n1: rd reg4 0x41798c438
+[   20.457841] m5_n1:    = 0x02000000 want 0x00000000/0x01800000 MATCH
+[   20.457895] m5_n1: rd reg4 0x41798c4a4
+[   20.457939] m5_n1:    = 0x00000010 want 0x00000010/0x00000010 MATCH
+[   20.457993] m5_n1: reg4 PLL+port0 AUSPMA: 44/45 already hold the ADT value
+[   20.458052] m5_n1: === stage tuncmp: 0
+[   20.461988] m5exp-n1w12: stage tuncmp rc=0
+[   20.507090] m5exp-n1w12: stage pmgr
+[   20.537588] m5_n1: === stage pmgr
+[   20.537636] m5_n1: PS APCIE_GP         +0x118 = 0x000000ff target f actual f
+[   20.537700] m5_n1: PS APCIE_GE         +0x120 = 0x00000200 target 0 actual 0
+[   20.537763] m5_n1: PS APCIE_ST0        +0x128 = 0x000002ff target f actual f
+[   20.537825] m5_n1: PS APCIE_ST1        +0x130 = 0x000002ff target f actual f
+[   20.537888] m5_n1: PS FAB6_SOC         +0x138 = 0x0f0000ff target f actual f
+[   20.537950] m5_n1: PS ANS              +0x140 = 0x1f0003ff target f actual f
+[   20.538013] m5_n1: PS APCIE_SYS_GP     +0x148 = 0x1f0003ff target f actual f
+[   20.538075] m5_n1: PS APCIE_SYS_ST0    +0x150 = 0x1000030f target f actual 0
+[   20.538137] m5_n1: PS APCIE_SYS_ST1    +0x158 = 0x1000030f target f actual 0
+[   20.538199] m5_n1: PS APCIE_SYS_GE     +0x188 = 0x0f000300 target 0 actual 0
+[   20.538261] m5_n1: PS APCIE_PHY_SW     +0x1b0 = 0x0f0002ff target f actual f
+[   20.538323] m5_n1: PS APHY_ST0_AUS5_A  +0x240 = 0x000002ff target f actual f
+[   20.538385] m5_n1: PS APHY_ST1_AUS5_A  +0x248 = 0x000002ff target f actual f
+[   20.538437] m5_n1: PS APHY_GE_AUS5_A   +0x250 = 0x00000200 target 0 actual 0
+[   20.538499] m5_n1: PS APHY_GP_AUS5_A   +0x258 = 0x000002ff target f actual f
+[   20.538562] m5_n1: PS APHY_ST0_AUS5    +0x268 = 0x1000030f target f actual 0
+[   20.538623] m5_n1: PS APHY_ST1_AUS5    +0x270 = 0x1000030f target f actual 0
+[   20.538685] m5_n1: PS APHY_GE_AUS5     +0x278 = 0x0f000300 target 0 actual 0
+[   20.538747] m5_n1: PS APHY_GP_AUS5     +0x280 = 0x1000030f target f actual 0
+[   20.538807] m5_n1: === stage pmgr: 0
+[   20.542457] m5exp-n1w12: stage pmgr rc=0
+[   20.582700] m5exp-n1w12: stage perst
+[   20.618856] m5_n1: === stage perst
+[   20.618915] m5_n1: PERST# asserted (1)
+[   20.618953] m5_n1: === stage perst: 0
+[   20.619477] m5exp-n1w12: stage perst rc=0
+[   20.657568] m5exp-n1w12: end

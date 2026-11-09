@@ -1,0 +1,331 @@
+--- codex-platform-r3t/src/drivers/pmdomain/apple/pmgr-pwrstate.c	2026-11-04 23:37:10.231812930 -0500
++++ codex-tier2-kbd/src/drivers/pmdomain/apple/pmgr-pwrstate.c	2026-11-06 02:02:21.082493035 -0500
+@@ -5,6 +5,7 @@
+  * Copyright The Asahi Linux Contributors
+  */
+ 
++#include <linux/atomic.h>
+ #include <linux/bitops.h>
+ #include <linux/bitfield.h>
+ #include <linux/err.h>
+@@ -100,20 +101,89 @@
+ 	return true;
+ }
+ 
++/*
++ * m5 Tier 2: ONE runtime power-on token for the exact domain "fpwm0", armed only by the explicit post-boot
++ * m5_kbdlight "force" activation (after its read-only gates). It is NOT an allow-list entry: m5_ps_ro(fpwm0) stays
++ * true, so probe-min-state, probe-auto-enable, power-off and the reset ops of fpwm0 are never written. The token
++ * permits exactly one store: genpd power_on -> PS TARGET=ACTIVE, with AUTO_ENABLE suppressed (so the domain is never
++ * left auto-gated and no later store can hit an auto-gated domain, T6050 hang note in the probe). Arming is refused
++ * before SYSTEM_RUNNING (no boot/cmdline use) and works once per boot. ps_set runs under the IRQ-safe genpd
++ * spinlock, hence atomics. States: 0 idle, 1 armed, 2 consumed, 3 closed.
++ */
++/* M5_TOK_BEGIN (host-tested: tools/tier2-kbd/token-test.c) */
++static atomic_t m5_fpwm0_tok = ATOMIC_INIT(0);	/* 0 idle, 1 armed, 2 consumed+stored, 3 closed, 4 consumed, NO store */
++int m5_pmgr_fpwm0_arm(void);
++bool m5_pmgr_fpwm0_close(void);
++
++int m5_pmgr_fpwm0_arm(void)
++{
++	int ret = system_state != SYSTEM_RUNNING ? -EPERM :
++		  atomic_cmpxchg(&m5_fpwm0_tok, 0, 1) == 0 ? 0 : -EALREADY;
++
++	pr_warn("m5 pmgr: fpwm0 runtime power-on token arm: %d\n", ret);
++	return ret;
++}
++
++/* Close the token for this boot; true only if the one power-on store was issued. */
++bool m5_pmgr_fpwm0_close(void)
++{
++	int old = atomic_xchg(&m5_fpwm0_tok, 3);
++
++	pr_warn("m5 pmgr: fpwm0 runtime power-on token closed (%s)\n",
++		old == 2 ? "used: store issued" : old == 4 ? "used: NO store (recheck refused)" :
++		old == 1 ? "armed, not used" : old == 3 ? "already closed" : "never armed");
++	return old == 2;
++}
++
++/* ps_set: take the token (1 -> 2) for an ACTIVE set of exactly "fpwm0"; only one caller can win. */
++static bool m5_fpwm0_take(const char *name, u32 pstate)
++{
++	return pstate == APPLE_PMGR_PS_ACTIVE && name && !strcmp(name, "fpwm0") &&
++	       atomic_cmpxchg(&m5_fpwm0_tok, 1, 2) == 1;
++}
++
++/* ps_set: the token was taken but no store follows (still consumed: one-shot). */
++static void m5_fpwm0_nostore(void)
++{
++	atomic_set(&m5_fpwm0_tok, 4);
++}
++/* M5_TOK_END */
++
+ static int apple_pmgr_ps_set(struct generic_pm_domain *genpd, u32 pstate, bool auto_enable)
+ {
+ 	int ret;
+ 	struct apple_pmgr_ps *ps = genpd_to_apple_pmgr_ps(genpd);
+ 	u32 reg, cur;
++	bool m5_tok = false;
+ 
+ 	if (m5_ps_ro(ps)) {
+-		M5_PS_LOG(ps, "SKIP(ro) set", pstate);
+-		return 0;
++		m5_tok = m5_fpwm0_take(genpd->name, pstate);
++		if (!m5_tok) {
++			M5_PS_LOG(ps, "SKIP(ro) set", pstate);
++			return 0;
++		}
++		auto_enable = false;
+ 	}
+ 
+ 	ret = regmap_read(ps->regmap, ps->offset, &reg);
+-	if (ret < 0)
++	if (ret < 0) {
++		if (m5_tok)
++			m5_fpwm0_nostore();
+ 		return ret;
++	}
++
++	/* m5 Tier 2: the token store only goes to a plainly-off fpwm0 (not auto-PM, not busy, not in reset). */
++	if (m5_tok && FIELD_GET(APPLE_PMGR_PS_ACTUAL, reg) == APPLE_PMGR_PS_ACTIVE) {
++		M5_PS_LOG(ps, "token: already active, no store", reg);
++		m5_fpwm0_nostore();
++		return 0;
++	}
++	if (m5_tok && reg & (APPLE_PMGR_RESET | APPLE_PMGR_AUTO_ENABLE | APPLE_PMGR_PS_RESET |
++			     APPLE_PMGR_BUSY | APPLE_PMGR_DEV_DISABLE)) {
++		M5_PS_LOG(ps, "token REFUSED (not plainly off), no store", reg);
++		m5_fpwm0_nostore();
++		return -EPERM;
++	}
+ 
+ 	/* Resets are synchronous, and only work if the device is powered and clocked. */
+ 	if (reg & APPLE_PMGR_RESET && pstate != APPLE_PMGR_PS_ACTIVE)
+--- codex-platform-r3t/src/drivers/soc/apple/m5_kbdlight.c	2026-11-06 01:22:27.937984106 -0500
++++ codex-tier2-kbd/src/drivers/soc/apple/m5_kbdlight.c	2026-11-06 02:02:43.492863278 -0500
+@@ -23,6 +23,12 @@
+  * (0x2_80900000), id 0xbb (= pwm0 clock-gates 187); SIO = 0x290 / id 0xb8 (live DT parent power-controller@290).
+  * kbd-backlight high-period 212 + low-period 748 = 960 counts at 24 MHz = 40 us (25 kHz): the period used here.
+  *
++ * Tier 2 (supersedes the m5_pmgr_allow=...,fpwm0 route for force): "force" needs NO allow-list entry and no boot
++ * PMGR write. After the read-only verdict (FPWM0 plainly off: ACTUAL != 0xf, no AUTO/BUSY/RESET/DISABLE bits;
++ * parent SIO ACTUAL == 0xf) it arms pmgr-pwrstate's one-shot fpwm0 power-on token, so the genpd power_on caused by
++ * the pwm bind is the only PMGR store (TARGET=ACTIVE, no AUTO_ENABLE). The token is closed right after the bind.
++ * "read" is a repeatable read-only preflight. A refusal before actuation does not spend the attempt.
++ *
+  * r3 runtime activation (instead of a cold boot): root writes "1" or "force" ONCE to
+  * /sys/module/m5_kbdlight/parameters/activate (0200). Refused before SYSTEM_RUNNING (no cmdline/early use), off
+  * apple,j714s, or if the boot-time path or an earlier write already ran (one attempt per boot, whatever the
+@@ -56,20 +62,57 @@
+ 
+ #define L(fmt, ...) pr_info("m5_kbdlight: " fmt "\n", ##__VA_ARGS__)
+ 
+-/* One read-only 32-bit read of the FPWM0 PMGR power-state word; returns ACTUAL[7:4], or -1 if unmappable. */
+-static int fpwm0_actual(void)
++/* Tier 2: built-in pmgr-pwrstate one-shot fpwm0 power-on token (force only; refused before SYSTEM_RUNNING). */
++int m5_pmgr_fpwm0_arm(void);
++bool m5_pmgr_fpwm0_close(void);
++
++#define SIO_PS_PA		(0x280900000UL + 0x290)	/* fpwm0's parent (live DT power-controller@290, always-on) */
++#define PS_ACT(w)		(((w) >> 4) & 0xf)
++#define PS_TGT(w)		((w) & 0xf)
++/* RESET(31) AUTO_ENABLE(28) PS_RESET(12) BUSY(11) DEV_DISABLE(10): any of these = not "plainly off" */
++#define PS_NOT_PLAIN		(BIT(31) | BIT(28) | BIT(12) | BIT(11) | BIT(10))
++#define PS_BAD			0xffffffffu
++
++/* One read-only 32-bit read of a PMGR power-state word, logged; PS_BAD if unmappable. */
++static u32 ps_word(const char *name, unsigned long pa)
+ {
+-	void __iomem *p = ioremap(FPWM0_PS_PA, 4);
++	void __iomem *p = ioremap(pa, 4);
+ 	u32 w;
+ 
+ 	if (!p)
+-		return -1;
++		return PS_BAD;
+ 	w = readl(p);
+ 	iounmap(p);
+-	L("FPWM0 power state %#x (actual %u)", w, (w >> 4) & 0xf);
+-	return (w >> 4) & 0xf;
++	L("%s power state %#x (actual %u target %u auto %u busy %u)", name, w, PS_ACT(w), PS_TGT(w),
++	  !!(w & BIT(28)), !!(w & BIT(11)));
++	return w;
+ }
+ 
++static int fpwm0_actual(void)
++{
++	u32 w = ps_word("FPWM0", FPWM0_PS_PA);
++
++	return w == PS_BAD ? -1 : PS_ACT(w);
++}
++
++enum { V_ON, V_FORCE, V_REFUSE };
++/* M5_VERDICT_BEGIN (host-tested: tools/tier2-kbd/verdict-test.c) */
++static int fpwm0_verdict(u32 w, u32 sio)
++{
++	if (w == PS_BAD)
++		return V_REFUSE;
++	if (PS_ACT(w) == 0xf)
++		return V_ON;			/* powered: mode 1, no PMGR store */
++	if (w & PS_NOT_PLAIN)
++		return V_REFUSE;		/* auto-PM / busy / reset: a PS store here is the T6050 hang class */
++	if (sio == PS_BAD || PS_ACT(sio) != 0xf)
++		return V_REFUSE;		/* parent not really on (genpd would not power it: always-on, ro) */
++	return V_FORCE;			/* plainly off, parent on: the one token store is eligible */
++}
++/* M5_VERDICT_END */
++static const char *const vname[] = { "powered: use 1", "plainly off, parent on: force eligible",
++				     "not eligible: nothing to do" };
++
+ static u32 free_phandle(u32 from)
+ {
+ 	struct device_node *np;
+@@ -111,6 +154,8 @@
+  * node (property add: no device). 2: pwm@505040000 (probe resolves power-domains + clocks). 3: led-controller
+  * (leds-pwm probe resolves pwms).
+  */
++static bool m5_kbd_used;	/* one attempt per boot, spent when actuation begins (boot option or runtime write) */
++
+ static int do_kbdlight(void)
+ {
+ 	struct device_node *root = of_find_node_by_path("/");
+@@ -121,7 +166,8 @@
+ 	struct of_changeset cs1, cs2, cs3;
+ 	const char *lbl = NULL, *cname = NULL;
+ 	u32 ps_ph, pwm_ph;
+-	int ret = -ENODEV;
++	int ret = -ENODEV, v;
++	bool tok = false;
+ 
+ 	if (!root || !soc || !ps || !clk)
+ 		goto out;
+@@ -137,13 +183,24 @@
+ 		goto out;
+ 	}
+ 
+-	if (fpwm0_actual() != 0xf && m5_kbdlight != 2) {
+-		L("FPWM0 is not powered and m5_pmgr_ro would skip the power-on: nothing created "
+-		  "(owner decision: m5_pmgr_allow=...,fpwm0 plus m5_kbdlight=force)");
++	/* Everything above and this verdict is read-only: a refusal here does NOT spend the attempt. */
++	v = fpwm0_verdict(ps_word("FPWM0", FPWM0_PS_PA), ps_word("SIO", SIO_PS_PA));
++	L("verdict: %s", vname[v]);
++	if (v != (m5_kbdlight == 2 ? V_FORCE : V_ON)) {
++		L("%s refused before actuation: nothing created, attempt NOT spent", m5_kbdlight == 2 ? "force" : "1");
+ 		ret = -EPERM;
+ 		goto out;
+ 	}
+ 
++	m5_kbd_used = true;	/* actuation begins: from here on this boot has no further attempt */
++	L("actuation begins (attempt spent)");
++	if (m5_kbdlight == 2) {
++		ret = m5_pmgr_fpwm0_arm();
++		if (ret)
++			goto out;
++		tok = true;
++	}
++
+ 	/* 1: phandle on the existing domain node (property only; the notifier creates no device for it) */
+ 	ps_ph = ps->phandle;
+ 	if (!ps_ph) {
+@@ -179,10 +236,14 @@
+ 		goto out;
+ 	}
+ 	pwm->phandle = pwm_ph;	/* __of_attach_node() sets it from the property; keep it explicit */
++	if (tok) {
++		tok = false;
++		L("force: fpwm0 power-on store %s", m5_pmgr_fpwm0_close() ? "issued" : "NOT issued");
++	}
+ 	if (!mkdev(pwm, soc)) {
+ 		L("pwm not bound: led-controller not created");
+ 		ret = -ENODEV;
+-		goto out;
++		goto pwm_fail;
+ 	}
+ 
+ 	/*
+@@ -193,7 +254,7 @@
+ 	if (fpwm0_actual() != 0xf) {
+ 		L("FPWM0 still not powered after pwm bind: led-controller not created");
+ 		ret = -EPERM;
+-		goto out;
++		goto pwm_fail;
+ 	}
+ 
+ 	/* 3: the pwm-leds consumer */
+@@ -215,7 +276,24 @@
+ 		goto out;
+ 	}
+ 	ret = mkdev(leds, root) ? 0 : -ENODEV;
++	goto out;
++
++pwm_fail:
++	/*
++	 * Tier 2 (m5review T1): in force mode a deferred or powerless pwm device must not stay, or a later deferred
++	 * retry binds pwm-apple over an OFF block (power_on is SKIP(ro) then) and a pwm request would read unpowered
++	 * FPWM registers. Remove the node (and its device); genpd's detach power-off is SKIP(ro). Attempt stays spent.
++	 */
++	if (m5_kbdlight == 2) {
++		int r = of_changeset_revert(&cs2);
++
++		L("force: pwm@505040000 removed after failure: %d", r);
++		if (!r)
++			of_changeset_destroy(&cs2);
++	}
+ out:
++	if (tok)
++		m5_pmgr_fpwm0_close();
+ 	of_node_put(root);
+ 	of_node_put(soc);
+ 	of_node_put(ps);
+@@ -224,7 +302,6 @@
+ }
+ 
+ static DEFINE_MUTEX(m5_kbd_lock);
+-static bool m5_kbd_used;	/* one attempt per boot (boot option or runtime write) */
+ 
+ static int __init m5_kbdlight_init(void)
+ {
+@@ -237,7 +314,7 @@
+ 		return 0;
+ 	}
+ 	mutex_lock(&m5_kbd_lock);
+-	m5_kbd_used = true;
++	m5_kbd_used = true;	/* boot option: one attempt, whatever happens (force can never arm before runtime) */
+ 	ret = do_kbdlight();
+ 	mutex_unlock(&m5_kbd_lock);
+ 	L("m5_kbdlight=%s: %d", m5_kbdlight == 2 ? "force" : "1", ret);
+@@ -250,7 +327,7 @@
+ {
+ 	int mode, ret;
+ 
+-	mode = sysfs_streq(val, "1") ? 1 : sysfs_streq(val, "force") ? 2 : 0;
++	mode = sysfs_streq(val, "1") ? 1 : sysfs_streq(val, "force") ? 2 : sysfs_streq(val, "read") ? 3 : 0;
+ 	if (!mode)
+ 		return -EINVAL;
+ 	if (system_state != SYSTEM_RUNNING) {
+@@ -262,12 +339,18 @@
+ 		return -ENODEV;
+ 	}
+ 	mutex_lock(&m5_kbd_lock);
++	if (mode == 3) {	/* Tier 2: read-only preflight, repeatable, never spends the attempt */
++		u32 w = ps_word("FPWM0", FPWM0_PS_PA), sio = ps_word("SIO", SIO_PS_PA);
++
++		L("activate read: %s; attempt %s", vname[fpwm0_verdict(w, sio)], m5_kbd_used ? "SPENT" : "available");
++		mutex_unlock(&m5_kbd_lock);
++		return w == PS_BAD ? -ENOMEM : 0;
++	}
+ 	if (m5_kbd_used) {
+ 		mutex_unlock(&m5_kbd_lock);
+ 		L("activate refused: already attempted this boot");
+ 		return -EALREADY;
+ 	}
+-	m5_kbd_used = true;
+ 	m5_kbdlight = mode;
+ 	L("activate %s: begin", mode == 2 ? "force" : "1");
+ 	ret = do_kbdlight();
+@@ -280,4 +363,4 @@
+ 	.set = m5_kbd_activate_set,
+ };
+ module_param_cb(activate, &m5_kbd_activate_ops, NULL, 0200);
+-MODULE_PARM_DESC(activate, "r3: write 1 (or force) once at runtime to run the gated keyboard-backlight setup");
++MODULE_PARM_DESC(activate, "runtime only: read (repeatable, read-only) | 1 | force (one actuation per boot)");

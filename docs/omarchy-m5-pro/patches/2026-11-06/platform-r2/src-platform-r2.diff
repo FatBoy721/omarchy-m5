@@ -1,0 +1,637 @@
+--- codex-ft19-fresh/src/drivers/mfd/macsmc.c	2026-11-05 20:24:55.087257652 -0500
++++ codex-platform-r2/src/drivers/mfd/macsmc.c	2026-11-06 00:48:45.680592666 -0500
+@@ -54,6 +54,63 @@
+ 	MFD_CELL_OF("macsmc-rtc", NULL, NULL, 0, 0, "apple,smc-rtc"),
+ };
+ 
++/*
++ * m5 PLATFORM: the read-mostly SMC children, added only when the live SMC node carries "apple,m5-children"
++ * (set by the m5_smcnode overlay, m5_smc=2). No gpio (no consumer; its get path is an SMC rw, denied here)
++ * and NO reboot child (smc_reboot stays disabled). Every child key write still goes through the S2 gate below.
++ */
++/*
++ * m5 PLATFORM-r2: every child is individually opt-in (boot cmdline only, default 0) and only takes effect with the
++ * m5_smc=2 overlay node ("apple,m5-children"). macsmc-power is NOT a child here (FROZEN after its native hard hang,
++ * FT19-BATTERY, SoC watchdog reset; leading hypothesis H1 above). CONFIG_MACSMC_POWER is off in PLATFORM-r2; any
++ * battery test is a separate, isolated, instrumented, reviewed module run.
++ */
++static bool m5_input, m5_hwmon, m5_rtc;
++module_param(m5_input, bool, 0400);
++module_param(m5_hwmon, bool, 0400);
++module_param(m5_rtc, bool, 0400);
++MODULE_PARM_DESC(m5_input, "register macsmc-input (lid/power button); default 0; boot cmdline only");
++MODULE_PARM_DESC(m5_hwmon, "register macsmc-hwmon; default 0; boot cmdline only");
++MODULE_PARM_DESC(m5_rtc, "register macsmc-rtc (read-only PMIC NVMEM); default 0; boot cmdline only");
++
++static const struct mfd_cell apple_smc_m5_input = MFD_CELL_NAME("macsmc-input");
++static const struct mfd_cell apple_smc_m5_hwmon = MFD_CELL_OF("macsmc-hwmon", NULL, NULL, 0, 0, "apple,smc-hwmon");
++static const struct mfd_cell apple_smc_m5_rtc = MFD_CELL_OF("macsmc-rtc", NULL, NULL, 0, 0, "apple,smc-rtc");
++
++static int apple_smc_m5_add_child(struct apple_smc *smc, bool on, const struct mfd_cell *cell)
++{
++	int ret = 0;
++
++	if (on)
++		ret = devm_mfd_add_devices(smc->dev, PLATFORM_DEVID_NONE, cell, 1, NULL, 0, NULL);
++	dev_info(smc->dev, "m5: child %s: %s (%d)\n", cell->name, on ? "registered" : "off", ret);
++	return ret;
++}
++
++/*
++ * m5 PLATFORM, opt-in macsmc.m5_ntap=1 (boot cmdline only, default 0): allow exactly ONE write, NTAP := 0x01
++ * (1 byte, the upstream apple_smc_write_flag(NTAP, true) notification enable), at probe. Needed for lid and
++ * power-button events; battery/hwmon/RTC do not need it. Nothing else is allowed by it.
++ */
++static bool m5_ntap;
++module_param(m5_ntap, bool, 0400);
++MODULE_PARM_DESC(m5_ntap, "allow the single NTAP := 1 notification-enable write at probe; default 0; boot cmdline only");
++static bool m5_ntap_used;
++
++/*
++ * m5 PLATFORM-r2 (m5review H1, ~/CODEX-FT19-BATTERY-HANG-AUDIT.md): memcpy_fromio() does __raw_readq() on every
++ * aligned 8-byte chunk of SMC SRAM; no m5 boot has ever done a 64-bit SRAM load (proven so far: byte loads from
++ * GET_KEY_INFO, inline <= 4-byte values). Read shmem with byte loads only. Writes (memcpy_toio) are unchanged:
++ * 8-byte pcIO writes are native-proven (FT13/FT14).
++ */
++static void m5_shmem_read(void *dst, const void __iomem *src, size_t n)
++{
++	u8 *d = dst;
++
++	while (n--)
++		*d++ = readb(src++);
++}
++
+ static int apple_smc_cmd_locked(struct apple_smc *smc, u64 cmd, u64 arg,
+ 				  u64 size, u64 wsize, u32 *ret_data)
+ {
+@@ -145,7 +202,11 @@
+ 	 * (macsmc.h APPLE_SMC_TYPE_OPS: apple_smc_write(smc, key, &p, sizeof(p)), i.e. the CPU's u64 memory image),
+ 	 * and only while the runtime budget m5_pcio_budget > 0 (default 0; each allowed write consumes 1).
+ 	 */
+-	if (wsize) {
++	if (wsize && m5_ntap && !m5_ntap_used && key == SMC_KEY(NTAP) && wsize == 1 && !rsize &&
++	    *(const u8 *)wbuf == 1) {
++		m5_ntap_used = true;	/* exactly one, whatever the result */
++		dev_warn(smc->dev, "m5 ALLOW: NTAP := 1 (notification enable, once)\n");
++	} else if (wsize) {
+ 		u64 got = 0;
+ 		bool ok = key == SMC_KEY(pcIO) && wsize == sizeof(u64) && !rsize;
+ 
+@@ -203,7 +264,7 @@
+ 		if (rsize <= 4)
+ 			memcpy(rbuf, &rdata, rsize);
+ 		else
+-			memcpy_fromio(rbuf, smc->shmem.iomem, rsize);
++			m5_shmem_read(rbuf, smc->shmem.iomem, rsize);
+ 	}
+ 
+ 	return ret;
+@@ -252,7 +313,7 @@
+ 
+ 	ret = apple_smc_cmd(smc, SMC_MSG_GET_KEY_INFO, key, 0, 0, NULL);
+ 	if (ret >= 0 && info) {
+-		memcpy_fromio(key_info, smc->shmem.iomem, sizeof(key_info));
++		m5_shmem_read(key_info, smc->shmem.iomem, sizeof(key_info));
+ 		info->size = key_info[0];
+ 		info->type_code = get_unaligned_be32(&key_info[1]);
+ 		info->flags = key_info[5];
+@@ -510,10 +571,36 @@
+ 		return dev_err_probe(smc->dev, ret, "Failed to get key count");
+ 	smc->key_count = be32_to_cpu(count);
+ 
+-	/* m5: no NTAP notification enable and NO sub-devices (no macsmc-power/input/hwmon/gpio/reboot/rtc). */
+-	dev_info(smc->dev, "m5: SMC up (S2): %u keys; writes denied except budgeted exact pcIO AFE payloads, no sub-devices, no quiesce\n",
+-		 smc->key_count);
++	if (!of_property_read_bool(dev->of_node, "apple,m5-children")) {
++		/* m5 (FT19 and earlier): no NTAP notification enable and NO sub-devices. */
++		dev_info(smc->dev, "m5: SMC up (S2): %u keys; writes denied except budgeted exact pcIO AFE payloads, no sub-devices, no quiesce\n",
++			 smc->key_count);
++		return 0;
++	}
++
++	/* m5 PLATFORM: NTAP is attempted only when macsmc.m5_ntap=1; otherwise the S2 gate would deny it anyway. */
++	if (m5_ntap) {
++		struct apple_smc_key_info ki;
+ 
++		/*
++		 * Manager-approved (2026-11-06): exactly the upstream apple_smc_write_flag(NTAP, true), once, and only if
++		 * the live key metadata is the flag type it assumes: type "flag", size 1. Otherwise nothing is written.
++		 */
++		ret = apple_smc_get_key_info(smc, SMC_KEY(NTAP), &ki);
++		if (ret || ki.type_code != _SMC_KEY("flag") || ki.size != 1) {
++			dev_warn(smc->dev, "m5: NTAP metadata %d type %#x size %u is not flag/1: NOT written\n",
++				 ret, ret ? 0 : ki.type_code, ret ? 0 : ki.size);
++		} else {
++			ret = apple_smc_write_flag(smc, SMC_KEY(NTAP), true);
++			dev_info(smc->dev, "m5: NTAP (flag/1) := 1 notification enable: %d\n", ret);
++		}
++	}
++	/* Each child independently; a failing child does not stop the others or the SMC. */
++	apple_smc_m5_add_child(smc, m5_input, &apple_smc_m5_input);
++	apple_smc_m5_add_child(smc, m5_hwmon, &apple_smc_m5_hwmon);
++	apple_smc_m5_add_child(smc, m5_rtc, &apple_smc_m5_rtc);
++	dev_info(smc->dev, "m5: SMC up (S2 PLATFORM-r2): %u keys; NTAP %s; key writes denied except budgeted pcIO%s\n",
++		 smc->key_count, m5_ntap ? "allowed once" : "off", m5_ntap ? " and NTAP once" : "");
+ 
+ 	return 0;
+ }
+--- codex-ft19-fresh/src/drivers/soc/apple/m5_smcnode.c	2026-11-05 20:47:33.781790822 -0500
++++ codex-platform-r2/src/drivers/soc/apple/m5_smcnode.c	2026-11-06 00:37:35.056216301 -0500
+@@ -11,11 +11,18 @@
+ #include <linux/of_platform.h>
+ #include <linux/platform_device.h>
+ #include <linux/string.h>
++#include <linux/slab.h>
++#include <linux/libfdt.h>
+ 
+-static bool m5_smc;
++/*
++ * m5_smc=1: FT12..FT19 behaviour, byte-for-byte the same nodes (mbox + bare SMC, no children).
++ * m5_smc=2 (m5 PLATFORM): mbox changeset as before, then the built-in overlay m5-j714s-smc.dtso (SMC with
++ * hwmon/rtc children + nub-spmi0/PMIC NVMEM, read-only) instead of the bare SMC changeset.
++ */
++static int m5_smc;
+ static int __init m5_smc_setup(char *s)
+ {
+-	m5_smc = !strcmp(s, "1");
++	m5_smc = !strcmp(s, "1") ? 1 : !strcmp(s, "2") ? 2 : 0;
+ 	return 1;
+ }
+ __setup("m5_smc=", m5_smc_setup);
+@@ -34,6 +41,45 @@
+ 	return pd;
+ }
+ 
++extern u8 __dtbo_m5_j714s_smc_begin[], __dtbo_m5_j714s_smc_end[];
++
++/* m5_smc=2: apply the SMC/SPMI overlay with "mboxes" set to the live mailbox phandle. */
++static int do_smc_overlay(struct device_node *soc, u32 mbph)
++{
++	size_t size = __dtbo_m5_j714s_smc_end - __dtbo_m5_j714s_smc_begin;
++	struct device_node *np;
++	int off, ovcs = 0, ret;
++	const fdt32_t *cur;
++	void *fdt;
++
++	fdt = kmemdup(__dtbo_m5_j714s_smc_begin, size, GFP_KERNEL);
++	if (!fdt)
++		return -ENOMEM;
++	off = fdt_path_offset(fdt, "/fragment@0/__overlay__/smc@28c600000");
++	cur = off < 0 ? NULL : fdt_getprop(fdt, off, "mboxes", &ret);
++	if (!cur || ret != sizeof(*cur) || fdt32_to_cpu(*cur) != 0xfffffffe) {
++		L("overlay: smc/mboxes placeholder not found (%d): not applied", off);
++		kfree(fdt);
++		return -EINVAL;
++	}
++	ret = fdt_setprop_inplace_u32(fdt, off, "mboxes", mbph);
++	ret = ret ?: of_overlay_fdt_apply(fdt, size, &ovcs, NULL);	/* copies the blob */
++	kfree(fdt);
++	L("overlay m5-j714s-smc (%zu bytes, mboxes 0x%x): %d (ovcs %d)", size, mbph, ret, ovcs);
++	if (ret)
++		return ret;
++	/* Devices are normally created by the OF reconfig notifier; make sure, as for changeset 1. */
++	np = of_find_node_by_path("/soc/spmi@28a014000");	/* not the live USB spmi@28a188000 */
++	if (np && !mkdev(np))
++		ret = -ENODEV;
++	of_node_put(np);
++	np = of_find_node_by_path("/soc/smc@28c600000");
++	if (!np || !mkdev(np))
++		ret = -ENODEV;
++	of_node_put(np);
++	return ret;
++}
++
+ static int do_smc(void)
+ {
+ 	struct device_node *soc = of_find_node_by_path("/soc");
+@@ -81,6 +127,8 @@
+ 	mb->phandle = mbph;	/* of_changeset does not set np->phandle from the property */
+ 	if (!mkdev(mb))
+ 		return -ENODEV;
++	if (m5_smc == 2)
++		return do_smc_overlay(soc, mbph);
+ 
+ 	of_changeset_init(&cs2);
+ 	smc = of_changeset_create_node(&cs2, soc, "smc@28c600000");
+@@ -113,7 +161,7 @@
+ 	if (!m5_smc)
+ 		return 0;
+ 	ret = do_smc();
+-	L("m5_smc=1: smc/mbox nodes: %d", ret);
++	L("m5_smc=%d: smc/mbox nodes: %d", m5_smc, ret);
+ 	return 0;
+ }
+ late_initcall(m5_smcnode_init);
+--- codex-ft19-fresh/src/drivers/soc/apple/Makefile	2026-11-05 20:24:55.100778411 -0500
++++ codex-platform-r2/src/drivers/soc/apple/Makefile	2026-11-06 00:37:54.206986368 -0500
+@@ -25,4 +25,5 @@
+ obj-$(CONFIG_APPLE_SEP) += sep.o
+ 
+ obj-$(CONFIG_APPLE_PMP) += pmp.o
+-obj-$(CONFIG_MFD_MACSMC)	+= m5_smcnode.o
++obj-$(CONFIG_MFD_MACSMC)	+= m5_smcnode.o m5-j714s-smc.dtbo.o
++obj-$(CONFIG_PWM_APPLE)	+= m5_kbdlight.o
+--- codex-ft19-fresh/src/drivers/power/supply/macsmc-power.c	2026-11-04 14:50:00.357964842 -0500
++++ codex-platform-r2/src/drivers/power/supply/macsmc-power.c	2026-11-06 00:37:35.057216287 -0500
+@@ -834,12 +834,19 @@
+ 	power->smc = smc;
+ 	dev_set_drvdata(dev, power);
+ 
+-	INIT_WORK(&power->critical_work, macsmc_power_critical_work);
++	/* devm_work_autocancel() initialises critical_work */
+ 	ret = devm_work_autocancel(dev, &power->critical_work, macsmc_power_critical_work);
+ 	if (ret)
+ 		return ret;
+ 
+ 	/*
++	 * Must be ready before the notifier is registered below: an SMC event
++	 * can arrive as soon as it is, and re-initialising a work item that
++	 * is already queued corrupts the workqueue.
++	 */
++	INIT_DELAYED_WORK(&power->dbg_log_work, macsmc_dbg_work);
++
++	/*
+ 	 * Check for battery presence.
+ 	 * B0AV is a fundamental key.
+ 	 */
+@@ -1039,9 +1046,6 @@
+ 	power->nb.notifier_call = macsmc_power_event;
+ 	blocking_notifier_chain_register(&smc->event_handlers, &power->nb);
+ 
+-	INIT_WORK(&power->critical_work, macsmc_power_critical_work);
+-	INIT_DELAYED_WORK(&power->dbg_log_work, macsmc_dbg_work);
+-
+ 	g_power = power;
+ 
+ 	if (log_power)
+--- codex-ft19-fresh/src/drivers/nvmem/apple-spmi-nvmem.c	2026-11-04 14:50:00.183255809 -0500
++++ codex-platform-r2/src/drivers/nvmem/apple-spmi-nvmem.c	2026-11-06 00:37:35.057216287 -0500
+@@ -48,6 +48,10 @@
+ 		.reg_write = apple_spmi_nvmem_write,
+ 	};
+ 
++	/* m5 PLATFORM: a DT "read-only" device gets no write method at all (sysfs force_ro cannot re-enable it). */
++	if (of_property_read_bool(sdev->dev.of_node, "read-only"))
++		nvmem_cfg.reg_write = NULL;
++
+ 	regmap = devm_regmap_init_spmi_ext(sdev, &apple_spmi_regmap_config);
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+--- codex-ft19-fresh/src/drivers/gpu/drm/sysfb/simpledrm.c	2026-11-04 14:50:33.927431583 -0500
++++ codex-platform-r2/src/drivers/gpu/drm/sysfb/simpledrm.c	2026-11-06 00:37:54.206438799 -0500
+@@ -800,8 +800,18 @@
+ 	/* Connector */
+ 
+ 	connector = &sdev->connector;
++	/*
++	 * A built-in laptop panel the loader hands over (Apple, before DCP): eDP, so desktops treat it as the
++	 * internal panel. From edimoldovan/linux-aurora 9dee12b1266c ("drm/sysfb: simpledrm: eDP connector for
++	 * an Apple built-in panel"; GPL-2.0-only file). m5 J714s: the live FDT comes from m5boot and its
++	 * /chosen/framebuffer@0 has no apple,internal-panel, so on apple,j714s an apple,simple-framebuffer node
++	 * is treated the same way (narrow board match; no loader change needed).
++	 */
+ 	ret = drm_connector_init(dev, connector, &simpledrm_connector_funcs,
+-				 DRM_MODE_CONNECTOR_Unknown);
++				 (of_property_read_bool(dev->dev->of_node, "apple,internal-panel") ||
++				  (of_machine_is_compatible("apple,j714s") &&
++				   of_device_is_compatible(dev->dev->of_node, "apple,simple-framebuffer"))) ?
++				 DRM_MODE_CONNECTOR_eDP : DRM_MODE_CONNECTOR_Unknown);
+ 	if (ret)
+ 		return ERR_PTR(ret);
+ 	drm_connector_helper_add(connector, &simpledrm_connector_helper_funcs);
+--- /dev/null	2026-11-03 15:15:42.640371333 -0500
++++ codex-platform-r2/src/drivers/soc/apple/m5-j714s-smc.dtso	2026-11-06 00:37:35.058216272 -0500
+@@ -0,0 +1,100 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * m5 PLATFORM (J714s, Mac17,9, T6050): built-in overlay applied by m5_smcnode (m5_smc=2) to make the SMC,
++ * its read-mostly children and the PMIC NVMEM they read effective in the LIVE device tree (the m5boot live
++ * FDT has no such nodes; a changed board .dts would not be used).
++ *
++ * Derived from edimoldovan/linux-aurora 4602eba4b9d2 (arch/arm64/boot/dts/apple/t6050-smc.dtsi, itself from
++ * betizzel/omarchy-m5 dt/t6050-smc.dtsi, GPL-2.0+ OR MIT, with rolotrealanis98's m5pro-linux 0x4000 nub-spmi0
++ * window fix) and c5b0600d19a4 (t6050-j714c.dts SMC sensors: hwmon-common/fan-dual/laptop, F0md/F1md).
++ * Changes for m5 (each documented below): no smc_mbox (the proven m5_smcnode changeset creates it; "mboxes" is
++ * patched at runtime), no smc_gpio and no smc_reboot node, PMIC NVMEM marked read-only, "apple,m5-children".
++ *
++ * J714s ADT check (reports/04-j714s-full.txt): nub-spmi0@8A014000 compatible "aapl,spmi" gen 4, first
++ * IODeviceMemory 0x28a014000/0x4000; spmi-abbeyL1@E "pmu,spmi","pmu,abbey" is-primary; info-pm_setting
++ * 0x2001; info-clock_offset {0x2100, 6}; info-fault_shadow {0x867b, 0x10}; info-scrpad_socd {0x8b00,
++ * 0x1800}; info-leg_scrpad 0xf800 (the +1/+2/+3/+0xf offsets are upstream INFERENCE, unused here since
++ * smc_reboot is absent). iop-smc-nub region-base 0x28de00000 size 0x140000.
++ */
++
++/dts-v1/;
++/plugin/;
++
++#include <dt-bindings/spmi/spmi.h>
++
++&{/soc} {
++	/* Polled: the gen 4 SPMI driver has no interrupt support. No power-domains (none in the ADT node). */
++	spmi@28a014000 {
++		compatible = "apple,t6050-spmi", "apple,t8142-spmi";
++		reg = <0x2 0x8a014000 0x0 0x4000>;
++		#address-cells = <2>;
++		#size-cells = <0>;
++
++		pmic@e {
++			compatible = "apple,abbey-pmic", "apple,spmi-nvmem";
++			reg = <0xe SPMI_USID>;
++			read-only;	/* m5: no PMIC writes (rtc set_time is refused) */
++
++			nvmem-layout {
++				compatible = "fixed-layout";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				pm_setting: pm-setting@2001 {
++					reg = <0x2001 0x1>;
++				};
++
++				rtc_offset: rtc-offset@2100 {
++					reg = <0x2100 0x6>;
++				};
++
++				fault_shadow: fault-shadow@867b {
++					reg = <0x867b 0x10>;
++				};
++
++				socd: socd@8b00 {
++					reg = <0x8b00 0x1800>;
++				};
++			};
++		};
++	};
++
++	/*
++	 * Same node and values the proven m5_smcnode changeset creates (compatible/reg/reg-names), plus the
++	 * children. "mboxes" is a placeholder that m5_smcnode replaces with the live mailbox phandle before the
++	 * overlay is applied (the mailbox is created by the existing changeset 1).
++	 */
++	smc@28c600000 {
++		compatible = "apple,t6050-smc", "apple,smc";
++		reg = <0x2 0x8c600000 0x0 0x4000>,
++		      <0x2 0x8de00000 0x0 0x140000>;
++		reg-names = "smc", "sram";
++		mboxes = <0xfffffffe>;
++		apple,m5-children;
++
++		smc_hwmon: hwmon {
++			compatible = "apple,smc-hwmon";
++		};
++
++		rtc {
++			compatible = "apple,smc-rtc";
++			nvmem-cells = <&rtc_offset>;
++			nvmem-cell-names = "rtc_offset";
++		};
++	};
++};
++
++#include "../../../arch/arm64/boot/dts/apple/hwmon-common.dtsi"
++#include "../../../arch/arm64/boot/dts/apple/hwmon-fan-dual.dtsi"
++#include "../../../arch/arm64/boot/dts/apple/hwmon-laptop.dtsi"
++
++/* c5b0600d19a4: the T6050 SMC spells the fan mode keys F0md/F1md. */
++&smc_hwmon {
++	fan-F0Ac {
++		apple,fan-mode = "F0md";
++	};
++
++	fan-F1Ac {
++		apple,fan-mode = "F1md";
++	};
++};
+--- /dev/null	2026-11-03 15:15:42.640371333 -0500
++++ codex-platform-r2/src/drivers/soc/apple/m5_kbdlight.c	2026-11-06 00:37:54.206967944 -0500
+@@ -0,0 +1,230 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * m5_kbdlight (m5 J714s platform build, built-in): make the keyboard-backlight PWM effective on the LIVE FDT that
++ * m5boot hands over (no loader change, no DTB handoff). Opt-in: m5_kbdlight=1 (or =force, see below).
++ *
++ * Nodes = edimoldovan/linux-aurora 594f4b3a49ec ("arm64: dts: apple: t6050-j714c: keyboard backlight", GPL-2.0+
++ * OR MIT dts): fpwm0 pwm@505040000 ("apple,t6050-fpwm", "apple,s5l-fpwm", 0x4000, power-domains = ps_fpwm0,
++ * clocks = clkref, #pwm-cells 2) and a pwm-leds "kbd_backlight" with period 40000 ns, max-brightness 255,
++ * default-state "keep". Verified against the J714s ADT (reports/04-j714s-full.txt:3828-3856): pwm0
++ * "fpwm,s5l8920x" reg 0x305040000 size 0x4000 (IODeviceMemory 0x505040000), clock-gates 187 (FPWM0),
++ * kbd-backlight default-hz 25000 (= 40000 ns). Live FT19 FDT: /soc/power-management@280900000/
++ * power-controller@2a8 label "fpwm0" (no phandle yet; parent sio, apple,always-on), /clock-ref "clkref".
++ * The live FDT has no __symbols__, so a .dtbo cannot resolve these labels: nodes are built with an
++ * of_changeset and phandles resolved by path (as m5_smcnode.c).
++ *
++ * PMGR: the board runs with m5_pmgr_ro (writes skipped and reported as success). If FPWM0 is not already
++ * powered, the PWM driver would touch an unpowered block. So the FPWM0 power-state word is READ first
++ * (0x2_80900000 + 0x2a8, ACTUAL[7:4]); unless it is 0xf, nothing is created. m5_kbdlight=force skips that
++ * gate and is only for an operator who ALSO put fpwm0 in m5_pmgr_allow= (a deliberate, owner-approved
++ * PMGR write); it is never implied. Even then the LED consumer (whose probe reads FPWM registers) is created
++ * only if a second read shows ACTUAL == on after the PWM device bound.
++ */
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/kernel.h>
++#include <linux/of.h>
++#include <linux/of_platform.h>
++#include <linux/platform_device.h>
++#include <linux/string.h>
++#include <dt-bindings/leds/common.h>
++
++#define FPWM_PA_HI		0x5
++#define FPWM_PA_LO		0x05040000
++#define FPWM_SIZE		0x4000
++#define FPWM0_PS_PA		(0x280900000UL + 0x2a8)
++#define FPWM0_NODE		"/soc/power-management@280900000/power-controller@2a8"
++#define KBD_PERIOD_NS		40000
++
++static int m5_kbdlight;	/* 0 off, 1 only if FPWM0 already on, 2 force */
++static int __init m5_kbdlight_setup(char *s)
++{
++	m5_kbdlight = !strcmp(s, "1") ? 1 : !strcmp(s, "force") ? 2 : 0;
++	return 1;
++}
++__setup("m5_kbdlight=", m5_kbdlight_setup);
++
++#define L(fmt, ...) pr_info("m5_kbdlight: " fmt "\n", ##__VA_ARGS__)
++
++/* One read-only 32-bit read of the FPWM0 PMGR power-state word; returns ACTUAL[7:4], or -1 if unmappable. */
++static int fpwm0_actual(void)
++{
++	void __iomem *p = ioremap(FPWM0_PS_PA, 4);
++	u32 w;
++
++	if (!p)
++		return -1;
++	w = readl(p);
++	iounmap(p);
++	L("FPWM0 power state %#x (actual %u)", w, (w >> 4) & 0xf);
++	return (w >> 4) & 0xf;
++}
++
++static u32 free_phandle(u32 from)
++{
++	struct device_node *np;
++
++	while ((np = of_find_node_by_phandle(from))) {
++		of_node_put(np);
++		from++;
++	}
++	return from;
++}
++
++/* Report the platform device the apply notifier created (parent is an OF_POPULATED_BUS), else create it. */
++static bool mkdev(struct device_node *np, struct device_node *parent)
++{
++	struct platform_device *pd = of_find_device_by_node(np), *par;
++	bool bound;
++
++	if (!pd) {
++		par = parent ? of_find_device_by_node(parent) : NULL;
++		pd = of_platform_device_create(np, NULL, par ? &par->dev : NULL);
++		if (par)
++			put_device(&par->dev);
++		if (!pd) {
++			L("platform device for %pOF: FAILED", np);
++			return false;
++		}
++		get_device(&pd->dev);
++	}
++	bound = !!pd->dev.driver;
++	L("platform device %s for %pOF: %s", dev_name(&pd->dev), np, bound ? "bound" : "NOT bound");
++	put_device(&pd->dev);
++	return bound;
++}
++
++/*
++ * Three changesets, in this order, because of_changeset_apply() runs the OF reconfig notifier, which creates AND
++ * probes the platform device at once (FT12 native, see m5_smcnode.c): every phandle a probe resolves must already
++ * be set in np->phandle before the changeset that creates the consumer. 1: phandle on the existing fpwm0 domain
++ * node (property add: no device). 2: pwm@505040000 (probe resolves power-domains + clocks). 3: led-controller
++ * (leds-pwm probe resolves pwms).
++ */
++static int do_kbdlight(void)
++{
++	struct device_node *root = of_find_node_by_path("/");
++	struct device_node *soc = of_find_node_by_path("/soc");
++	struct device_node *ps = of_find_node_by_path(FPWM0_NODE);
++	struct device_node *clk = of_find_node_by_path("/clock-ref");
++	struct device_node *pwm, *leds, *led0, *old;
++	struct of_changeset cs1, cs2, cs3;
++	const char *lbl = NULL, *cname = NULL;
++	u32 ps_ph, pwm_ph;
++	int ret = -ENODEV;
++
++	if (!root || !soc || !ps || !clk)
++		goto out;
++	if (of_property_read_string(ps, "label", &lbl) || strcmp(lbl, "fpwm0") ||
++	    of_property_read_string(clk, "clock-output-names", &cname) || strcmp(cname, "clkref") || !clk->phandle) {
++		L("live FDT is not the expected fpwm0/clkref layout: nothing created");
++		goto out;
++	}
++	if ((old = of_find_node_by_path("/soc/pwm@505040000")) || (old = of_find_node_by_path("/led-controller"))) {
++		of_node_put(old);
++		L("pwm@505040000 or /led-controller already present: nothing created");
++		ret = -EEXIST;
++		goto out;
++	}
++
++	if (fpwm0_actual() != 0xf && m5_kbdlight != 2) {
++		L("FPWM0 is not powered and m5_pmgr_ro would skip the power-on: nothing created "
++		  "(owner decision: m5_pmgr_allow=...,fpwm0 plus m5_kbdlight=force)");
++		ret = -EPERM;
++		goto out;
++	}
++
++	/* 1: phandle on the existing domain node (property only; the notifier creates no device for it) */
++	ps_ph = ps->phandle;
++	if (!ps_ph) {
++		ps_ph = free_phandle(0x7e40);
++		of_changeset_init(&cs1);
++		ret = of_changeset_add_prop_u32(&cs1, ps, "phandle", ps_ph);
++		ret = ret ?: of_changeset_apply(&cs1);
++		L("cs1 fpwm0 phandle %#x: %d", ps_ph, ret);
++		if (ret) {
++			of_changeset_destroy(&cs1);
++			goto out;
++		}
++		ps->phandle = ps_ph;	/* a property add does not update np->phandle */
++	}
++
++	/* 2: the PWM controller (594f4b3a49ec fpwm0, address/clock gate checked against the J714s ADT) */
++	pwm_ph = free_phandle(ps_ph + 1);
++	of_changeset_init(&cs2);
++	pwm = of_changeset_create_node(&cs2, soc, "pwm@505040000");
++	ret = pwm ? 0 : -ENOMEM;
++	ret = ret ?: of_changeset_add_prop_string_array(&cs2, pwm, "compatible",
++		(const char *[]){ "apple,t6050-fpwm", "apple,s5l-fpwm" }, 2);
++	ret = ret ?: of_changeset_add_prop_u32_array(&cs2, pwm, "reg",
++		(u32 []){ FPWM_PA_HI, FPWM_PA_LO, 0x0, FPWM_SIZE }, 4);
++	ret = ret ?: of_changeset_add_prop_u32(&cs2, pwm, "power-domains", ps_ph);
++	ret = ret ?: of_changeset_add_prop_u32(&cs2, pwm, "clocks", clk->phandle);
++	ret = ret ?: of_changeset_add_prop_u32(&cs2, pwm, "#pwm-cells", 2);
++	ret = ret ?: of_changeset_add_prop_u32(&cs2, pwm, "phandle", pwm_ph);
++	ret = ret ?: of_changeset_apply(&cs2);
++	L("cs2 pwm@505040000 (phandle %#x, power-domains %#x, clocks %#x): %d", pwm_ph, ps_ph, clk->phandle, ret);
++	if (ret) {
++		of_changeset_destroy(&cs2);
++		goto out;
++	}
++	pwm->phandle = pwm_ph;	/* __of_attach_node() sets it from the property; keep it explicit */
++	if (!mkdev(pwm, soc)) {
++		L("pwm not bound: led-controller not created");
++		ret = -ENODEV;
++		goto out;
++	}
++
++	/*
++	 * Fail closed in BOTH modes: leds-pwm's request reads FPWM registers (get_state). With m5_pmgr_ro (or a
++	 * power-on that did not take) the domain may still be off although genpd reported success, so the consumer
++	 * is created only if the hardware state word now says ACTUAL == on. "force" only permits the power-on attempt.
++	 */
++	if (fpwm0_actual() != 0xf) {
++		L("FPWM0 still not powered after pwm bind: led-controller not created");
++		ret = -EPERM;
++		goto out;
++	}
++
++	/* 3: the pwm-leds consumer */
++	of_changeset_init(&cs3);
++	leds = of_changeset_create_node(&cs3, root, "led-controller");
++	led0 = leds ? of_changeset_create_node(&cs3, leds, "led-0") : NULL;
++	ret = led0 ? 0 : -ENOMEM;
++	ret = ret ?: of_changeset_add_prop_string(&cs3, leds, "compatible", "pwm-leds");
++	ret = ret ?: of_changeset_add_prop_u32_array(&cs3, led0, "pwms", (u32 []){ pwm_ph, 0, KBD_PERIOD_NS }, 3);
++	ret = ret ?: of_changeset_add_prop_string(&cs3, led0, "label", "kbd_backlight");
++	ret = ret ?: of_changeset_add_prop_string(&cs3, led0, "function", LED_FUNCTION_KBD_BACKLIGHT);
++	ret = ret ?: of_changeset_add_prop_u32(&cs3, led0, "color", LED_COLOR_ID_WHITE);
++	ret = ret ?: of_changeset_add_prop_u32(&cs3, led0, "max-brightness", 255);
++	ret = ret ?: of_changeset_add_prop_string(&cs3, led0, "default-state", "keep");
++	ret = ret ?: of_changeset_apply(&cs3);
++	L("cs3 led-controller: %d", ret);
++	if (ret) {
++		of_changeset_destroy(&cs3);
++		goto out;
++	}
++	ret = mkdev(leds, root) ? 0 : -ENODEV;
++out:
++	of_node_put(root);
++	of_node_put(soc);
++	of_node_put(ps);
++	of_node_put(clk);
++	return ret;
++}
++
++static int __init m5_kbdlight_init(void)
++{
++	int ret;
++
++	if (!m5_kbdlight)
++		return 0;
++	if (!of_machine_is_compatible("apple,j714s")) {
++		L("not apple,j714s: nothing created");
++		return 0;
++	}
++	ret = do_kbdlight();
++	L("m5_kbdlight=%s: %d", m5_kbdlight == 2 ? "force" : "1", ret);
++	return 0;
++}
++late_initcall(m5_kbdlight_init);

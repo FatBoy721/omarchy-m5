@@ -1,0 +1,50 @@
+#!/bin/busybox sh
+# /init for the J714s first-boot / loader initramfs (our own code).
+/bin/busybox --install -s /bin
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+mkdir -p /proc /sys /dev /tmp /run /mnt /root
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev
+mkdir -p /dev/pts && mount -t devpts devpts /dev/pts
+mount -t configfs configfs /sys/kernel/config 2>/dev/null
+# say: to the console AND /dev/kmsg, so it shows on the m5fb earlycon even without fbcon (task 25)
+say() { echo "$*"; echo "m5init: $*" > /dev/kmsg 2>/dev/null; }
+say "=== m5 initramfs ==="
+say "$(uname -a)"
+say "nproc: $(nproc)"
+say "compatible: $(tr '\0' ' ' < /proc/device-tree/compatible)"
+say "model: $(tr -d '\0' < /proc/device-tree/model)"
+say "console: $(cat /sys/class/tty/console/active 2>/dev/null)  fb: $(ls /sys/class/graphics 2>/dev/null | tr '\n' ' ')"
+for a in $(cat /proc/cmdline); do case $a in m5.esplog=1) /bin/m5-esplog & LOGPID=$! ;; esac; done
+# task 27: m5.root=s5 -> switch_root into the Omarchy rootfs on the 120 GB Linux partition; refuse = stay here
+if grep -qw m5.root=s5 /proc/cmdline; then
+  if /bin/m5-root; then
+    [ -n "${LOGPID:-}" ] && { sleep 10; kill $LOGPID 2>/dev/null; sleep 1
+      # the logger may have been killed with the ESP mounted: release it, or the rootfs can't open the ESP
+      umount /mnt/esp 2>/dev/null; say "initramfs logger stopped, ESP released (rootfs logger takes over)"; }
+    for m in /dev /proc /sys /run; do mkdir -p /newroot$m; mount --move $m /newroot$m 2>/dev/null || true; done
+    say "switch_root /newroot /sbin/init"
+    exec switch_root /newroot /sbin/init
+  fi
+  say "m5.root=s5 refused: staying in the initramfs shell"
+fi
+/bin/m5-gadget-net &          # USB CDC-EEM on every UDC, 10.55.<n>.2/24
+/bin/m5-sshd &                # dropbear with work's key
+for a in $(cat /proc/cmdline); do case $a in m5.loader=1) /bin/m5-loader ;; esac; done
+say "=== shell (tty0). ssh root@10.55.<n>.2 from work. m5-loader to kexec /boot ==="
+# PID 1 must never exit (the kernel panics: "Attempted to kill init"). Respawn a console shell forever.
+# Alpine busybox-static has no cttyhack, so do what it does: find the real console device (the last entry
+# in /sys/class/tty/console/active, e.g. tty0 on the Mac, ttyAMA0 in QEMU), start the shell in a new
+# session (setsid) and open that device, which makes it the shell's controlling terminal.
+con=tty0
+if [ -r /sys/class/tty/console/active ]; then
+  set -- $(cat /sys/class/tty/console/active)
+  for c in "$@"; do con=$c; done
+fi
+[ -c /dev/$con ] || con=console
+while :; do
+  setsid sh -c "exec sh </dev/$con >/dev/$con 2>&1"
+  echo "=== console shell on /dev/$con exited; respawning in 1 s ==="
+  sleep 1
+done

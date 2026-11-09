@@ -1,0 +1,108 @@
+=== input @ 149.60
+--- /proc/bus/input/devices
+--- libinput list-devices (needs libinput-tools; may be absent)
+timeout: failed to run command 'libinput': No such file or directory
+--- hyprctl devices (as alarm, on the running Hyprland)
+mice:
+
+
+Keyboards:
+
+
+Tablets:
+
+
+Touch:
+
+
+Switches:
+
+--- udev input devices
+--- dmesg (mtp/rtkit/dockchannel/hid)
+[    0.046362] calling  input_init+0x0/0x90 @ 1
+[    0.046406] initcall input_init+0x0/0x90 returned 0 after 0 usecs
+[    0.078778] calling  dockchannel_driver_init+0x0/0x28 @ 1
+[    0.078995] initcall dockchannel_driver_init+0x0/0x28 returned 0 after 169 usecs
+[    0.079369] calling  apple_rtkit_helper_driver_init+0x0/0x28 @ 1
+[    0.079425] probe of 294600000.mtp returned -517 after 1 usecs
+[    0.079508] initcall apple_rtkit_helper_driver_init+0x0/0x28 returned 0 after 87 usecs
+[    0.120350] platform 294600000.mtp: Adding to iommu group 0
+[    0.120434] platform 294b28000.input: Adding to iommu group 0
+[    0.186972] calling  hid_init+0x0/0x40 @ 1
+[    0.187036] initcall hid_init+0x0/0x40 returned 0 after 6 usecs
+[    0.187117] calling  uhid_misc_init+0x0/0x1c @ 1
+[    0.192268] initcall uhid_misc_init+0x0/0x1c returned 0 after 5089 usecs
+[    0.193516] calling  hid_generic_init+0x0/0x28 @ 1
+[    0.194878] initcall hid_generic_init+0x0/0x28 returned 0 after 32 usecs
+[    0.198685] calling  dockchannel_hid_driver_init+0x0/0x28 @ 1
+[    0.200138] probe of 294b28000.input returned 517 after 72 usecs
+[    0.208301] initcall dockchannel_hid_driver_init+0x0/0x28 returned 0 after 8467 usecs
+[    0.420313] rtkit-helper 294600000.mtp: CPU_CONTROL at probe: stopped
+[    2.475716] rtkit-helper 294600000.mtp: Coprocessor shutdown failed: -62; DMA must remain mapped
+[    2.476810] rtkit-helper 294600000.mtp: error -62: Failed to wake up coprocessor
+[    2.477810] rtkit-helper 294600000.mtp: probe with driver rtkit-helper failed with error -62
+[    2.478747] probe of 294600000.mtp returned 62 after 2066385 usecs
+[    2.509314] probe of 294b28000.input returned 517 after 50 usecs
+[    2.516512] nvme-apple 45dcc0000.nvme: RTKit: Initializing (protocol version 12)
+[    2.522594] nvme-apple 45dcc0000.nvme: RTKit: Unknown system endpoint: 0x0a
+[    2.528350] probe of 294b28000.input returned 517 after 52 usecs
+[    2.586268] nvme-apple 45dcc0000.nvme: RTKit: syslog message: gc.c:9300: Restarting rebuild from lba 0
+[    2.592296] nvme-apple 45dcc0000.nvme: RTKit: syslog message: cmd.c:8304: boot: mode normal
+[    2.593162] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:886: PowerBudget: set on boot setByHost=1, is_warm_boot=0
+[    2.593987] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:130: PowerBudget bu=200 pc=1 rc=1 ppm=0 pbio=0 ess=0
+[    2.594773] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:144: e=100 p=100/0/100 rmp=100 rsp=25/0/25 ressmp=0 ressspn=0/0 sio=0 comp=0
+[    2.595587] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:231: PowerBudget: num dies horizontal change 1 -> 1
+[    2.596380] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:130: PowerBudget bu=0 pc=0 rc=0 ppm=0 pbio=0 ess=0
+[    2.597142] nvme-apple 45dcc0000.nvme: RTKit: syslog message: power_budget.c:144: e=0 p=0/0/0 rmp=0 rsp=0/0/0 ressmp=0 ressspn=0/0 sio=0 comp=0
+[    2.597923] nvme-apple 45dcc0000.nvme: RTKit: syslog message: rtkpmc_t6050.cpp:208: pmc_init PMC-T6050 Init die = 0 io_base 0
+[    2.760270] nvme-apple 45dcc0000.nvme: RTKit: syslog message: raid_mpbx_int.c:260: flow 0  band 156 rebuilding parity (parity band: 0) pgIdx 3000
+[    2.761503] nvme-apple 45dcc0000.nvme: RTKit: syslog message: raid_mpbx_int.c:260: flow 2  band 58 rebuilding parity (parity band: 0) pgIdx 3000
+[    2.781923] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[    3.474414] nvme-apple 45dcc0000.nvme: RTKit: syslog message: raid_hw_common.c:602: raid_mpbx_rebuild_parity_per_flow flow 0, band 156, dip 0, normalBand 156, page 1332
+[    3.475763] nvme-apple 45dcc0000.nvme: RTKit: syslog message: raid_mpbx_int.c:696: rebuild parity flow 0, band 156, page 1332, normalBand 156
+[    3.498281] nvme-apple 45dcc0000.nvme: RTKit: syslog message: raid_hw_common.c:602: raid_mpbx_rebuild_parity_per_flow flow 2, band 58, dip 12, normalBand 58, page 2015
+[    3.499685] nvme-apple 45dcc0000.nvme: RTKit: syslog message: raid_mpbx_int.c:696: rebuild parity flow 2, band 58, page 2015, normalBand 58
+[    4.093835] nvme-apple 45dcc0000.nvme: RTKit: syslog message: gc.c:9280: Stopping GC rebuild
+[   12.772401] probe of 294b28000.input returned 517 after 67 usecs
+[   12.868278] platform 294b28000.input: deferred probe pending: (reason unknown)
+[   15.726489] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.728416] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.730340] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.732210] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.734049] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.735811] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.737581] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.739281] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.740951] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.742562] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.744116] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.745664] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.747147] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.748585] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.749962] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.751324] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.766139] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.767688] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.769178] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.770565] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   15.771879] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.398352] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.410509] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.410874] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.410935] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.421502] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.422489] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.423493] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.423579] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.423650] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.424054] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.424129] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.424169] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.424490] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.425154] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.425353] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.425510] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.425747] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.426498] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.429000] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT
+[   16.429021] nvme-apple 45dcc0000.nvme: RTKit: syslog message: util.c:4198: attempting to read element=PANICLOG not yet written, returning ERR_ABORT

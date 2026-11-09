@@ -1,0 +1,20 @@
+#!/bin/sh
+# m5-esplog-rootfs (task 27): every 30 s (timer) copy `journalctl -b` + dmesg to the ESP, readable from macOS.
+# Same verified-mount rules as the initramfs logger (m5boot task 18): exactly one partition with the EFI GPT type and
+# 200-1100 MB on nvme0n1, mounted vfat, and the mount confirmed in /proc/mounts before writing. Writes only m5log/.
+set -u
+ESP_TYPE=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+DISK=/dev/nvme0n1; [ -b $DISK ] || exit 0
+ESP=""
+for p in $(lsblk -lnpo NAME,PARTTYPE,SIZE -b $DISK | awk -v t=$ESP_TYPE 'tolower($2)==t && $3>=200000000 && $3<=1100000000 {print $1}'); do
+  [ -z "$ESP" ] || { echo "two ESPs, refusing"; exit 1; }; ESP=$p
+done
+[ -n "$ESP" ] || { echo "no ESP"; exit 1; }
+M=/run/m5-esp; mkdir -p $M
+mountpoint -q $M || mount -t vfat -o rw,noatime,umask=022 "$ESP" $M || exit 1
+grep -q "^$ESP $M vfat " /proc/mounts || { echo "mount not verified"; umount $M 2>/dev/null; exit 1; }
+mkdir -p $M/m5log
+B=$(cut -c1-8 /proc/sys/kernel/random/boot_id)
+{ echo "=== rootfs boot $B uptime $(cut -d' ' -f1 /proc/uptime)"; journalctl -b --no-pager -o short-monotonic; } > $M/m5log/rootfs-$B-journal.txt.tmp && mv $M/m5log/rootfs-$B-journal.txt.tmp $M/m5log/rootfs-$B-journal.txt
+dmesg > $M/m5log/rootfs-$B-dmesg.txt.tmp && mv $M/m5log/rootfs-$B-dmesg.txt.tmp $M/m5log/rootfs-$B-dmesg.txt
+sync; umount $M
