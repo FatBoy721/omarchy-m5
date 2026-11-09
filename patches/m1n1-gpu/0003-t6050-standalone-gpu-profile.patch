@@ -1,0 +1,78 @@
+From: omarchy-m5 local integration
+Subject: [PATCH] payload: validate native J714s profile and prepare NVMe
+
+The tethered GPU gate runs on the host and therefore cannot protect a
+self-contained payload. Generate t6050_gpu_profile.h only from an ADT
+accepted by the existing Python model, firmware and voltage-table SHA256
+guard. Compare those seven raw properties before starting secondaries,
+initializing NVMe or preparing the Linux DT. No duplicate hand-edited
+calibration constants or new hashing implementation are needed.
+
+Reproduce the tested NVMe init/shutdown handoff without a host GPT probe.
+No disk writes are issued. The existing kboot_boot() already calls usb_init()
+and powers the USB PHY chains; do not add a second USB initialization path.
+
+This patch belongs only to the separate native GPU simpledrm build. The
+existing tether loaders and installed boot object are unchanged.
+---
+--- a/src/payload.c
++++ b/src/payload.c
+@@ -12,8 +12,10 @@
+ #include "heapblock.h"
+ #include "kboot.h"
+ #include "mitigations.h"
++#include "nvme.h"
+ #include "smp.h"
+ #include "utils.h"
++#include "t6050_gpu_profile.h"
+ 
+ #include "libfdt/libfdt.h"
+ #include "minilzlib/minlzma.h"
+@@ -288,6 +290,26 @@
+     return false;
+ }
+ 
++static bool payload_gpu_profile_matches(void)
++{
++    int nodes[] = {0, adt_path_offset(adt, "/chosen"), adt_path_offset(adt, "/arm-io/sgx")};
++    static const char *const paths[] = {"/", "/chosen", "/arm-io/sgx"};
++
++    for (size_t i = 0; i < ARRAY_SIZE(t6050_gpu_profile); i++) {
++        const struct t6050_gpu_profile_property *expected = &t6050_gpu_profile[i];
++        u32 length = 0;
++        const void *value = nodes[expected->node] < 0 ? NULL :
++            adt_getprop(adt, nodes[expected->node], expected->name, &length);
++        if (!value || length != expected->length || memcmp(value, expected->value, length)) {
++            printf("GPU profile mismatch: %s %s; refusing standalone Linux boot\n",
++                   paths[expected->node], expected->name);
++            return false;
++        }
++    }
++    printf("GPU profile PASS: model, firmware metadata and all four voltage tables match\n");
++    return true;
++}
++
+ int payload_run(void)
+ {
+     const char *target = adt_getprop(adt, 0, "target-type", NULL);
+@@ -314,6 +336,20 @@
+     }
+ 
+     if (kernel && fdt) {
++        if (!payload_gpu_profile_matches())
++            return -1;
++
++        /* Match the tethered NVMe init/shutdown handoff without a host probe.
++         * No disk writes are issued; shutdown leaves ANS cold for Linux.
++         * kboot_boot() already brings up the USB PHYs for the kernel.
++         */
++        printf("Standalone boot: preparing internal NVMe\n");
++        if (!nvme_init()) {
++            printf("Standalone boot: NVMe initialization failed\n");
++            return -1;
++        }
++        nvme_shutdown();
++
+         cpufreq_init();
+         smp_start_secondaries();
+         mitigations_perform();

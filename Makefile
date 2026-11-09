@@ -1,6 +1,7 @@
 # omarchy-m5 dev harness
-.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm dtbs initramfs payload tether clean-vendor
+.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-standalone payload-gpu-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm dtbs initramfs payload tether clean-vendor
 AURA_ROLLBACK ?= build/m1n1-enrolled-stage1.bin
+GPU_ADT ?= build/adt-runtime-j714s.bin
 
 setup:          ## install host deps (brew llvm, rust target, ...)
 	scripts/setup.sh
@@ -20,6 +21,17 @@ m1n1-gpu-simpledrm: ## build the separate GPU loader supporting explicit Linux D
 	python3 scripts/prepare-m1n1-gpu.py --simpledrm
 	M1N1=build/m1n1-gpu-simpledrm CHAINLOADING=1 scripts/build-m1n1.sh
 	cp build/m1n1-gpu-simpledrm/build/m1n1.bin build/m1n1-chain-gpu-simpledrm.bin
+
+m1n1-gpu-standalone: ## build a separate calibrated native loader; no enrollment
+	python3 scripts/prepare-m1n1-gpu.py --simpledrm --standalone --adt "$(GPU_ADT)"
+	M1N1=build/m1n1-gpu-standalone CHAINLOADING=0 scripts/build-m1n1.sh
+	cp build/m1n1-gpu-standalone/build/m1n1.bin build/m1n1-stage1-gpu-simpledrm.bin
+
+payload-gpu-simpledrm: m1n1-gpu-standalone ## package the verified GPU kernel/DT for native boot
+	scripts/mkpayload.sh --m1n1 build/m1n1-stage1-gpu-simpledrm.bin \
+		--kernel build/linux-aurora-gpu-out/arch/arm64/boot/Image.gz \
+		--dtb build/linux-aurora-gpu-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dtb \
+		--out build/m1n1-gpu-simpledrm-payload.bin
 
 aura:           ## build pinned proxy-only Mach-O Aura Stage 1 (no installation)
 	scripts/build-aura.sh

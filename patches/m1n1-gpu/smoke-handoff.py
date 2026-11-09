@@ -7,6 +7,8 @@ The C handoff, reservation and DCP opt-out bodies are extracted verbatim and
 linked to the source's libfdt. ADT properties use m1n1.adt/get_reg; DCP checks
 and watchdog writes are host substitutes. Python boot-argument serialization
 is consumed by the actual C layout/watchdog code. No target Rust ADT FFI or hardware.
+When --source selects a standalone tree, also exercise its actual native
+calibration guard against matching, changed, missing and wrong-length properties.
 
 Usage: python patches/m1n1-gpu/smoke-handoff.py --adt SAVED.bin --dtb GPU.dtb
        --default-dtb DEFAULT.dtb --simpledrm-dtb SIMPLEDRM.dtb
@@ -21,20 +23,24 @@ import sys
 import tempfile
 
 MAILBOX_PATHS = ("/arm-io/gfx-asc", "/arm-io/gfx1-asc")
-PATHS = ("/arm-io/sgx", *MAILBOX_PATHS, "/arm-io/wdt")
+PATHS = ("/", "/chosen", "/arm-io/sgx", *MAILBOX_PATHS, "/arm-io/wdt")
 REGIONS = ("uat-handoff", "uat-l2-pagetables", "uat-pagetables", "uat-ttbs", "gpu-fw-text", "gpu-fw-data")
 
 
 def fixture(tree):
     arrays, props, regs = [], [], []
     for idx, path in enumerate(PATHS):
-        node = tree[path]
+        node = tree if path == "/" else tree[path]
         for p in node.tostruct()["properties"]:
+            if path == "/" and p["name"] != "model":
+                continue
+            if path == "/chosen" and p["name"] not in ("firmware-version", "system-firmware-version"):
+                continue
             ident = f"prop_{len(props)}"
             value = p["value"]
             arrays.append(f"static unsigned char {ident}[] = {{{','.join(map(str, value))}}};")
             props.append(f'{{{idx}, "{p["name"]}", {ident}, {len(value)}}}')
-        for reg_idx in range(len(node.reg)):
+        for reg_idx in range(len(getattr(node, "reg", ()))):
             base, size = node.get_reg(reg_idx)
             regs.append(f"{{{idx},{reg_idx},0x{base:x}ULL,0x{size:x}ULL}}")
     return "\n".join(arrays) + "\n" + """
@@ -78,9 +84,24 @@ static int adt_get_reg(const void *unused, int *path, const char *name, int idx,
     return -1;
 }
 int fixture_u64(const char *name, u64 value) {
-    u32 len; void *p=(void *)adt_getprop(adt,0,name,&len);
+    u32 len; void *p=(void *)adt_getprop(adt,adt_path_offset(adt,"/arm-io/sgx"),name,&len);
     if (!p || len!=8) return -1;
     memcpy(p,&value,8); return 0;
+}
+int fixture_profile_mutate(const char *path, const char *name, int operation) {
+    int node=adt_path_offset(adt,path);
+    if (node<0) return -1;
+    for (size_t i=0; i<ARRAY_SIZE(props); i++) {
+        struct prop *p=&props[i];
+        if ((p->node==node || p->node==-node-1) && !strcmp(p->name,name)) {
+            if (operation==0) p->value[0]^=1;
+            else if (operation==1) p->node=-p->node-1;
+            else if (operation==2) p->len^=1;
+            else return -1;
+            return 0;
+        }
+    }
+    return -1;
 }
 """ % (",".join(props), ",".join(regs), ",".join(f'"{path}"' for path in PATHS))
 
@@ -177,6 +198,38 @@ u32 watchdog_write_value(unsigned i) { return wdt_values[i]; }
 """
 
 
+def native_profile_code(source):
+    header = source / "src/t6050_gpu_profile.h"
+    if not header.exists():
+        return ""
+    code = (source / "src/payload.c").read_text()
+    body = code[code.index("static bool payload_gpu_profile_matches("):code.index("\nint payload_run(")]
+    return (f'#include "{header}"\n' + body +
+            "\nint run_profile(void) { return payload_gpu_profile_matches(); }\n")
+
+
+def check_native_profile(lib):
+    lib.fixture_profile_mutate.argtypes = [C.c_char_p, C.c_char_p, C.c_int]
+    assert lib.run_profile() == 1
+    print("PASS: native profile accepts this Mac's exact metadata and calibration")
+    properties = [
+        ("/", "model"),
+        ("/chosen", "firmware-version"),
+        ("/chosen", "system-firmware-version"),
+        *[("/arm-io/sgx", name) for name in
+          ("perf-states", "perf-states-sram", "afr-perf-states", "cs-perf-states")],
+    ]
+    for path, name in properties:
+        for operation, failure in enumerate(("changed bytes", "missing property", "wrong length")):
+            assert lib.fixture_profile_mutate(path.encode(), name.encode(), operation) == 0
+            try:
+                assert lib.run_profile() == 0, (path, name, failure)
+            finally:
+                assert lib.fixture_profile_mutate(path.encode(), name.encode(), operation) == 0
+            print(f"PASS: native profile rejects {path} {name}: {failure}")
+    assert lib.run_profile() == 1
+
+
 def check_bootargs(lib, tree):
     from m1n1.tgtypes import BootArgs_r1, BootArgs_r2, BootArgs_r3
     lib.run_watchdog.argtypes = [C.c_void_p, C.c_size_t]
@@ -238,11 +291,12 @@ def main():
     code = (source / "src/kboot_gpu.c").read_text()
     reservation = code[code.index("static int dt_set_resvmem("):code.index("static int dt_set_region(")]
     body = code[code.index("/* Adapted from Rolando Trevino"):code.index("\nint dt_set_gpu(void *dt)")]
+    profile = native_profile_code(source)
     with tempfile.TemporaryDirectory(prefix="j714s-gpu-smoke-") as td:
         td = Path(td)
         unit = td / "handoff.c"
         unit.write_text(PRELUDE + fixture(tree) + reservation + body + display_code(source)
-                        + watchdog_code(source)
+                        + watchdog_code(source) + profile
                         + "\nint run_handoff(void *dt) { return dt_set_gpu_t6050(dt); }\n")
         fdt = source / "src/libfdt"
         library = td / "handoff.so"
@@ -290,7 +344,7 @@ def main():
         assert lib.run_handoff(dt) == 0
         for path in ["gpu", "gpu-mbox", "gpu-mbox1", *["/reserved-memory/" + r for r in REGIONS]]:
             assert prop(dt, path, "status") == b"okay\0", path
-        sgx = tree[PATHS[0]]
+        sgx = tree["/arm-io/sgx"]
         expected = [(sgx.getprop(n + "-base"), sgx.getprop(n + "-size")) for n in
                     ("gfx-handoff", "gfx-shared-l2-region", "gfx-shared-region", "gpu-region")]
         segments = [list(struct.iter_unpack("<QQQII", tree[p].getprop("segment-ranges"))) for p in MAILBOX_PATHS]
@@ -383,6 +437,8 @@ def main():
         print("PASS: malformed simpledrm display bindings stop before hardware checks")
 
         check_bootargs(lib, tree)
+        if profile:
+            check_native_profile(lib)
 
 
 if __name__ == "__main__":

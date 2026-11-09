@@ -6,13 +6,17 @@ trial; 0009 then repairs its native boot-argument layout without changing vendor
 0005/0006 target a different (newer C USB/HV) source layout and are not applicable
 to this pinned source. The GPU delta is MIT-licensed PR37 adaptation.
 --simpledrm adds the explicit DCP handoff opt-out in a separate source tree.
+--standalone additionally embeds the existing validated profile from --adt in a
+private native-loader tree; no raw ADT or second hand-edited profile is published.
 Existing destinations are accepted only when their tracked files equal the recipe;
 unrelated edits are never reset. Builds and hardware access are deliberately absent.
 """
 import argparse
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 BASE = "4184923ffb2dff079b384d6a32cc02142aa14572"
@@ -48,14 +52,61 @@ def signature(path):
     return (bool(path.stat().st_mode & 0o111), path.read_bytes())
 
 
+def profile_header(root, source, capture):
+    """Generate byte-exact native checks only after the existing SHA256 gate passes."""
+    spec = importlib.util.spec_from_file_location(
+        "gpu_preflight", root / "scripts/probes/gpu-preflight.py")
+    preflight = importlib.util.module_from_spec(spec)
+    sys.path.insert(0, str(source / "proxyclient"))
+    try:
+        spec.loader.exec_module(preflight)
+        tree = preflight.validate(capture.read_bytes())
+    finally:
+        sys.path.pop(0)
+    chosen = preflight.properties(preflight.child(tree, "chosen"))
+    sgx = preflight.properties(preflight.child(preflight.child(tree, "arm-io"), "sgx"))
+    entries = [(0, "model", preflight.properties(tree)["model"])]
+    entries += [(1, name, chosen[name])
+                for name in ("firmware-version", "system-firmware-version")]
+    entries += [(2, name, sgx[name]) for name in preflight.PERF_SHA256]
+    lines = [
+        "/* Generated from an ADT accepted by scripts/probes/gpu-preflight.py. */",
+        "/* Private build input: never hand-edit or publish the raw ADT. */",
+        "struct t6050_gpu_profile_property {",
+        "    unsigned node;",
+        "    const char *name;",
+        "    const unsigned char *value;",
+        "    u32 length;",
+        "};",
+    ]
+    for index, (_, _, value) in enumerate(entries):
+        lines.append(f"static const unsigned char gpu_profile_{index}[] = {{")
+        for start in range(0, len(value), 16):
+            lines.append("    " + ", ".join(f"0x{byte:02x}" for byte in value[start:start + 16]) + ",")
+        lines.append("};")
+    lines.append("static const struct t6050_gpu_profile_property t6050_gpu_profile[] = {")
+    for index, (node, name, value) in enumerate(entries):
+        lines.append(f'    {{{node}, "{name}", gpu_profile_{index}, {len(value)}}},')
+    lines.append("};")
+    return "\n".join(lines) + "\n"
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--simpledrm", action="store_true",
                         help="include the DCP opt-out in build/m1n1-gpu-simpledrm")
+    parser.add_argument("--standalone", action="store_true",
+                        help="prepare the calibrated self-contained GPU simpledrm loader")
+    parser.add_argument("--adt", type=Path, help="private saved runtime ADT for --standalone")
     args = parser.parse_args()
-    default = "m1n1-gpu-simpledrm" if args.simpledrm else "m1n1-gpu"
+    if args.standalone and (not args.simpledrm or args.adt is None):
+        parser.error("--standalone requires --simpledrm and --adt")
+    if args.adt is not None and not args.standalone:
+        parser.error("--adt is only used with --standalone")
+    default = ("m1n1-gpu-standalone" if args.standalone else
+               "m1n1-gpu-simpledrm" if args.simpledrm else "m1n1-gpu")
     dest = (args.output or root / "build" / default).resolve()
     vendor = root / "vendor/m1n1"
     if dest == vendor.resolve() or vendor.resolve() in dest.parents:
@@ -73,6 +124,11 @@ def main():
         git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0001-t6050-g17s-adt-handoff.patch"))
         if args.simpledrm:
             git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0002-kboot-t6050-simpledrm-only.patch"))
+        profile_path = Path("src/t6050_gpu_profile.h")
+        if args.standalone:
+            git(prepared, "apply", "--binary",
+                str(root / "patches/m1n1-gpu/0003-t6050-standalone-gpu-profile.patch"))
+            (prepared / profile_path).write_text(profile_header(root, prepared, args.adt))
         if dest.exists():
             expected = tracked_files(prepared)
             actual = tracked_files(dest)
@@ -89,6 +145,11 @@ def main():
                     raise SystemExit(f"Refusing missing tracked file: {existing}")
                 if signature(existing) != signature(prepared / name):
                     raise SystemExit(f"Refusing unrelated/stale source changes: {existing}; choose a fresh --output")
+            if args.standalone:
+                existing = dest / profile_path
+                if (existing.is_symlink() or not existing.is_file() or
+                        existing.read_bytes() != (prepared / profile_path).read_bytes()):
+                    raise SystemExit(f"Refusing missing/changed native calibration: {existing}")
             print(f"Existing isolated loader matches pinned recipe: {dest}")
         else:
             prepared.rename(dest)
@@ -96,6 +157,8 @@ def main():
         print(f"Base: {BASE}; GPU source: omacom/m1n1 PR37 2bebfe7708c7077377ecc0d80d29bfb458335c0d")
         print("Display handoff: explicit simpledrm opt-out supported" if args.simpledrm
               else "Display handoff: original DCP behavior")
+        if args.standalone:
+            print("Native GPU admission: seven byte-exact properties from the validated private ADT")
 
 
 if __name__ == "__main__":

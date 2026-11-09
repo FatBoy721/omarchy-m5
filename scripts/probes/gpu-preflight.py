@@ -57,6 +57,7 @@ def validate(data):
             raise SystemExit(f"GPU preflight: {name} differs from this trial's voltage bins ({actual})")
     print(f"GPU preflight PASS: {model}, {FIRMWARE}, all four raw voltage tables match")
     print("GPU firmware image identity still requires kernel admission; no GPU execution performed.")
+    return root
 
 
 def capture():

@@ -17,15 +17,16 @@
 #                   milestone boots, not for iteration.
 #
 # Usage: scripts/mkpayload.sh [--bootargs "..."] [--board j714s] [--out PATH]
-#                             [--no-initramfs]
+#                             [--m1n1 PATH] [--kernel PATH] [--dtb PATH]
+#                             [--initramfs PATH] [--no-initramfs]
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 BOARD="j714s"
-# SMP is broken on T6050 (secondaries never execute the reset vector), so the
-# first milestone is deliberately single-core.
+# The verified 27.3 beta 1 stub brings up all 15 usable CPUs. Keep the
+# WFI-preservation flags and SSD-root settings used by the tethered boot.
 #
 # Console: on this DT boot, earlycon=efifb needs patch 0001's
 # CONFIG_OMARCHY_FB_MARKERS initializer and valid framebuffer geometry.
@@ -37,10 +38,11 @@ BOARD="j714s"
 # pd_ignore_unused/clk_ignore_unused: genpd powering off unclaimed PMGR
 # domains SErrors on T6050 (and would freeze m1n1's framebuffer); patch 0004
 # makes the sync_state path honour pd_ignore_unused too.
-BOOTARGS="maxcpus=1 earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend"
+BOOTARGS="earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 arm64.nowfxt kvm-arm.wfi_trap_policy=trap m5.root=/dev/nvme0n1p5"
 OUT="build/m1n1-payload.bin"
 M1N1="vendor/m1n1/build/m1n1.bin"
 KERNEL="vendor/linux/arch/arm64/boot/Image.gz"
+DTB=""
 INITRAMFS="build/initramfs.cpio.gz"
 USE_INITRAMFS=1
 
@@ -51,13 +53,14 @@ while [ $# -gt 0 ]; do
         --out) OUT="$2"; shift 2 ;;
         --m1n1) M1N1="$2"; shift 2 ;;
         --kernel) KERNEL="$2"; shift 2 ;;
+        --dtb) DTB="$2"; shift 2 ;;
         --initramfs) INITRAMFS="$2"; shift 2 ;;
         --no-initramfs) USE_INITRAMFS=0; shift ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 
-DTB="vendor/linux/arch/arm64/boot/dts/apple/t6050-$BOARD.dtb"
+DTB="${DTB:-vendor/linux/arch/arm64/boot/dts/apple/t6050-$BOARD.dtb}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 

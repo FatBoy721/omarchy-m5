@@ -933,21 +933,116 @@ No DCP sleep, N1, audio or PMC/PMP activation is qualified by this trial.
 
 ### Standalone (no second machine - one 1TR ceremony per image)
 
-m1n1 parses everything appended after its own image as a payload chain
-(`src/payload.c`), so the kernel, DT, initramfs and cmdline ship inside
-the boot object itself:
+The current candidate is a **device-specific GPU/simpledrm image**, not an
+enrolled boot object. It contains the native `CHAINLOADING=0` loader, the
+already-tested `7.3.0-g929e67a1da3e` kernel, GPU/simpledrm DT, initramfs and
+SSD-root command line. It does not introduce U-Boot, GRUB or Limine, change
+partitions, or depend on another computer supplying those payloads.
+
+Build after preparing the GPU kernel and initramfs described above:
 
 ```sh
-make initramfs   # Alpine aarch64 busybox+musl, repacked as newc cpio (no root)
-make payload     # m1n1 | chosen.bootargs=… | Image.gz | dtb | initramfs.cpio.gz
-sudo scripts/finish-install.sh --m1n1 build/m1n1-payload.bin
-# then repeat the power-hold → picker → "Omarchy" ceremony
+make payload-gpu-simpledrm \
+  GPU_ADT=build/adt-runtime-j714s-unattended-20261108T213635Z.bin
 ```
 
-`mkpayload.sh` re-walks the assembled file with the same magics m1n1 uses
-and fails if the chain doesn't parse, so a bad `cat` never reaches the
-ceremony. Use this for milestone boots; it costs a ceremony per kernel, so
-it is not an iteration loop.
+This reconstructs `build/m1n1-gpu-standalone` without changing the tether
+loader or vendor checkout, and writes `build/m1n1-gpu-simpledrm-payload.bin`.
+`mkpayload.sh --dtb PATH` selects the exact board profile and re-walks the
+assembled payload chain. There is no `maxcpus=1` or forced systemd target in
+this candidate; the existing SSD's default target selects console/desktop.
+
+The standalone build applies `patches/m1n1-gpu/0003-*`. Its seven-property
+native guard is generated from a private ADT **only after** the existing
+Python model, firmware and four voltage-table hash checks accept it. At boot,
+the loader compares the raw model, both firmware properties and all four
+tables byte-for-byte before NVMe initialization, secondary startup or Linux
+DT preparation. A mismatch refuses Linux and returns to the proxy path.
+This is not a generic J714s voltage profile or GPU firmware-image attestation.
+
+The loader also performs the tested native NVMe init/shutdown sequence:
+no GPT probe or disk writes, and shutdown leaves ANS cold for Linux.
+`kboot_boot()` already calls `usb_init()` to power the USB PHY chains; there
+is no extra USB workaround. The generated calibration header stays private
+under `build/`; it is not a second hand-maintained calibration table.
+
+**Qualification on this Mac (2026-11-08 local / November 9 UTC):**
+
+- The actual C handoff/boot-argument checks still pass all 26 cases. Selecting
+  `--source build/m1n1-gpu-standalone` in the smoke command above adds 22
+  native-guard cases: exact acceptance and changed, missing and wrong-length
+  rejection for each of seven properties. **48 cases pass.**
+- The small native loader was chainloaded with the verified watchdog retained.
+  Its actual compiled parser processed the candidate's identical payload tail
+  staged in ordinary RAM, then its actual `payload_run()` passed the live
+  calibration gate, initialized/shut down NVMe itself and booted Linux. No host
+  NVMe probe, C replacement, altered entry point or CTRR bypass was used.
+- Linux reached the existing ext4 SSD root read-write with CPUs `0-14`,
+  simpledrm and the Aurora render node. Native GL and Vulkan-backed Zink each
+  passed the 13 scene variants and 14 indexed-rendering cases, with no new
+  kernel messages during those checks. Systemd settled to `running`, no jobs
+  and no failed units. The obsolete `serial-getty@ttyGS0` was disabled:
+  this image exposes EEM networking, not an ACM serial port; `tty1` remains
+  enabled. That removes its pointless 90-second missing-device wait.
+- Local evidence: `build/native-payload-ram-20261108.log`,
+  `build/native-payload-gpu-20261108.json` and
+  `build/native-payload-health-20261108.json`.
+
+The full candidate is 24,012,585 bytes, SHA256
+`53ae65c9a689806efb5b58a5e7e392ceeb58a69dfce7e47bd29ac9942ef84fab`.
+Its kernel, DT and initramfs are byte-identical to the exercised tether bundle.
+The existing Stage-1 CTRR reservation cannot contain this whole image.
+**Do not disable that guard:** the RAM test does not prove iBoot enrollment,
+the monolithic placement, cold USB initialization or an unplugged cold boot.
+Those still require the owner's attended native trial.
+
+#### Enroll only after current-volume and rollback checks
+
+The staged recovery bundle is `omarchy-native-gpu-20261108` on the existing
+EFI partition, visible from Linux at `/boot/omarchy-native-gpu-20261108`.
+Copying it there does **not** enroll it or change the startup disk. It includes
+the candidate, saved raw proxy Stage 1, both GPU and non-GPU tether fallbacks,
+checksums and a manifest. The saved raw image's provenance was established
+before the stub refresh; **re-identify/backup the currently enrolled boot object
+and verify the saved rollback against it before replacing anything**.
+
+From macOS/Recovery, identify the current Omarchy **System** volume and its
+volume-group UUID afresh. Never reuse the pre-refresh UUID or guess a disk
+number. Find the FAT partition by its GPT UUID
+`79e793a2-ba60-4560-bf05-a8e268faddd9`; its `OMARCHY` label can collide with the
+APFS `Omarchy` name, so use its actual mount path rather than assuming
+`/Volumes/OMARCHY`. Set `BUNDLE` and `TARGET` to the verified absolute paths,
+then check `shasum -a 256 -c "$BUNDLE/SHA256SUMS"` **from inside `$BUNDLE`**.
+
+Use the target's paired 1TR and check `bputil -d -v "$VGID"` for `: Paired`
+and `one true recoveryOS`. If pairing is wrong, stop and use the existing
+Finish Installation recovery-routing instructions, not a security-policy
+reset. This follows the upstream
+[Stage-1 replacement procedure](https://asahilinux.org/docs/sw/m1n1-user-guide/#stage-1-as-fuos).
+The owner must approve the exact target and candidate and enter any required
+credentials interactively. Only then:
+
+```sh
+kmutil configure-boot -c "$BUNDLE/boot/m1n1-gpu-simpledrm-payload.bin" \
+  --raw --entry-point 2048 --lowest-virtual-address 0 -v "$TARGET"
+```
+
+For this already-installed stub, do not recreate partitions, run the firmware
+refresh again, rewrite `Finish Installation.app`, or lower security again.
+If the candidate fails, return through the power-hold picker to the same
+verified Recovery/target and, after approving rollback, enroll the verified
+saved raw Stage 1 with the same raw/entry/virtual-address options:
+
+```sh
+kmutil configure-boot -c "$BUNDLE/rollback/m1n1-stage1-saved.bin" \
+  --raw --entry-point 2048 --lowest-virtual-address 0 -v "$TARGET"
+```
+
+`finish-install.sh --undo` does not restore an enrolled boot object. A fresh
+boot with the tether disconnected, working display/input and SSD root is the
+acceptance check; keep the tether and Recovery fallback available until it
+passes. Kernel/DT/initramfs changes need another enrollment, while ordinary
+rootfs and desktop changes do not.
 
 Kernel cmdline: `arm64.nowfxt kvm-arm.wfi_trap_policy=trap`. On this SoC WFI
 loses x0-x30 and FP/SIMD on every core except the boot CPU; SP, PC and system

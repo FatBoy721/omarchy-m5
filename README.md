@@ -128,6 +128,14 @@ accelerated Hyprland session still need checking. The
 artifacts, source pins, live calibration guard, earlier control findings and
 remaining limits. **GPU + DCP is not yet qualified.**
 
+The [standalone milestone](docs/bringup.md#standalone-no-second-machine---one-1tr-ceremony-per-image)
+now packages that same kernel/DT/initramfs with a native loader that checks this
+Mac's calibration and prepares NVMe without the host probe. Its real payload
+parser and boot routine were exercised from RAM: SSD-root Linux, all 15 CPUs
+and both GPU smoke modes passed. The full image is staged for an **attended
+Recovery enrollment**, not installed yet; an unplugged cold boot remains to
+be verified. No CTRR guard, disk layout or installed boot object was changed.
+
 ## Aura Mach-O Stage 1 (optional, untested on hardware)
 
 `make aura-test` packages a pinned Aura v1.0.0b4 Mach-O Stage 1 with our
