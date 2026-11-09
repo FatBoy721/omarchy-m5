@@ -52,4 +52,6 @@ Edimoldovan reports a J714c chain using stage1 → stage2 through asahi-scripts 
 3. Qualify the complete installed release and recovery/update paths. Publish support only after those checks pass.
 4. Watch upstream for proven improvements, pin each candidate, review compatibility, and rerun only affected qualification. Promote additional profiles through the same gates.
 
+Adapt the existing installer acceptance runbook to the selected board before running it: its historical M1 Broadcom firmware and speaker-test steps are not M5 N1 or speaker-safety qualification. Check the installed profile’s actual driver/firmware path and keep audio disabled until its own safe routing and protection are qualified.
+
 Record component adoption and native outcomes in the canonical ledger and release evidence. Keep exploratory scripts and historical diagnostics outside the normal installation flow. A release's support matrix must describe what the installed system actually does, not everything a source branch contains.
