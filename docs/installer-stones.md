@@ -112,6 +112,15 @@ Untested on hardware. Expected boots:
 | this repo's m1n1 | `t6050-j714s-gpu*.dtb` | as before; N1 inert |
 | `make m1n1-installer` | `t6050-j714s-gpu-tripleu-simpledrm.dtb` | N1 may train; DCP display absent (simpledrm) |
 
+**Result 2026-11-09 (TripleU613's unit, installer-family stage-2 m1n1):** hangs
+deterministically at ~0.34 s, right after `Key type dns_resolver registered`
+(two boots). DCP and GPU nodes are disabled in that DTB, so the lead suspect is
+the `-tripleu` DTB enabling `pcie@1cb0000000` while its port/DART stay disabled:
+the host probes late (deferred on its DART) into an apcie block the loader did
+not power. Next: keep the host disabled in the DTB and have the loader enable
+host, port and DART together after a successful train. Do not boot `aurora-n1`
+DTBs until then.
+
 ## Credits
 
 | Who | Work this flavor builds on |
