@@ -43,6 +43,20 @@ case "$KERNEL_FLAVOR" in
             DTB=apple/t6050-j714s-gpu-simpledrm.dtb
         fi
         ;;
+    aurora-n1|aurora-n1-simpledrm)
+        # betizzel's aurora-gpu J714s plus the installer's N1 Wi-Fi/BT, PHY and
+        # cpufreq pieces (docs/installer-stones.md). Its DTBs carry TripleU613's
+        # GPU voltage bins and enable apcie: boot them only on that unit, with
+        # the installer m1n1 (make m1n1-installer). N1 drivers are modules.
+        BASE_SHA=34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a
+        SOURCE_FLAVOR=aurora-n1
+        PATCH_DIRS+=(patches/linux-aurora-gpu patches/linux-aurora-n1)
+        FRAGMENTS+=(configs/aurora-j714s-gpu.config configs/aurora-j714s-n1.config)
+        DTB=apple/t6050-j714s-gpu-tripleu.dtb
+        if [ "$KERNEL_FLAVOR" = aurora-n1-simpledrm ]; then
+            DTB=apple/t6050-j714s-gpu-tripleu-simpledrm.dtb
+        fi
+        ;;
     aurora-installer)
         # The exact kernel the omarchy-mac-installer J714s image ships (N1
         # Wi-Fi/BT, T6050 PHYs, GPU). Its own DT layout: not stacked on
@@ -53,7 +67,7 @@ case "$KERNEL_FLAVOR" in
         DTB=apple/t6050-j714s.dtb
         ;;
     *)
-        echo "ERROR: unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use aurora, aurora-gpu, aurora-gpu-simpledrm or aurora-installer)" >&2
+        echo "ERROR: unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use aurora, aurora-gpu, aurora-gpu-simpledrm, aurora-n1, aurora-n1-simpledrm or aurora-installer)" >&2
         exit 1
         ;;
 esac
@@ -152,7 +166,7 @@ REQUIRED_Y="CONFIG_DRM CONFIG_DRM_SIMPLEDRM CONFIG_DRM_FBDEV_EMULATION
             CONFIG_USB_DWC3 CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_EEM
             CONFIG_USB_CONFIGFS_NCM CONFIG_USB_CONFIGFS_ACM CONFIG_DRM_APPLE"
 REQUIRED_UNSET="CONFIG_RUST"
-if [ "$SOURCE_FLAVOR" = aurora-gpu ]; then
+if [ "$SOURCE_FLAVOR" = aurora-gpu ] || [ "$SOURCE_FLAVOR" = aurora-n1 ]; then
     REQUIRED_Y+=" CONFIG_RUST CONFIG_DRM_ASAHI CONFIG_APPLE_PMP_REPORT
                   CONFIG_RUST_APPLE_MAILBOX CONFIG_RUST_APPLE_RTKIT CONFIG_CRYPTO_LIB_SHA256"
     REQUIRED_UNSET="CONFIG_APPLE_PMP CONFIG_APPLE_AOP CONFIG_APPLE_SEP
@@ -160,6 +174,7 @@ if [ "$SOURCE_FLAVOR" = aurora-gpu ]; then
                     CONFIG_DRM_ASAHI_M5 CONFIG_DRM_APPLE_DCP_T8132
                     CONFIG_APPLE_T8132_PLATFORM_HANDOFF"
 fi
+[ "$SOURCE_FLAVOR" != aurora-n1 ] || REQUIRED_Y+=" CONFIG_PCIE_APPLE CONFIG_CFG80211"
 if [ "$KERNEL_FLAVOR" = aurora-installer ]; then
     # Mirrors the installer's kernel/j714s-required.config (modular root
     # stack via initramfs; DCP and SMC power stay off in this freeze).
@@ -223,6 +238,8 @@ case "${1:-all}" in
         ensure_config
         echo "==> Building Image.gz + $DTB"
         "${KMAKE[@]}" Image.gz "$DTB"
+        # aurora-n1's Centauri drivers load firmware from the rootfs: modules.
+        [ "$SOURCE_FLAVOR" != aurora-n1 ] || "${KMAKE[@]}" modules
         echo
         echo "==> Artifacts:"
         ls -lh "$OUT/arch/arm64/boot/Image.gz" "$OUT/arch/arm64/boot/dts/$DTB"

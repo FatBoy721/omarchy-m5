@@ -35,6 +35,10 @@ from them. Not booted through the normal U-Boot/Limine chain yet.
   Hardware result on J714s, 2026-11-08: association, DHCP, default route,
   device-bound DNS and HTTPS passed
   ([`omarchy-m5-pro/STATUS-2026-11-08.md`](omarchy-m5-pro/STATUS-2026-11-08.md)).
+  That run used a different kernel (the local "D415" baseline plus
+  [`kernel-n1-integration.patch`](omarchy-m5-pro/patches/2026-11-09/n1-j714s/));
+  this flavor's N1 code derives from it, but this exact frozen tree has not
+  itself been booted for Wi-Fi.
   Workaround needed: NetworkManager rejects the passphrase/SAE form with
   `CONNECT = -95`; store the network's 64-hex WPA2 PMK instead (derived
   locally from passphrase + SSID, never on a command line). Reconnect after
@@ -82,6 +86,31 @@ drivers/soc/apple/sart.c
 
 Port the `pcie@1cb0000000` N1 node with its `wlan`/`bluetooth` children into
 whichever DT layout wins.
+
+### Done: `aurora-n1` (`patches/linux-aurora-n1`)
+
+This merge now exists as one patch on top of `linux-aurora` + `linux-aurora-gpu`,
+keeping this repo's DT layout (`make kernel-aurora-n1`):
+
+- All installer-only files merged as-is. Conflicts: this repo's SARTv4, RTKit
+  timeout, macsmc-power work lifetime and simpledrm kept; the pmgr auto-PM
+  guard combines both (`m5_pmgr_ro` stays opt-in).
+- **GPU voltage bins are per chip, and the two J714s units differ** (ADT
+  `e68662cd...` vs `d7feb012...`). `apple,j714s-gpu` keeps betizzel's bins;
+  `apple,j714s-gpu-tripleu` (DTB `t6050-j714s-gpu-tripleu*.dtb`) selects
+  TripleU613's, behind the fuse-mask guard. A J714s without a per-unit GPU
+  compatible now refuses GPU init instead of guessing.
+- `t6050-j714s-n1.dtsi`: N1 PCIe host, port, DART, `wifi0`/`bluetooth0`, all
+  disabled in the shared tree. The `-tripleu` DTBs enable the host; the
+  installer m1n1 enables the port and DART after training.
+- Centauri Wi-Fi/BT are modules (`request_firmware_direct` needs the rootfs).
+
+Untested on hardware. Expected boots:
+
+| Loader | DTB | Expect |
+| --- | --- | --- |
+| this repo's m1n1 | `t6050-j714s-gpu*.dtb` | as before; N1 inert |
+| `make m1n1-installer` | `t6050-j714s-gpu-tripleu-simpledrm.dtb` | N1 may train; DCP display absent (simpledrm) |
 
 ## Credits
 

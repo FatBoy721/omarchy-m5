@@ -19,7 +19,8 @@ not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
 
 > **N1 Wi-Fi/Bluetooth, T6050 PHYs and the installer image's kernel/loader**
 > are an isolated extra flavor: [`docs/installer-stones.md`](docs/installer-stones.md)
-> (`make kernel-aurora-installer`, `make m1n1-installer`).
+> (`make kernel-aurora-installer`, `make m1n1-installer`). Merged with this repo's GPU
+> kernel as `make kernel-aurora-n1` (untested on hardware; per-unit GPU bins).
 > Full J714s status/evidence history: [`docs/omarchy-m5-pro/`](docs/omarchy-m5-pro/README.md).
 
 > **Reviewing this?** Start with **[`FOR-AURORA.md`](FOR-AURORA.md)** - the three
