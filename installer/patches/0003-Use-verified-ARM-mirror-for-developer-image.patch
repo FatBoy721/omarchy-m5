@@ -1,0 +1,26 @@
+From 8bd98c0651ed03de88aaaef24119089bf47097ba Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Mon, 9 Nov 2026 12:45:46 -0500
+Subject: [PATCH 3/6] Use verified ARM mirror for developer image
+
+---
+ .github/workflows/recovery-image.yml | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/.github/workflows/recovery-image.yml b/.github/workflows/recovery-image.yml
+index b00b995..7643bae 100644
+--- a/.github/workflows/recovery-image.yml
++++ b/.github/workflows/recovery-image.yml
+@@ -199,7 +199,8 @@ jobs:
+           set -euo pipefail
+           bash image-builder/bin/mac-image-inputs resolve "$WORK/inputs" \
+             --candidates "$WORK/input/candidate-set" --channel edge --image-profile j714s-developer \
+-            --recovery-app "$WORK/input/recovery" --cache "$WORK/cache" 2>&1 | tee "$WORK/evidence/resolve.log"
++            --recovery-app "$WORK/input/recovery" --cache "$WORK/cache" \
++            --alarm-server 'https://arm-mirror.omarchy.org/$arch/$repo' 2>&1 | tee "$WORK/evidence/resolve.log"
+           cp "$WORK/inputs" "$WORK/evidence/inputs"
+           bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile j714s-developer \
+             --candidates "$WORK/input/candidate-set" --recovery-app "$WORK/input/recovery" \
+-- 
+2.56.0
+

@@ -1,0 +1,3230 @@
+From 0a47f63af3efe8b73e25b7264b2d36ff5a1a3bbb Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Mon, 9 Nov 2026 12:34:47 -0500
+Subject: [PATCH 2/6] Integrate J714s developer image profile on main
+
+---
+ .github/workflows/recovery-image.yml          | 143 ++++++++-
+ Engine/overlay/src/omarchy_asahi.py           |  51 ++-
+ Engine/overlay/src/omarchy_centauri.py        | 299 ++++++++++++++++++
+ Engine/overlay/tests/test_omarchy_asahi.py    | 151 +++++++++
+ Engine/overlay/tests/test_omarchy_centauri.py | 131 ++++++++
+ Engine/overlay/tests/test_omarchy_firmware.py |  37 +++
+ .../patches/0001-omarchy-engine-runtime.patch |  42 ++-
+ Engine/source-lock.json                       |  28 +-
+ Integration/M5/J714s-Normal-System/README.md  |   4 +-
+ .../build-input-provenance.json               |  40 +++
+ .../candidate-package-manifest.json           | 208 ++++++++++++
+ .../tools/finish-inputs.py                    | 233 ++++++++++++++
+ README.md                                     |   2 +
+ SOURCES.md                                    |  44 +++
+ image-builder/bin/build-mac-image             |  54 +++-
+ image-builder/bin/mac-image-check             |  99 ++++--
+ image-builder/bin/mac-image-inputs            |  14 +-
+ image-builder/builder/candidate_set.py        |  24 +-
+ image-builder/builder/image_profile.py        |  42 +++
+ image-builder/builder/inspection.py           |  24 +-
+ .../candidate-trust/policy.json               | 132 ++++++++
+ .../candidate-trust/public.asc                |  10 +
+ .../j714s-developer/stage1-qualification.json |  13 +
+ image-builder/builder/stage1_qualification.py | 164 ++++++++++
+ image-builder/test/all                        |   5 +
+ image-builder/test/build-mac-image-test.sh    |   6 +-
+ image-builder/test/mac-image-inputs-test.sh   |   2 +
+ image-builder/test/test_candidate_set.py      |  33 ++
+ image-builder/test/test_image_profile.py      |  43 +++
+ image-builder/test/test_mac_image_check.py    |   6 +
+ .../test/test_stage1_qualification.py         |  85 +++++
+ 31 files changed, 2086 insertions(+), 83 deletions(-)
+ create mode 100644 Engine/overlay/src/omarchy_centauri.py
+ create mode 100644 Engine/overlay/tests/test_omarchy_centauri.py
+ create mode 100644 Integration/M5/J714s-Normal-System/build-input-provenance.json
+ create mode 100644 Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+ create mode 100644 Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+ create mode 100644 SOURCES.md
+ create mode 100644 image-builder/builder/image_profile.py
+ create mode 100644 image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+ create mode 100644 image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
+ create mode 100644 image-builder/builder/profiles/j714s-developer/stage1-qualification.json
+ create mode 100644 image-builder/builder/stage1_qualification.py
+ create mode 100644 image-builder/test/test_image_profile.py
+ create mode 100644 image-builder/test/test_stage1_qualification.py
+
+diff --git a/.github/workflows/recovery-image.yml b/.github/workflows/recovery-image.yml
+index 878585a..b00b995 100644
+--- a/.github/workflows/recovery-image.yml
++++ b/.github/workflows/recovery-image.yml
+@@ -9,10 +9,23 @@ name: Native Recovery image input check and build
+ on:
+   workflow_dispatch:
+     inputs:
++      image-profile:
++        description: Select the public production image or the reviewed J714s developer profile
++        type: choice
++        options: [production, j714s-developer]
++        default: production
+       build-image:
+         description: Build the full image after authenticating inputs
+         type: boolean
+         default: false
++      bundle-url:
++        description: Owned-fork PRE-RELEASE BUILD INPUTS asset URL (developer profile only)
++        type: string
++        default: ''
++      bundle-sha256:
++        description: Reviewed SHA-256 of the developer inputs archive
++        type: string
++        default: ''
+ 
+ permissions:
+   contents: read
+@@ -24,7 +37,7 @@ defaults:
+ jobs:
+   recovery:
+     name: Build the native Recovery image input
+-    if: github.repository == 'omacom/omarchy-mac-installer'
++    if: github.repository == 'omacom/omarchy-mac-installer' && inputs.image-profile == 'production'
+     uses: ./.github/workflows/recovery-app.yml
+     permissions:
+       contents: read
+@@ -34,6 +47,7 @@ jobs:
+     needs: recovery
+     if: >-
+       github.repository == 'omacom/omarchy-mac-installer' &&
++      inputs.image-profile == 'production' &&
+       github.event_name != 'pull_request' &&
+       github.event_name != 'pull_request_target'
+     # Namespace's bleeding-edge kernel, as mac-image.yml: a full build needs FAT.
+@@ -97,3 +111,130 @@ jobs:
+             ${{ runner.temp }}/recovery-image/evidence/
+             ${{ runner.temp }}/recovery-image/out/
+           retention-days: 14
++
++  developer-image:
++    name: Build the J714s developer image
++    if: >-
++      github.repository == 'TripleU613/omarchy-mac-installer' &&
++      github.event_name == 'workflow_dispatch' &&
++      github.ref == 'refs/heads/main' &&
++      inputs.image-profile == 'j714s-developer'
++    runs-on: ubuntu-24.04-arm
++    timeout-minutes: 180
++    env:
++      INPUT_URL: ${{ inputs.bundle-url }}
++      INPUT_SHA256: ${{ inputs.bundle-sha256 }}
++      RECOVERY_SOURCE_TREE: 13705bf0ccab8cc841ee9d418c36b7d7ddcafb48
++      RECOVERY_INVENTORY: f32296121b1145619f7dff52155fc056b00c1c67942891252bb977ce8291b386
++    steps:
++      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
++        with:
++          persist-credentials: false
++
++      - name: Check the ephemeral ARM build host
++        run: |
++          set -euo pipefail
++          [[ $(uname -m) == aarch64 ]]
++          sudo apt-get update -qq
++          sudo apt-get install --yes -qq libarchive-tools jq gnupg zstd btrfs-progs
++          sudo modprobe loop
++          sudo modprobe vfat
++          sudo modprobe btrfs
++          WORK=$RUNNER_TEMP/j714s-developer-image
++          echo "WORK=$WORK" >> "$GITHUB_ENV"
++          mkdir -p "$WORK/evidence"
++          {
++            git rev-parse HEAD
++            uname -a
++            free -h
++            df -h / "$RUNNER_TEMP"
++            docker version --format '{{.Server.Version}} {{.Server.Arch}}'
++            grep -E 'vfat|btrfs' /proc/filesystems
++          } | tee "$WORK/evidence/host.txt"
++
++      - name: Fetch and verify the reviewed developer inputs
++        run: |
++          set -euo pipefail
++          [[ $INPUT_SHA256 =~ ^[0-9a-f]{64}$ ]]
++          [[ $INPUT_URL =~ ^https://github\.com/TripleU613/omarchy-mac-installer/releases/download/developer-inputs-[A-Za-z0-9._-]+/j714s-developer-inputs-[0-9a-f]{12}\.tar\.zst$ ]]
++          curl --fail --silent --show-error --location --proto '=https' -- "$INPUT_URL" > "$WORK/inputs.tar.zst"
++          printf '%s  %s\n' "$INPUT_SHA256" "$WORK/inputs.tar.zst" | sha256sum --check -
++          zstd --decompress --stdout "$WORK/inputs.tar.zst" > "$WORK/inputs.tar"
++          python3 - "$WORK" <<'PY'
++          import hashlib, json, pathlib, subprocess, sys, tarfile
++          work = pathlib.Path(sys.argv[1])
++          with tarfile.open(work / 'inputs.tar') as archive:
++              allowed = {'candidate-set', 'recovery', 'engine', 'source-provenance.json'}
++              seen = set()
++              for member in archive.getmembers():
++                  parts = pathlib.PurePosixPath(member.name).parts
++                  if (not parts or parts[0] not in allowed or '..' in parts or member.name.startswith('/')
++                          or member.name in seen or not (member.isfile() or member.isdir())):
++                      raise SystemExit('unexpected developer input member')
++                  seen.add(member.name)
++              archive.extractall(work / 'input', filter='data')
++          source = json.loads((work / 'input/source-provenance.json').read_text())
++          if source.get('developer_only') is not True or source.get('builder_commit') != subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip():
++              raise SystemExit('developer input source does not match this main build commit')
++          lock = json.loads(pathlib.Path('Engine/source-lock.json').read_text())['validation_artifact']
++          if any(source.get('engine', {}).get(key) != lock[key] for key in ('filename', 'size_bytes', 'sha256', 'metadata_sha256')):
++              raise SystemExit('developer provenance names a different engine source lock')
++          engine = work / 'input/engine' / lock['filename']
++          if engine.is_symlink() or engine.stat().st_size != lock['size_bytes'] or hashlib.file_digest(engine.open('rb'), 'sha256').hexdigest() != lock['sha256']:
++              raise SystemExit('engine archive differs from the source lock')
++          engine_out = work / 'engine'
++          engine_out.mkdir()
++          engine_out.joinpath(lock['filename']).write_bytes(engine.read_bytes())
++          PY
++          python3 Engine/prepare-engine.py --output "$WORK/engine" --cache "$WORK/engine-cache" | tee "$WORK/evidence/engine-archive.txt"
++          [[ $(git rev-parse HEAD:Recovery) == "$RECOVERY_SOURCE_TREE" ]]
++          python3 image-builder/builder/recovery_app.py "$WORK/input/recovery" --sha256 "$RECOVERY_INVENTORY"
++          python3 image-builder/builder/candidate_set.py describe --input "$WORK/input/candidate-set" --image-profile j714s-developer | tee "$WORK/evidence/candidate-import.txt"
++          cp "$WORK/input/source-provenance.json" "$WORK/evidence/"
++          cp image-builder/builder/profiles/j714s-developer/candidate-trust/{policy.json,public.asc} "$WORK/evidence/"
++          printf 'input_url=%s\ninput_sha256=%s\n' "$INPUT_URL" "$INPUT_SHA256" > "$WORK/evidence/transport.txt"
++
++      - name: Resolve and build with the named developer profile
++        run: |
++          set -euo pipefail
++          bash image-builder/bin/mac-image-inputs resolve "$WORK/inputs" \
++            --candidates "$WORK/input/candidate-set" --channel edge --image-profile j714s-developer \
++            --recovery-app "$WORK/input/recovery" --cache "$WORK/cache" 2>&1 | tee "$WORK/evidence/resolve.log"
++          cp "$WORK/inputs" "$WORK/evidence/inputs"
++          bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile j714s-developer \
++            --candidates "$WORK/input/candidate-set" --recovery-app "$WORK/input/recovery" \
++            --cache "$WORK/cache" "$WORK/out" 2>&1 | tee "$WORK/evidence/build.log"
++
++      - name: Check and retain the developer image
++        run: |
++          set -euo pipefail
++          sudo chown -R "$(id -u):$(id -g)" "$WORK/out"
++          python3 image-builder/bin/mac-image-check provenance edge "$WORK/out"
++          python3 image-builder/bin/mac-image-check descriptor edge "$WORK/out"
++          python3 - "$WORK/out/installer_data.json" <<'PY'
++          import json, sys
++          os_info = json.load(open(sys.argv[1]))['os_list'][0]
++          if os_info.get('allowed_device_classes') != ['j714sap'] or os_info.get('recovery_gui') != 'omarchy-native-v1':
++              raise SystemExit('developer installer metadata does not name the reviewed device and Recovery flow')
++          PY
++          mkdir "$WORK/out/engine"
++          cp "$WORK/engine/"*.tar.gz "$WORK/out/engine/"
++          printf '%s\n' 'DEVELOPER IMAGE BUILD INPUTS: no supported-model release, catalog publication, promotion, or hardware qualification.' > "$WORK/out/DEVELOPER-ONLY.txt"
++          (cd "$WORK/out" && sha256sum ./*.zip > payload.sha256)
++
++      - name: Retain diagnostics from a failed build
++        if: failure() || cancelled()
++        run: |
++          sudo chown -R "$(id -u):$(id -g)" "$WORK/out" 2>/dev/null || true
++          if [[ -d $WORK/out/logs ]]; then cp -r "$WORK/out/logs" "$WORK/evidence/logs"; fi
++
++      - name: Save developer build artifacts
++        if: always()
++        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
++        with:
++          name: j714s-developer-image-${{ github.sha }}
++          path: |
++            ${{ runner.temp }}/j714s-developer-image/evidence/
++            ${{ runner.temp }}/j714s-developer-image/out/
++          compression-level: 0
++          retention-days: 7
+diff --git a/Engine/overlay/src/omarchy_asahi.py b/Engine/overlay/src/omarchy_asahi.py
+index cc81f20..affa274 100644
+--- a/Engine/overlay/src/omarchy_asahi.py
++++ b/Engine/overlay/src/omarchy_asahi.py
+@@ -25,6 +25,7 @@ import osinstall
+ import stub
+ 
+ import omarchy_apple_aea
++import omarchy_centauri
+ import omarchy_mesa
+ import omarchy_mt7932
+ import omarchy_mt7932_policy
+@@ -488,16 +489,35 @@ def board_stage1(device_class, os_firmware, members=(), *, common_allowed=False)
+     return board
+ 
+ 
+-def common_stage1_allowed(template, device_class, os_firmware):
++def common_stage1_allowed(template, device_class, os_firmware, *, system_firmware=None):
+     policy = template.get("aurora_stage1")
+     if policy is None:
+         return False
+-    if (not isinstance(policy, dict) or set(policy) != {"kind", "qualified_machines"}
++    required = {"kind", "qualified_machines"}
++    if (not isinstance(policy, dict) or not required <= set(policy)
++            or set(policy) - required - {"qualified_system_firmware"}
+             or policy["kind"] != "common-raw-v1" or not isinstance(policy["qualified_machines"], dict)):
+         raise AsahiAdapterError("invalid common Stage 1 qualification contract")
++    system_policy = policy.get("qualified_system_firmware", {})
++    if (not isinstance(system_policy, dict)
++            or set(system_policy) - set(policy["qualified_machines"])
++            or any(not isinstance(versions, list) or not versions
++                   or not all(isinstance(version, str) and version for version in versions)
++                   for versions in system_policy.values())):
++        raise AsahiAdapterError("invalid qualified Stage 1 system firmware contract")
+     firmware = policy["qualified_machines"].get(device_class, [])
+     if not isinstance(firmware, list) or not all(isinstance(value, str) for value in firmware):
+         raise AsahiAdapterError("invalid qualified Stage 1 firmware list")
++    if device_class in system_policy and system_firmware not in system_policy[device_class]:
++        raise AsahiAdapterError(
++            f"this Stage 1 is not qualified for {device_class} system firmware; "
++            "use a release qualified for this Mac's installed firmware"
++        )
++    if device_class in system_policy and os_firmware not in firmware:
++        raise AsahiAdapterError(
++            f"this Stage 1 is not qualified for {device_class} installation firmware; "
++            "use a release qualified for this Mac's installation firmware"
++        )
+     return os_firmware in firmware
+ 
+ 
+@@ -699,6 +719,10 @@ def stub_installer(sysinfo, dutil, osinfo):
+     def collect_firmware_from_an_encrypted_recovery(pkg):
+         with _newer_trackpad_keys(), _neo_peripheral_collectors(installer):
+             result = _collect_firmware(pkg)
++        try:
++            omarchy_centauri.collect(installer, pkg)
++        except omarchy_centauri.CentauriError as error:
++            raise AsahiAdapterError("Centauri firmware preparation failed") from error
+         required = getattr(installer, "required_neo_peripherals", [])
+         _collect_neo_radios(installer, pkg, required="radio" in required)
+         _collect_neo_touch_id(installer, pkg, required="touch-id" in required)
+@@ -1290,6 +1314,18 @@ class AsahiStage1Adapter:
+         board = getattr(self.installer.sysinfo, "device_class", "")
+         allowed = self.template.get("allowed_device_classes")
+         excluded = self.template.get("excluded_device_classes", [])
++        policy = self.template.get("aurora_stage1")
++        candidate_policy = {
++            "kind": "common-raw-v1",
++            "qualified_machines": {"j714sap": ["27.3"]},
++            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++        }
++        names_j714s = (isinstance(policy, dict)
++                       and isinstance(policy.get("qualified_machines"), dict)
++                       and "j714sap" in policy["qualified_machines"])
++        if (board == "j714sap" or names_j714s) and (
++                allowed != ["j714sap"] or policy != candidate_policy):
++            raise AsahiAdapterError("J714s requires its exact single-board common Stage 1 candidate profile")
+         if (allowed is not None and board not in allowed) or board in excluded:
+             raise AsahiAdapterError("this image is not qualified for this Mac")
+         self.osins = OmarchyOSInstaller(
+@@ -1332,8 +1368,15 @@ class AsahiStage1Adapter:
+         self.installer.ins.load_ipsw(ipsw)
+         self.os_firmware = ipsw.version.split(maxsplit=1)[0]
+         esp_members = self._esp_members()
+-        self.common_stage1 = COMMON_STAGE1.member in esp_members and common_stage1_allowed(
+-            self.template, self.installer.sysinfo.device_class, self.os_firmware)
++        common_present = COMMON_STAGE1.member in esp_members
++        policy = self.template.get("aurora_stage1")
++        system_bound = isinstance(policy, dict) and "qualified_system_firmware" in policy
++        qualified_common_stage1 = (common_present or system_bound) and common_stage1_allowed(
++            self.template, self.installer.sysinfo.device_class, self.os_firmware,
++            system_firmware=getattr(self.installer.sysinfo, "sys_firmware", None))
++        if qualified_common_stage1 and not common_present:
++            raise AsahiAdapterError(f"this qualified image has no {COMMON_STAGE1.member}")
++        self.common_stage1 = qualified_common_stage1 and common_present
+         board = board_stage1(self.installer.sysinfo.device_class, self.os_firmware, esp_members,
+                              common_allowed=self.common_stage1)
+         if board is not None:
+diff --git a/Engine/overlay/src/omarchy_centauri.py b/Engine/overlay/src/omarchy_centauri.py
+new file mode 100644
+index 0000000..2d9c1c6
+--- /dev/null
++++ b/Engine/overlay/src/omarchy_centauri.py
+@@ -0,0 +1,299 @@
++# SPDX-License-Identifier: MIT
++"""Centauri firmware preparation from the installer's selected restore identity.
++
++FTAB/IM4M parsing adapted from Rolando's mk-ftab-w3.py at
++rolotrealanis98/m5pro-linux 1381edf028814b08c2783da6d5b0fa15ba2a80db.
++This checks identity/digests, not an independently anchored Apple signature.
++
++MIT License
++
++Copyright (c) 2026 Rolando (github.com/rolotrealanis98)
++
++Permission is hereby granted, free of charge, to any person obtaining a
++copy of this software and associated documentation files (the "Software"),
++to deal in the Software without restriction, including without limitation
++the rights to use, copy, modify, merge, publish, distribute, sublicense,
++and/or sell copies of the Software, and to permit persons to whom the
++Software is furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
++DEALINGS IN THE SOFTWARE.
++"""
++import hashlib
++import re
++import struct
++
++MAX_DRIVER = 64 << 20
++MAX_TICKET = 1 << 20
++
++
++class CentauriError(ValueError):
++    pass
++
++
++def die(message):
++    raise CentauriError(message)
++
++
++def ftab_parse(d, what):
++    if len(d) < 0x30 or d[0x20:0x28] != b"rkosftab":
++        die(f"{what}: no rkosftab magic at 0x20")
++    hdr = struct.unpack_from("<8I", d, 0)
++    n, unk6 = struct.unpack_from("<2I", d, 0x28)
++    table_end = 0x30 + 16 * n
++    if not 0 < n < 1024 or table_end > len(d):
++        die(f"{what}: entry count {n} does not fit")
++    ents, ranges = [], []
++    for i in range(n):
++        tag, off, size, unk = struct.unpack_from("<4sIII", d, 0x30 + 16 * i)
++        if off < table_end or off + size > len(d):
++            die(f"{what}: entry {i} {tag!r} 0x{off:x}+0x{size:x} out of bounds")
++        ents.append((tag, off, size, unk))
++        ranges.append((off, off + size))
++    ranges.sort()
++    for (a0, a1), (b0, b1) in zip(ranges, ranges[1:]):
++        if b0 < a1:
++            die(f"{what}: overlapping entries at 0x{b0:x}")
++    tags = [e[0] for e in ents]
++    if len(set(tags)) != len(tags):
++        die(f"{what}: duplicate tags")
++    return dict(hdr=hdr, n=n, unk6=unk6, ents=ents, table_end=table_end,
++                data_end=max(r[1] for r in ranges), tkt_off=hdr[4], tkt_len=hdr[5])
++
++
++# ---------------------------------------------------------------- DER (just enough for IM4M)
++def der(b, i):
++    """-> (cls_byte, tagnum, value_start, value_len). Handles high-tag-number (private 4CC) tags."""
++    if not 0 <= i < len(b):
++        raise ValueError("truncated DER tag")
++    t = b[i]
++    i += 1
++    num = t & 0x1F
++    if num == 0x1F:
++        num = 0
++        while True:
++            if i >= len(b) or num.bit_length() > 32:
++                raise ValueError("invalid DER tag")
++            c = b[i]
++            i += 1
++            num = (num << 7) | (c & 0x7F)
++            if not c & 0x80:
++                break
++    if i >= len(b):
++        raise ValueError("truncated DER length")
++    L = b[i]
++    i += 1
++    if L & 0x80:
++        k = L & 0x7F
++        if not 0 < k <= 4:
++            raise ValueError("bad DER length")
++        if i + k > len(b):
++            raise ValueError("truncated DER length")
++        L = int.from_bytes(b[i:i + k], "big")
++        i += k
++    if i + L > len(b):
++        raise ValueError("DER element runs past its container")
++    return t, num, i, L
++
++
++def children(b, start, length):
++    i, end = start, start + length
++    while i < end:
++        t, num, v, L = der(b, i)
++        if v + L > end:
++            raise ValueError("DER child crosses container")
++        yield t, num, v, L
++        i = v + L
++    if i != end:
++        raise ValueError("DER children overrun")
++
++
++def fourcc(num):
++    return num.to_bytes(4, "big") if num.bit_length() <= 32 else b"????"
++
++
++def im4m_parse(b):
++    """-> dict: manp {key: (type, value)} and images {tag: {key: (type, value)}}.
++    Values are kept in memory for the checks only; nothing here is printed except key names."""
++    t, _, v, L = der(b, 0)
++    if t != 0x30 or v + L != len(b):
++        die("IM4M: not one DER SEQUENCE spanning the file")
++    top = list(children(b, v, L))
++    if len(top) < 4 or top[0][0] != 0x16 or b[top[0][2]:top[0][2] + top[0][3]] != b"IM4M":
++        die("IM4M: no 'IM4M' header")
++    if top[2][0] != 0x31:
++        die("IM4M: no manifest body SET")
++    if top[3][0] != 0x04:
++        die("IM4M: no signature OCTET STRING")
++
++    def props(start, length):
++        out = {}
++        for t, num, v, L in children(b, start, length):
++            if t & 0xE0 != 0xE0:  # private, constructed [4CC]
++                raise ValueError("unexpected element in a property set")
++            (st, _, sv, sl), = [c for c in children(b, v, L)]
++            parts = list(children(b, sv, sl))
++            name = b[parts[0][2]:parts[0][2] + parts[0][3]]
++            if name != fourcc(num):
++                raise ValueError("property name mismatch")
++            pt, _, pv, pl = parts[1]
++            if name in out:
++                raise ValueError("duplicate manifest property")
++            out[name] = (pt, b[pv:pv + pl], pv, pl)
++        return out
++
++    manb = None
++    for t, num, v, L in children(b, top[2][2], top[2][3]):
++        if fourcc(num) == b"MANB":
++            if manb is not None:
++                raise ValueError("duplicate MANB")
++            manb = (v, L)
++    if manb is None:
++        die("IM4M: no MANB")
++    (st, _, sv, sl), = list(children(b, *manb))
++    seq = list(children(b, sv, sl))
++    if b[seq[0][2]:seq[0][2] + seq[0][3]] != b"MANB" or seq[1][0] != 0x31:
++        die("IM4M: malformed MANB")
++    manp, images = None, {}
++    for t, num, v, L in children(b, seq[1][2], seq[1][3]):
++        (st2, _, sv2, sl2), = list(children(b, v, L))
++        inner = list(children(b, sv2, sl2))
++        name = b[inner[0][2]:inner[0][2] + inner[0][3]]
++        if name != fourcc(num) or inner[1][0] != 0x31:
++            die("IM4M: malformed MANB entry")
++        p = props(inner[1][2], inner[1][3])
++        if name == b"MANP":
++            if manp is not None:
++                raise ValueError("duplicate MANP")
++            manp = p
++        else:
++            if name in images:
++                raise ValueError("duplicate manifest image")
++            images[name] = p
++    if manp is None:
++        die("IM4M: no MANP")
++    return manp, images
++
++
++def as_int(p, k):
++    t, val, _, _ = p[k]
++    if t != 0x02:
++        die(f"IM4M: MANP {k.decode()} is not an INTEGER")
++    return int.from_bytes(val, "big")
++
++
++def as_bool(p, k):
++    t, val, _, _ = p[k]
++    if t != 0x01 or val not in (b"\0", b"\xff"):
++        die(f"IM4M: MANP {k.decode()} is not a BOOLEAN")
++    return val[0] != 0
++
++
++
++def _number(value):
++    if type(value) is int:
++        return value
++    if isinstance(value, str):
++        return int(value, 0)
++    raise CentauriError("invalid restore identity number")
++
++
++def _read(installer, path, limit):
++    if not isinstance(path, str) or path.startswith("/") or any(
++        part in ("", ".", "..") for part in path.split("/")
++    ):
++        raise CentauriError("invalid restore member path")
++    with installer.open(path) as member:
++        data = member.read(limit + 1)
++    if not data or len(data) > limit:
++        raise CentauriError("restore member is empty or exceeds limit")
++    return data
++
++
++def prepare(installer):
++    """Return normal FWPackage (name, bytes), or None for a legacy board.
++
++    The caller already selected and loaded its restore BuildIdentity. Reads
++    use that StubInstaller's existing ZIP/cache, never another firmware URL.
++    """
++    sysinfo = getattr(installer, "sysinfo", None)
++    if getattr(sysinfo, "device_class", "") != "j714sap":
++        return None
++    try:
++        identity = installer.identity
++        info = identity["Info"]
++        manifest = installer.manifest
++        if (sysinfo.chip_id != 0x6050 or sysinfo.board_id != 0x08
++                or info["DeviceClass"] != sysinfo.device_class
++                or _number(identity["ApChipID"]) != sysinfo.chip_id
++                or _number(identity["ApBoardID"]) != sysinfo.board_id
++                or info["Variant"] != "macOS Customer"
++                or info["BuildNumber"] != manifest["ProductBuildVersion"]):
++            raise CentauriError("Centauri selected restore identity mismatch")
++        target = sysinfo.get_str(sysinfo.dt["target-type"]).lower()
++        if not re.fullmatch(r"[a-z0-9]{1,15}", target):
++            raise CentauriError("invalid Centauri ADT target-type")
++        wireless_chip = _number(identity["Wireless1,ChipID"])
++        wireless_board = _number(identity["Wireless1,BoardID"])
++        if wireless_chip != 0x2026:
++            raise CentauriError("unsupported Centauri accessory chip")
++        components = [entry for key, entry in identity["Manifest"].items()
++                      if key.startswith("Wireless1,")]
++        if not components or any(entry.get("Trusted") is not True for entry in components):
++            raise CentauriError("missing trusted Wireless1 components")
++        paths = {entry["Info"]["Path"] for entry in components}
++        if len(paths) != 1 or any(entry["Info"].get("IsFTAB") is not True for entry in components):
++            raise CentauriError("Wireless1 components do not share one FTAB")
++        data = _read(installer, paths.pop(), MAX_DRIVER)
++        ticket_path = ("Firmware/Manifests/restore/macOS Customer/centauri/centauri."
++                       + sysinfo.device_class + ".im4m")
++        ticket = _read(installer, ticket_path, MAX_TICKET)
++        ftab = ftab_parse(data, "input FTAB")
++        if (any(ftab["hdr"][i] for i in range(2, 8)) or ftab["unk6"]
++                or ftab["data_end"] != len(data) or len(data) % 4):
++            raise CentauriError("unsupported or already ticketed FTAB")
++        manp, images = im4m_parse(ticket)
++        if any(key in manp for key in (b"ECID", b"BNCH", b"snon", b"Nonc")):
++            raise CentauriError("personalized Centauri ticket is not supported")
++        if (as_int(manp, b"CHIP") != wireless_chip
++                or as_int(manp, b"BORD") != wireless_board
++                or not as_bool(manp, b"CPRO") or not as_bool(manp, b"CSEC")):
++            raise CentauriError("Centauri production ticket/accessory identity mismatch")
++        expected = sorted(entry["Digest"] for entry in components)
++        if any(properties[b"DGST"][0] != 0x04 for properties in images.values()):
++            raise CentauriError("Centauri digest is not an OCTET STRING")
++        actual = sorted(properties[b"DGST"][1] for properties in images.values())
++        if not actual or expected != actual or any(len(digest) != 48 for digest in actual):
++            raise CentauriError("Wireless1/ticket digest sets differ")
++        entries = {entry[0]: entry for entry in ftab["ents"]}
++        for tag, properties in images.items():
++            _, offset, size, _ = entries[tag]
++            if hashlib.sha384(data[offset:offset + size]).digest() != properties[b"DGST"][1]:
++                raise CentauriError("Centauri FTAB segment digest mismatch")
++        result = bytearray(data)
++        struct.pack_into("<II", result, 0x10, len(data), len(ticket))
++        result.extend(ticket)
++        if len(result) > MAX_DRIVER:
++            raise CentauriError("ticketed Centauri FTAB exceeds driver limit")
++        return "apple/centauri/" + target + "-ftab.bin", bytes(result)
++    except CentauriError:
++        raise
++    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OSError, struct.error) as error:
++        raise CentauriError("invalid Centauri restore inputs") from error
++
++
++def collect(installer, package):
++    """Add prepared bytes to the existing private vendor archive, no files/logs."""
++    item = prepare(installer)
++    if item is not None:
++        import asahi_firmware
++        name, data = item
++        package.add_file(name, asahi_firmware.core.FWFile(name, data))
+diff --git a/Engine/overlay/tests/test_omarchy_asahi.py b/Engine/overlay/tests/test_omarchy_asahi.py
+index cc3fb9a..8a28d13 100644
+--- a/Engine/overlay/tests/test_omarchy_asahi.py
++++ b/Engine/overlay/tests/test_omarchy_asahi.py
+@@ -123,6 +123,7 @@ from omarchy_asahi import (  # noqa: E402
+     AsahiInPlaceRepairAdapter,
+     AsahiStage1Adapter,
+     OmarchyOSInstaller,
++    common_stage1_allowed,
+     esp_board_layout,
+     fill_aurora_stage1,
+     install_board_stage1,
+@@ -135,6 +136,29 @@ from omarchy_asahi import (  # noqa: E402
+ GIB = 1024**3
+ 
+ 
++class CentauriFirmwareFlowTests(unittest.TestCase):
++    def test_selected_restore_preparation_enters_existing_collection_hook(self):
++        from test_omarchy_centauri import fixture
++        selected, _ = fixture()
++        selected.load_identity = lambda: selected.identity
++        selected.install_files = lambda _current: None
++        selected.osi = SimpleNamespace(recovery="unused", vgid="unused")
++        seen = []
++        selected.collect_firmware = lambda package: seen.append("legacy-collected")
++        package = SimpleNamespace(add_file=lambda name, data: seen.append((name, data)))
++        firmware = SimpleNamespace(core=SimpleNamespace(FWFile=lambda name, data: data))
++        with patch("omarchy_asahi.stub.StubInstaller", return_value=selected), patch(
++            "omarchy_asahi._is_encrypted", return_value=False
++        ), patch.dict(
++            sys.modules, {"asahi_firmware": firmware}
++        ):
++            installer = stub_installer(selected.sysinfo, "dutil", "osinfo")
++            installer.collect_firmware(package)
++        self.assertEqual(seen[0], "legacy-collected")
++        self.assertEqual(seen[1][0], "apple/centauri/j714s-ftab.bin")
++        self.assertEqual(seen[1][1][0x20:0x28], b"rkosftab")
++
++
+ class DefaultBootVerificationTests(unittest.TestCase):
+     group = "11111111-2222-3333-4444-555555555555"
+ 
+@@ -581,6 +605,98 @@ class AsahiStage1AdapterTests(unittest.TestCase):
+                 self.assertFalse(adapter.preflight_complete)
+                 self.assertEqual(installer.dutil.add_calls, [])
+ 
++    def test_exact_system_firmware_preflight_rejects_before_partitioning(self):
++        self._common_payload()
++        metadata = self._target_metadata()
++        metadata["allowed_device_classes"] = ["j714sap"]
++        metadata["aurora_stage1"] = {
++            "kind": "common-raw-v1",
++            "qualified_machines": {"j714sap": ["27.3"]},
++            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++        }
++        self._write_metadata([metadata])
++        for firmware in (None, "mBoot-20457.41.2", "mBoot-20457.60.65.0.10"):
++            with self.subTest(firmware=firmware):
++                installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++                installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware=firmware)
++                installer.ipsw.version = "27.3"
++                adapter = self._adapter(installer)
++                with self.assertRaisesRegex(AsahiAdapterError, "not qualified.*system firmware"):
++                    adapter.preflight(self.plan)
++                self.assertFalse(adapter.preflight_complete)
++                self.assertEqual(installer.dutil.add_calls, [])
++                self.assertEqual(installer.ins.calls, [("load_ipsw", installer.ipsw)])
++
++    def test_exact_system_firmware_contract_is_checked_without_common_payload(self):
++        metadata = self._target_metadata()
++        metadata["allowed_device_classes"] = ["j714sap"]
++        metadata["aurora_stage1"] = {
++            "kind": "common-raw-v1",
++            "qualified_machines": {"j714sap": ["27.3"]},
++            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++        }
++        self._write_metadata([metadata])
++        installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++        installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
++        installer.ipsw.version = "27.3"
++        adapter = self._adapter(installer)
++        with self.assertRaisesRegex(AsahiAdapterError, "qualified image has no esp/aurora/stage1.bin"):
++            adapter.preflight(self.plan)
++        self.assertEqual(installer.dutil.add_calls, [])
++
++    def test_exact_system_firmware_contract_can_pass_preflight_without_granting_catalog_support(self):
++        self._common_payload()
++        metadata = self._target_metadata()
++        metadata["allowed_device_classes"] = ["j714sap"]
++        metadata["aurora_stage1"] = {
++            "kind": "common-raw-v1",
++            "qualified_machines": {"j714sap": ["27.3"]},
++            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++        }
++        self._write_metadata([metadata])
++        installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++        installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
++        installer.ipsw.version = "27.3"
++        adapter = self._adapter(installer)
++        adapter.preflight(self.plan)
++        self.assertTrue(adapter.common_stage1)
++        self.assertEqual(installer.dutil.add_calls, [])
++
++    def test_j714s_cannot_fall_back_to_generic_or_mixed_board_install_metadata(self):
++        for allowed, policy in ((None, None), (["j714sap"], None),
++                                (["j714sap", "j714cap"], {
++                                    "kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.3"]},
++                                    "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]}}),
++                                (["j714sap"], {
++                                    "kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.3"]}})):
++            with self.subTest(allowed=allowed, policy=policy):
++                metadata = self._target_metadata()
++                if allowed is not None:
++                    metadata["allowed_device_classes"] = allowed
++                if policy is not None:
++                    metadata["aurora_stage1"] = policy
++                self._write_metadata([metadata])
++                installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++                installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
++                installer.ipsw.version = "27.3"
++                adapter = self._adapter(installer)
++                with self.assertRaisesRegex(AsahiAdapterError, "exact single-board.*candidate profile"):
++                    adapter.preflight(self.plan)
++                self.assertEqual(installer.dutil.add_calls, [])
++                self.assertFalse(hasattr(installer, "ins"), "reject before selecting/loading firmware")
++
++    def test_legacy_common_policy_without_common_member_keeps_legacy_preflight(self):
++        metadata = self._target_metadata()
++        metadata["aurora_stage1"] = {
++            "kind": "common-raw-v1", "qualified_machines": {"j613ap": ["14.8.3"]},
++        }
++        self._write_metadata([metadata])
++        installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++        adapter = self._adapter(installer)
++        adapter.preflight(self.plan)
++        self.assertFalse(adapter.common_stage1)
++        self.assertEqual(installer.dutil.add_calls, [])
++
+     def _neo_payload(self, stage2=b"m1n1 neo"):
+         with zipfile.ZipFile(self.payload, "a") as archive:
+             archive.writestr("esp/aurora/stage1-j700.bin", j700_stage1())
+@@ -2022,6 +2138,41 @@ def j700_stage1(path=b"", window=0, uuid=b""):
+ class BoardStage1Tests(unittest.TestCase):
+     UUID = "97c92d03-2cb3-461f-9134-134a58cc9fdc"
+ 
++    def test_exact_system_firmware_qualification_is_board_and_stub_specific(self):
++        template = {"aurora_stage1": {
++            "kind": "common-raw-v1",
++            "qualified_machines": {"j714sap": ["27.3"]},
++            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++        }}
++        self.assertTrue(common_stage1_allowed(template, "j714sap", "27.3",
++                        system_firmware="mBoot-20457.60.65.0.1"))
++        for board in ("j714cap", "j716sap", "j714s", "j714sapx"):
++            with self.subTest(board=board):
++                self.assertFalse(common_stage1_allowed(template, board, "27.3",
++                                 system_firmware="mBoot-20457.60.65.0.1"))
++        for version in ("27.2", "27.3 beta 1", "27.30"):
++            with self.subTest(version=version), self.assertRaisesRegex(
++                    AsahiAdapterError, "not qualified.*installation firmware"):
++                common_stage1_allowed(template, "j714sap", version,
++                                      system_firmware="mBoot-20457.60.65.0.1")
++
++    def test_malformed_system_firmware_policy_fails_closed(self):
++        for policy in (None, [], {"j714sap": []}, {"j714sap": "mBoot-x"},
++                       {"j714sap": [None]}, {"j714sap": [""]},
++                       {"j714cap": ["mBoot-20457.60.65.0.1"]}):
++            with self.subTest(policy=policy), self.assertRaisesRegex(
++                    AsahiAdapterError, "invalid qualified Stage 1 system firmware contract"):
++                common_stage1_allowed({"aurora_stage1": {
++                    "kind": "common-raw-v1",
++                    "qualified_machines": {"j714sap": ["27.3"]},
++                    "qualified_system_firmware": policy,
++                }}, "j714sap", "27.3", system_firmware="mBoot-20457.60.65.0.1")
++
++    def test_legacy_common_metadata_does_not_require_system_firmware(self):
++        self.assertTrue(common_stage1_allowed({"aurora_stage1": {
++            "kind": "common-raw-v1", "qualified_machines": {"j700ap": ["26.6.2"]},
++        }}, "j700ap", "26.6.2"))
++
+     def test_the_block_is_filled_in_place(self):
+         import struct as _struct
+         import zlib as _zlib
+diff --git a/Engine/overlay/tests/test_omarchy_centauri.py b/Engine/overlay/tests/test_omarchy_centauri.py
+new file mode 100644
+index 0000000..de56640
+--- /dev/null
++++ b/Engine/overlay/tests/test_omarchy_centauri.py
+@@ -0,0 +1,131 @@
++# SPDX-License-Identifier: MIT
++"""Synthetic restore fixtures contain no Apple firmware or ticket material."""
++import hashlib
++import io
++import struct
++import unittest
++from types import SimpleNamespace
++
++import omarchy_centauri as c
++
++
++def der(tag, data):
++    size = len(data)
++    length = bytes([size]) if size < 128 else bytes([0x82]) + size.to_bytes(2, 'big')
++    return tag + length + data
++
++
++def tagged(name, data):
++    number = int.from_bytes(name, 'big')
++    parts = [number & 127]
++    number >>= 7
++    while number:
++        parts.insert(0, (number & 127) | 128)
++        number >>= 7
++    return der(b'\xff' + bytes(parts), der(b'\x30', der(b'\x16', name) + data))
++
++
++def ticket(digest, board=0x841, chip=0x2026, personalized=False, production=True):
++    properties = tagged(b'CHIP', der(b'\x02', chip.to_bytes(2, 'big')))
++    properties += tagged(b'BORD', der(b'\x02', board.to_bytes(2, 'big')))
++    properties += tagged(b'CPRO', der(b'\x01', b'\xff' if production else b'\0'))
++    properties += tagged(b'CSEC', der(b'\x01', b'\xff'))
++    if personalized:
++        properties += tagged(b'ECID', der(b'\x02', b'\x01'))
++    body = tagged(b'MANP', der(b'\x31', properties))
++    body += tagged(b'krnl', der(b'\x31', tagged(b'DGST', der(b'\x04', digest))))
++    return der(b'\x30', der(b'\x16', b'IM4M') + der(b'\x02', b'\0')
++               + der(b'\x31', tagged(b'MANB', der(b'\x31', body))) + der(b'\x04', b'fixture'))
++
++
++def fixture(**ticket_options):
++    payload = b'synthetic-kernel'
++    payload += b'\0' * (-len(payload) % 4)
++    digest = hashlib.sha384(payload).digest()
++    data = struct.pack('<8I', 0, 0, 0, 0, 0, 0, 0, 0) + b'rkosftab'
++    data += struct.pack('<II', 1, 0) + struct.pack('<4sIII', b'krnl', 0x40, len(payload), 0) + payload
++    identity = {'ApChipID': '0x6050', 'ApBoardID': '0x08',
++                'Wireless1,ChipID': 0x2026, 'Wireless1,BoardID': 0x841,
++                'Info': {'DeviceClass': 'j714sap', 'Variant': 'macOS Customer', 'BuildNumber': 'fixture'},
++                'Manifest': {'Wireless1,Kernel': {'Trusted': True, 'Digest': digest,
++                    'Info': {'Path': 'Firmware/ftab.bin', 'IsFTAB': True}}}}
++    files = {'Firmware/ftab.bin': data,
++             'Firmware/Manifests/restore/macOS Customer/centauri/centauri.j714sap.im4m': ticket(digest, **ticket_options)}
++    system = SimpleNamespace(device_class='j714sap', chip_id=0x6050, board_id=8,
++                dt={'target-type': b'J714s\0'}, get_str=lambda value:value.rstrip(b'\0').decode())
++    instance = SimpleNamespace(sysinfo=system, identity=identity,
++                manifest={'ProductBuildVersion': 'fixture'}, reads=[])
++    def read(path):
++        instance.reads.append(path)
++        return io.BytesIO(files[path])
++    instance.open = read
++    return instance, files
++
++
++class CentauriTests(unittest.TestCase):
++    def test_exact_selected_restore_identity_stitches_only_ticket_fields(self):
++        installer, files = fixture()
++        name, output = c.prepare(installer)
++        data = files['Firmware/ftab.bin']
++        manifest = next(value for key, value in files.items() if key.endswith('.im4m'))
++        self.assertEqual(name, 'apple/centauri/j714s-ftab.bin')
++        self.assertEqual(output[:0x10], data[:0x10])
++        self.assertEqual(output[0x18:len(data)], data[0x18:])
++        self.assertEqual(struct.unpack_from('<II', output, 0x10), (len(data), len(manifest)))
++        self.assertEqual(output[len(data):], manifest)
++        self.assertEqual(set(installer.reads), set(files))
++
++    def test_legacy_board_performs_no_restore_reads(self):
++        installer, _ = fixture()
++        installer.sysinfo.device_class = 'j314sap'
++        self.assertIsNone(c.prepare(installer))
++        self.assertEqual(installer.reads, [])
++
++    def test_accessory_identity_is_independent_of_ap_board(self):
++        for options in ({'board': 8}, {'chip': 0x6050}, {'personalized': True}, {'production': False}):
++            with self.subTest(options=options), self.assertRaises(c.CentauriError):
++                c.prepare(fixture(**options)[0])
++
++    def test_wrong_selected_identity_rejects_before_firmware_reads(self):
++        for key, value in [('ApBoardID','0x0c'), ('ApChipID','0x6051')]:
++            installer, _ = fixture()
++            installer.identity[key] = value
++            with self.subTest(key=key), self.assertRaises(c.CentauriError):
++                c.prepare(installer)
++            self.assertEqual(installer.reads, [])
++
++    def test_component_and_segment_digest_mismatch_rejected(self):
++        installer, _ = fixture()
++        installer.identity['Manifest']['Wireless1,Kernel']['Digest'] = bytes(48)
++        with self.assertRaises(c.CentauriError):
++            c.prepare(installer)
++        installer, files = fixture()
++        files['Firmware/ftab.bin'] = files['Firmware/ftab.bin'][:-1] + b'x'
++        with self.assertRaises(c.CentauriError):
++            c.prepare(installer)
++
++    def test_bad_bounds_and_existing_ticket_are_rejected(self):
++        for offset, value in [(0x10, 64), (0x28, 1024), (0x34, 0), (0x38, 10000)]:
++            installer, files = fixture()
++            data = bytearray(files['Firmware/ftab.bin'])
++            struct.pack_into('<I', data, offset, value)
++            files['Firmware/ftab.bin'] = bytes(data)
++            with self.subTest(offset=offset), self.assertRaises(c.CentauriError):
++                c.prepare(installer)
++
++    def test_truncated_der_and_unsafe_paths_fail_closed(self):
++        installer, files = fixture()
++        key = next(key for key in files if key.endswith('.im4m'))
++        for size in (1, 3, 20, len(files[key])-1):
++            original = files[key]
++            files[key] = original[:size]
++            with self.subTest(size=size), self.assertRaises(c.CentauriError):
++                c.prepare(installer)
++            files[key] = original
++        installer.identity['Manifest']['Wireless1,Kernel']['Info']['Path'] = '../ftab.bin'
++        with self.assertRaises(c.CentauriError):
++            c.prepare(installer)
++
++
++if __name__ == '__main__':
++    unittest.main()
+diff --git a/Engine/overlay/tests/test_omarchy_firmware.py b/Engine/overlay/tests/test_omarchy_firmware.py
+index 9fbce3d..c31aea8 100644
+--- a/Engine/overlay/tests/test_omarchy_firmware.py
++++ b/Engine/overlay/tests/test_omarchy_firmware.py
+@@ -66,6 +66,12 @@ IPSW_VERSIONS = patched_ipsws() + UPSTREAM_IPSWS
+ CHIP_MIN_VER = {0x8103: "11.0", 0x8112: "12.4", 0x8122: "14.8.3", 0x8140: "26.6"}
+ DEVICE_MIN = {"j313ap": "11.0", "j413ap": "12.4", "j613ap": "14.8.3",
+               "j615ap": "14.8.3", "j700ap": "26.6"}
++# Read new admission entries from the actual shipped patch: deleting or
++# changing the real chip/device entries must break the candidate fixtures.
++CHIP_MIN_VER.update({int(chip, 16): version for chip, version in re.findall(
++    r'^\+\s+(0x[0-9a-fA-F]+): "([^"]+)"', PATCH.read_text(), re.MULTILINE)})
++DEVICE_MIN.update(dict(re.findall(
++    r'^\+\s+"(j[0-9a-z]+ap)":\s+Device\("([^"]+)", False\)', PATCH.read_text(), re.MULTILINE)))
+ TODAY = ["13.5", "14.8.3", "26.6"]
+ ON_26_6_2 = dict(sys_firmware="mBoot-18000.161.10", macos_ver="26.6.2",
+                  sfr_full_ver="25.7.83.0.0,0")
+@@ -110,6 +116,37 @@ class PatchedFirmwareTableTests(unittest.TestCase):
+                       "+            omarchy_firmware.require_available(minver, avail, split_ver)\n", main)
+         self.assertNotIn("+                stub_size=(STUB_SIZE_MACOS26", main)
+ 
++    def test_j714s_candidate_has_one_exact_device_restricted_apple_restore(self):
++        candidate, = [item for item in IPSW_VERSIONS if item.version == "27.3"]
++        self.assertEqual((candidate.min_macos, candidate.min_iboot, candidate.min_sfr,
++                          candidate.expert_only, candidate.devices),
++                         ("27.3", "mBoot-20457.60.65.0.1", "26.3.35.5.18,0", False, ["j714sap"]))
++        self.assertEqual(candidate.url,
++                         "https://updates.cdn-apple.com/2026FallSeed/53df7654-4865-4259-8dae-30177b76f104/"
++                         "UniversalMac_27.3_26C5035r_Restore.ipsw")
++
++    def test_j714s_requires_its_os_system_and_restore_firmware_and_large_stub(self):
++        versions = dict(sys_firmware="mBoot-20457.60.65.0.1", macos_ver="27.3",
++                        sfr_full_ver="26.3.35.5.18,0")
++        system, device = mac("j714sap", 0x6050, **versions)
++        self.assertEqual(choose(system, device, ["27.3"]), ("27.3", STUB_SIZE_MACOS26))
++        self.assertEqual(choose(system, device, TODAY), (None, STUB_SIZE_MACOS26))
++        for key, value in (("sys_firmware", "mBoot-20457.41.2"), ("macos_ver", "27.2"),
++                           ("sfr_full_ver", "26.3.35.5.17,0")):
++            with self.subTest(key=key):
++                system, device = mac("j714sap", 0x6050, **{**versions, key: value})
++                self.assertEqual(choose(system, device, ["27.3"]), (None, STUB_SIZE_MACOS26))
++
++    def test_j714s_restore_is_not_offered_to_legacy_or_sibling_devices(self):
++        for board in ("j700ap", "j613ap", "j714cap", "j716sap"):
++            system = SimpleNamespace(device_class=board, chip_id=0x6050,
++                                     sys_firmware="mBoot-20457.60.65.0.1", macos_ver="27.3",
++                                     sfr_full_ver="26.3.35.5.18,0")
++            device = SimpleNamespace(min_ver="27.3")
++            _, available = available_ipsws(IPSW_VERSIONS, CHIP_MIN_VER, system, device,
++                                           ["27.3"], False, split_ver)
++            self.assertEqual(available, [], board)
++
+ 
+ class DefaultFirmwareTests(unittest.TestCase):
+     def test_an_air_offered_only_26_6_2_takes_it_and_the_larger_stub(self):
+diff --git a/Engine/patches/0001-omarchy-engine-runtime.patch b/Engine/patches/0001-omarchy-engine-runtime.patch
+index 2f4ed8c..11dce50 100644
+--- a/Engine/patches/0001-omarchy-engine-runtime.patch
++++ b/Engine/patches/0001-omarchy-engine-runtime.patch
+@@ -35,7 +35,7 @@ index 21031fd..76c0935 100755
+  
+  echo "Packaging installer..."
+ diff --git a/src/main.py b/src/main.py
+-index 88dd2ab..47aad7c 100644
++index 88dd2ab..9f40a4f 100644
+ --- a/src/main.py
+ +++ b/src/main.py
+ @@ -4,11 +4,16 @@ import os, os.path, shlex, subprocess, sys, time, termios, json, getpass, report
+@@ -55,19 +55,21 @@ index 88dd2ab..47aad7c 100644
+  
+  # Minimum free space to leave when resizing, to allow for OS upgrades
+  MIN_FREE_OS = psize("38GB")
+-@@ -49,9 +54,11 @@ CHIP_MIN_VER = {
++@@ -49,9 +54,13 @@ CHIP_MIN_VER = {
+      0x6030: "14.8.3",   # T6030, M3 Pro
+      0x6031: "14.8.3",   # T6031, M3 Max (16-core)
+      0x6034: "14.8.3",   # T6034, M3 Max (14-core)
+ +    0x8140: "26.6",     # T8140, A18 Pro
+++    0x6050: "27.3",     # T6050, exact J714s candidate firmware
+  }
+  
+  DEVICES = {
+++    "j714sap":  Device("27.3", False),  # MacBook Pro (14-inch, M5 Pro)
+ +    "j700ap":   Device("26.6", False),  # MacBook Neo (A18 Pro, 2026)
+      "j274ap":   Device("11.0", False),  # Mac mini (M1, 2020)
+      "j293ap":   Device("11.0", False),  # MacBook Pro (13-inch, M1, 2020)
+      "j313ap":   Device("11.0", False),  # MacBook Air (M1, 2020)
+-@@ -95,6 +102,22 @@ if os.environ.get("ALLOW_VM", None):
++@@ -95,6 +104,31 @@ if os.environ.get("ALLOW_VM", None):
+      DEVICES["vma2macosap"] = Device("12.0", False)
+  
+  IPSW_VERSIONS = [
+@@ -87,10 +89,19 @@ index 88dd2ab..47aad7c 100644
+ +         False,
+ +         ["j613ap", "j615ap", "j700ap"],
+ +         "https://updates.cdn-apple.com/2026SummerFCS/fullrestores/140-75212/A2A24B94-1FC1-45A3-93F7-C51B02AF1F4D/UniversalMac_26.6.2_25G83_Restore.ipsw"),
+++    # Device-restricted candidate: Apple 27.3 beta 1 (26C5035r).
+++    # RestoreLongVersion is from the selected IPSW's RestoreVersion.plist.
+++    IPSW("27.3",
+++         "27.3",
+++         "mBoot-20457.60.65.0.1",
+++         "26.3.35.5.18,0",
+++         False,
+++         ["j714sap"],
+++         "https://updates.cdn-apple.com/2026FallSeed/53df7654-4865-4259-8dae-30177b76f104/UniversalMac_27.3_26C5035r_Restore.ipsw"),
+      IPSW("12.3.1",
+           "12.1",
+           "iBoot-7459.101.3",
+-@@ -128,7 +151,10 @@ IPSW_VERSIONS = [
++@@ -128,7 +162,10 @@ IPSW_VERSIONS = [
+  class InstallerMain:
+      def __init__(self, version):
+          self.version = version
+@@ -101,7 +112,7 @@ index 88dd2ab..47aad7c 100644
+          self.credentials_validated = False
+          self.expert = False
+          self.ipsw = None
+-@@ -585,20 +611,11 @@ class InstallerMain:
++@@ -585,20 +622,11 @@ class InstallerMain:
+          self.step2(report=True)
+  
+      def choose_ipsw(self, supported_fw=None):
+@@ -127,7 +138,7 @@ index 88dd2ab..47aad7c 100644
+  
+          minver.sort(key=lambda ipsw: split_ver(ipsw.version))
+  
+-@@ -812,18 +829,15 @@ class InstallerMain:
++@@ -812,18 +840,15 @@ class InstallerMain:
+          else:
+              target = resizable[0]
+  
+@@ -155,7 +166,7 @@ index 88dd2ab..47aad7c 100644
+  
+          min_perc = 100 * min_size / total
+  
+-@@ -922,6 +936,25 @@ class InstallerMain:
++@@ -922,6 +947,25 @@ class InstallerMain:
+  
+          return True
+  
+@@ -181,7 +192,7 @@ index 88dd2ab..47aad7c 100644
+      def action_select_disk(self):
+          choices = {"1": "Internal storage"}
+  
+-@@ -939,21 +972,22 @@ class InstallerMain:
++@@ -939,21 +983,22 @@ class InstallerMain:
+          return True
+  
+      def main(self):
+@@ -217,7 +228,7 @@ index 88dd2ab..47aad7c 100644
+              p_message("By default, this installer will hide certain advanced options that")
+              p_message("are only useful for Asahi Linux developers. You can enable expert mode")
+              p_message("to show them. Do not enable this unless you know what you are doing.")
+-@@ -970,7 +1004,19 @@ class InstallerMain:
++@@ -970,7 +1015,23 @@ class InstallerMain:
+  
+          self.chip_min_ver = CHIP_MIN_VER.get(self.sysinfo.chip_id, None)
+          self.device = DEVICES.get(self.sysinfo.device_class, None)
+@@ -226,6 +237,10 @@ index 88dd2ab..47aad7c 100644
+ +            self.chip_min_ver
+ +            and self.device
+ +            and (not self.device.expert_only or self.expert)
+++            and (
+++                self.sysinfo.device_class != "j714sap"
+++                or (self.sysinfo.chip_id == 0x6050 and self.sysinfo.board_id == 0x08)
+++            )
+ +        )
+ +        if self.engine_runtime:
+ +            self.engine_runtime.inspect(
+@@ -238,7 +253,7 @@ index 88dd2ab..47aad7c 100644
+              p_error("This device is not supported yet!")
+              p_error("Please check out the Asahi Linux Blog for updates on device support:")
+              print()
+-@@ -1126,6 +1172,19 @@ class InstallerMain:
++@@ -1126,6 +1187,19 @@ class InstallerMain:
+  
+          if self.cur_os is None and self.sysinfo.boot_mode != "macOS":
+              self.cur_os = default_os
+@@ -258,7 +273,7 @@ index 88dd2ab..47aad7c 100644
+          self.check_cur_os()
+  
+          actions = {}
+-@@ -1226,7 +1285,11 @@ if __name__ == "__main__":
++@@ -1226,7 +1300,11 @@ if __name__ == "__main__":
+          logging.exception("Process execution failed")
+          p_warning("If you need to file a bug report, please attach the log file:")
+          p_warning(f"  {os.getcwd()}/installer.log")
+@@ -287,9 +302,10 @@ index d99a1e1..76f9a94 100644
+              osi.sys_vol_bootable = fsctl_is_bootable(mounts["System"])
+          except Exception as e:
+ diff --git a/src/osinstall.py b/src/osinstall.py
++index c721fcb..c6eb9a7 100644
+ --- a/src/osinstall.py
+ +++ b/src/osinstall.py
+-@@ -127,6 +127,13 @@
++@@ -127,6 +127,13 @@ class OSInstaller(PackageInstaller):
+                  fd.write(data)
+              ucache.flush_progress()
+  
+@@ -303,7 +319,7 @@ diff --git a/src/osinstall.py b/src/osinstall.py
+      def install(self, stub_ins):
+          p_progress("Installing OS...")
+          logging.info("OSInstaller.install()")
+-@@ -146,12 +153,7 @@
++@@ -146,12 +153,7 @@ class OSInstaller(PackageInstaller):
+              if image:
+                  p_plain(f"  Extracting {image} into {info.name} partition...")
+                  logging.info(f"Extract: {image}")
+diff --git a/Engine/source-lock.json b/Engine/source-lock.json
+index 5b60eee..6d7f714 100644
+--- a/Engine/source-lock.json
++++ b/Engine/source-lock.json
+@@ -141,7 +141,7 @@
+     }
+   },
+   "downstream_overlay": {
+-    "version": "v0.9.2-omarchy.20261106.0f73bea79639",
++    "version": "v0.9.2-omarchy.20261109.5b065b47f32e",
+     "capability": "candidate_bound_full_os_stage_one_authenticated_recovery",
+     "minimum_app_version": "2.3.0",
+     "engine_modes": [
+@@ -151,7 +151,7 @@
+     ],
+     "patch": {
+       "path": "patches/0001-omarchy-engine-runtime.patch",
+-      "sha256": "28c3dbceebaeb2d023d972f816184609c2ffb6065502e1f91839ac69e9e4a94a"
++      "sha256": "a10baaadc0317a1e655496ed95edfb18f778128bb153d72fe4791b906179b906"
+     },
+     "files": [
+       {
+@@ -172,7 +172,7 @@
+       {
+         "path": "overlay/src/omarchy_asahi.py",
+         "destination": "src/omarchy_asahi.py",
+-        "sha256": "60312d7336505f126418c85d9ea2b62b33ead8ac70af73301de2809c08dfafe6"
++        "sha256": "46fcb4e54244fe888fdb0725e961196d3c807d556698d5462c82f1a3e982d246"
+       },
+       {
+         "path": "overlay/src/omarchy_contract.py",
+@@ -207,7 +207,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_asahi.py",
+         "destination": "tests/test_omarchy_asahi.py",
+-        "sha256": "c0da26efe1aa3e7450c0eff029f58591c13e86821dbf40b4b449fc825d6341f6"
++        "sha256": "aadbb3870082e84a0cf5be7d9e5df6b5f9ef149231608b595d84f8bda622c1c0"
+       },
+       {
+         "path": "overlay/tests/test_omarchy_contract.py",
+@@ -292,7 +292,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_firmware.py",
+         "destination": "tests/test_omarchy_firmware.py",
+-        "sha256": "3655ba86b7282c2ce3a5305b78dba2510e535e5ae5d669a473301003040c34f1"
++        "sha256": "65fcaab9d28c3887b68746ca62acf826c0b22710812b61a16997c33925bbbf89"
+       },
+       {
+         "path": "overlay/src/omarchy_als.py",
+@@ -333,6 +333,16 @@
+         "path": "overlay/tests/test_omarchy_recovery.py",
+         "destination": "tests/test_omarchy_recovery.py",
+         "sha256": "769dfa871dc59371099f7bea59f3e4209159ef4123522f31001626c4484f7541"
++      },
++      {
++        "path": "overlay/src/omarchy_centauri.py",
++        "destination": "src/omarchy_centauri.py",
++        "sha256": "2c5c4021983e303edce6d868c5992cc1238851238202f2e6b9c725a15394e42d"
++      },
++      {
++        "path": "overlay/tests/test_omarchy_centauri.py",
++        "destination": "tests/test_omarchy_centauri.py",
++        "sha256": "e1d90d09e20fb6325525c6c076b68af529ad0bcdcfb1a619dc0f2210f8244861"
+       }
+     ]
+   },
+@@ -467,9 +477,9 @@
+     }
+   ],
+   "validation_artifact": {
+-    "filename": "installer-v0.9.2-omarchy.20261106.0f73bea79639.tar.gz",
+-    "size_bytes": 17904144,
+-    "sha256": "a60855716be5cea4f2113a368f784a5fe55a7034602f48fac8bb6e79f796fd7a",
++    "filename": "installer-v0.9.2-omarchy.20261109.5b065b47f32e.tar.gz",
++    "size_bytes": 17909338,
++    "sha256": "a8b2fbd306ced6320414d680a29d1edccc37136642306a939349da1fca076efe",
+     "reproducibility_scope": "two-identical-python-overlay-repacks-authenticated-base",
+     "signature": "absent",
+     "metadata_sha256": "2e6181ce6b6e17c11039e04bfadade8d10ae0e11889885ad8c9960b68f179a5d"
+@@ -496,7 +506,7 @@
+           "upstream_base_sha256": "c8d4d2a80f3a88a9ba4d6d4024c0001062e35d15d72ae530681a0612e6525984",
+           "upstream_sha256": "894fb8cd2ffc672bb96a14969ee9de2879d250c8c5990fee122ccf66d9b50024",
+           "base_sha256": "95760ed02d44b5457acb81559a4e2d892ffbb7f0f2b7417c0b2eb02937945ae7",
+-          "sha256": "84da2978421cc551411bc4acd15e4fcd208ea21c4f2f01510bfed5ce49e809dc"
++          "sha256": "b71a9a65c930c6568788b1f57c1be49d061ff8f3fd24310086af78abdf5a91cb"
+         }
+       ]
+     },
+diff --git a/Integration/M5/J714s-Normal-System/README.md b/Integration/M5/J714s-Normal-System/README.md
+index 90156d3..0eb7234 100644
+--- a/Integration/M5/J714s-Normal-System/README.md
++++ b/Integration/M5/J714s-Normal-System/README.md
+@@ -8,6 +8,8 @@ Integration/M5/J714s-Normal-System/prepare /absolute/new/build-directory
+ 
+ The command fetches immutable omacom/omarchy-pkgs commit `30a33ee435db8f4a158ca41f82e91cc34bcd2e3b` into a local Git cache, verifies the resolved commit, extracts the selected recipes, applies the checksummed `recipes.patch` and `runtime-pair.patch`, then copies the frozen kernel, loader and Mesa inputs. Its only network access is that pinned Git fetch. It does not build, install, enroll, contact a Mac or publish. Existing destinations are refused. Build the copies with ordinary Arch `makepkg` in an appropriate aarch64 build environment. Their package names/providers/conflicts stay normal, so do not install these private candidates on an ordinary supported Mac.
+ 
++After the 15 package archives and reviewed Recovery/Engine inputs exist, [`tools/finish-inputs.py`](tools/finish-inputs.py) validates them against the checked-in package manifest and source provenance, verifies the approved developer signer, signs the candidate-set metadata, and writes the developer-only `.tar.zst` build-input bundle. It checks that the builder SHA is the current published `origin/main`. The signing home is read only for signing; the bundle contains the signed package set, public trust material, Recovery app, Engine archive and provenance, never the private key. Use `--help` for the required local input paths. The helper does not build packages or an image, publish a supported release, change the catalog or qualify hardware.
++
+ ## Exact sources
+ 
+ | Component | Public baseline and private source closure | Normal integration |
+@@ -44,4 +46,4 @@ Firmware preparation remains an image-producer dependency. The generated `omarch
+ 
+ These are integration snapshots of public and previously demonstrated local derivatives, not new hardware discoveries or a clean-room claim. The original file headers, author/copyright notices and per-file SPDX identifiers remain intact in the patches. Kernel source follows its GPL/per-file dual-license terms; the exact pinned m1n1 tree and modified C files carry MIT terms; its third-party licenses still ship with the normal recipe. New kernel config fragments are kernel configuration derivatives; the loader bounds fixture is project-owned test code. The public contributions credited in the snapshots include Asahi Linux, Aurora Silicon, betizzel, Rolando Trevino and Eduard Moldovan. Do not apply a later upstream repository's license retroactively to these exact pinned files or strip their existing notices.
+ 
+-`kernel/source-manifest.json` and `loader/source-manifest.json` identify the changed/new source files and their digests (83 for the kernel snapshot and 11 for the loader snapshot). The patches preserve deletions from their exact frozen diffs. The manifests contain source identity, not signed model admission or native qualification; they do not replace the installer's authenticated package/candidate-set checks.
++`kernel/source-manifest.json` and `loader/source-manifest.json` identify changed, new and deleted source paths (83 kernel entries and 11 loader entries), with content hashes where present. The frozen patches record removals from the exact source diffs. The manifests contain source identity, not signed model admission or native qualification; they do not replace the installer's authenticated package/candidate-set checks.
+diff --git a/Integration/M5/J714s-Normal-System/build-input-provenance.json b/Integration/M5/J714s-Normal-System/build-input-provenance.json
+new file mode 100644
+index 0000000..c5e21fd
+--- /dev/null
++++ b/Integration/M5/J714s-Normal-System/build-input-provenance.json
+@@ -0,0 +1,40 @@
++{
++  "schema": 1,
++  "official_baseline": {
++    "database_sha256": "d64a0cd062d01cdb8c18aa090bbe67ecde37fe5775d1292d57b5130f5322538b",
++    "signer": "40DFB630FF42BCFFB047046CF0134EE680CAC571",
++    "original_signatures": {
++      "alsa-ucm-conf-aurora": "42ccf6f77479ea718325030544cc84bb3571e46c644e176bda6948fb851c87ee",
++      "aurora-audio": "c152bf18b41b4956e564c46eebe6cbfa6293912b3a61a6ca53877a3018f89d83",
++      "aurora-bless": "8d196ca03ea1ed96d1669588ee8ecdae3eb0b5bf69f8f8a6c557e63e9e0436ef",
++      "limine-mkinitcpio-hook": "17c2da77061c5b996f6605a596157eb817e5d0dae86983ef2719bc1035ec7289",
++      "omarchy": "78b2d661dec42e37f75efcfe4af4e732f6d6e1fd6a997977bda16cb81135c559",
++      "omarchy-mac": "b7bcc600fc5fd3577bd8b016aeaa7fb187e4c5ca224fe10851632115903ddae4",
++      "omarchy-mac-boot": "892570c557bd8983e2ecba8fa60941fb1f8f7fc3b9dd058a8ce1ec7d907d61cc",
++      "omarchy-settings": "5ec7340ca1343c6b79d0bab8c2527509a0e4e8c4b1982a95317294199fa8977d",
++      "speakerguardd": "7cbcf28938f09cb7025e384ad171f6a580dad376242f90ccbb4bb6428dc01127"
++    }
++  },
++  "recovery": {
++    "repository": "omacom/omarchy-mac-installer",
++    "source_commit": "c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9",
++    "source_tree": "13705bf0ccab8cc841ee9d418c36b7d7ddcafb48",
++    "ci_run": 42164687304,
++    "artifact_id": 13479080380,
++    "artifact_sha256": "b2b3f243c71ddf578595dcf6a1a81a50df34ffff80a369269543b69a6fda0f93",
++    "inventory_sha256": "f32296121b1145619f7dff52155fc056b00c1c67942891252bb977ce8291b386"
++  },
++  "native_mesa": {
++    "repository": "TripleU613/omarchy-pkgs",
++    "commit": "9c88bed7a7cc6b69d230ebb2279becaac9d14840",
++    "run": 42649339647,
++    "artifact_id": 13688964867,
++    "artifact_sha256": "507b72a3aae1c6c8a5d8923e4e43100f470bc771ec8466905f57b2fc03fcc43c"
++  },
++  "candidate_set_signer_tool": {
++    "repository": "omacom/omarchy-mac-pkgs",
++    "commit": "062cda3d2786fcebf2cebf46e14170c8999d4c37",
++    "path": "tools/release/candidate-set",
++    "sha256": "b3f4f2a54ea6efeb05ac4875fcadd218b76371cdc779c377547e5a72cc72ca29"
++  }
++}
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+new file mode 100644
+index 0000000..d3b4a2e
+--- /dev/null
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -0,0 +1,208 @@
++{
++  "schema": 1,
++  "candidate_only": true,
++  "set": "j714s-dev-runtime-11c310b1d7dc",
++  "source": {
++    "repository": "omacom/omarchy",
++    "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
++    "ref": "v4.5.0"
++  },
++  "platform_sources": {
++    "omarchy-mac": "ea0097a523191bcf3c6997e8d3a162ea13a1fe67",
++    "omarchy-mac-boot": "7e50e937b5f32a62f1c8fee9699467d23faa74d5"
++  },
++  "packages": [
++    {
++      "name": "alsa-ucm-conf-aurora",
++      "version": "10.aurora3-1",
++      "arch": "aarch64",
++      "filename": "alsa-ucm-conf-aurora-10.aurora3-1-aarch64.pkg.tar.zst",
++      "sha256": "77161459a800e9803b700b0200006ac13ad1e1e92b63b04ba3abc82fe0164352",
++      "source": {
++        "channel": "omacom edge aarch64",
++        "url": "https://pkgs.omarchy.org/edge/aarch64/alsa-ucm-conf-aurora-10.aurora3-1-aarch64.pkg.tar.zst",
++        "omacom_signature_sha256": "42ccf6f77479ea718325030544cc84bb3571e46c644e176bda6948fb851c87ee"
++      },
++      "size_bytes": 9255
++    },
++    {
++      "name": "aurora-audio",
++      "version": "4.1.aurora3-3",
++      "arch": "aarch64",
++      "filename": "aurora-audio-4.1.aurora3-3-aarch64.pkg.tar.zst",
++      "sha256": "c53f9e18c3c213eada2fa7b7dbee5f04224304d296e6b3c672f12e20fed19c7c",
++      "source": {
++        "channel": "omacom edge aarch64",
++        "url": "https://pkgs.omarchy.org/edge/aarch64/aurora-audio-4.1.aurora3-3-aarch64.pkg.tar.zst",
++        "omacom_signature_sha256": "c152bf18b41b4956e564c46eebe6cbfa6293912b3a61a6ca53877a3018f89d83"
++      },
++      "size_bytes": 1790126
++    },
++    {
++      "name": "aurora-bless",
++      "version": "0.4.4.aurora2-1",
++      "arch": "aarch64",
++      "filename": "aurora-bless-0.4.4.aurora2-1-aarch64.pkg.tar.zst",
++      "sha256": "23ae2572f4b15246aafbdfd9929250250ceb623b9e7810886720f4ff117fa732",
++      "source": {
++        "channel": "omacom edge aarch64",
++        "url": "https://pkgs.omarchy.org/edge/aarch64/aurora-bless-0.4.4.aurora2-1-aarch64.pkg.tar.zst",
++        "omacom_signature_sha256": "8d196ca03ea1ed96d1669588ee8ecdae3eb0b5bf69f8f8a6c557e63e9e0436ef"
++      },
++      "size_bytes": 382511
++    },
++    {
++      "name": "limine-mkinitcpio-hook",
++      "version": "1.40.0-3",
++      "arch": "aarch64",
++      "filename": "limine-mkinitcpio-hook-1.40.0-3-aarch64.pkg.tar.zst",
++      "sha256": "21aa10e92b11ef3d8e4929ad79b737c173e8ed2be267c69dee5d9e8681348315",
++      "source": {
++        "channel": "omacom edge aarch64",
++        "url": "https://pkgs.omarchy.org/edge/aarch64/limine-mkinitcpio-hook-1.40.0-3-aarch64.pkg.tar.zst",
++        "omacom_signature_sha256": "17c2da77061c5b996f6605a596157eb817e5d0dae86983ef2719bc1035ec7289"
++      },
++      "size_bytes": 6816462
++    },
++    {
++      "name": "linux-aurora",
++      "version": "7.3.0.aurora15.j714s2-1",
++      "arch": "aarch64",
++      "filename": "linux-aurora-7.3.0.aurora15.j714s2-1-aarch64.pkg.tar.zst",
++      "sha256": "efe8d9c95c02d1ac93e4f043527523c05ba3d9dcd94b70abec4a5004784ca2c0",
++      "source": {
++        "repository": "TripleU613/omarchy-pkgs",
++        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++      },
++      "size_bytes": 42674507
++    },
++    {
++      "name": "m1n1-aurora",
++      "version": "1.6.1.aurora22.j714s2-1",
++      "arch": "aarch64",
++      "filename": "m1n1-aurora-1.6.1.aurora22.j714s2-1-aarch64.pkg.tar.zst",
++      "sha256": "ab67bc77b8894cfd15d168ade5cb52edefff9ed4cdd230c7caf27ebaf25c5a00",
++      "source": {
++        "repository": "TripleU613/omarchy-pkgs",
++        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++      },
++      "size_bytes": 2000194
++    },
++    {
++      "name": "mesa-aurora",
++      "version": "1:26.3.0_devel.20261109.j714s2.043a4c5-1",
++      "arch": "aarch64",
++      "filename": "mesa-aurora-1:26.3.0_devel.20261109.j714s2.043a4c5-1-aarch64.pkg.tar.zst",
++      "sha256": "699631582c7206c94292a0486a6829e476f35489874ef58eeb72bf2f402bbc87",
++      "source": {
++        "repository": "TripleU613/omarchy-pkgs",
++        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++      },
++      "size_bytes": 7307523
++    },
++    {
++      "name": "omarchy",
++      "version": "4.5.0-3.7141",
++      "arch": "aarch64",
++      "filename": "omarchy-4.5.0-3.7141-aarch64.pkg.tar.zst",
++      "sha256": "5ea3890c92d5748b2eca930c8b17c95fb9b3bb68ed3682f407f9ef2f7034436f",
++      "source": {
++        "repository": "omacom/omarchy",
++        "commit": "a948d8a6871f446b335258c827648ac5f4e9428b"
++      },
++      "size_bytes": 81675765
++    },
++    {
++      "name": "omarchy-aurora-firmware",
++      "version": "20261014.j714s1-1",
++      "arch": "aarch64",
++      "filename": "omarchy-aurora-firmware-20261014.j714s1-1-aarch64.pkg.tar.zst",
++      "sha256": "403f9fccf5dd353f893aafae05dd2153f7198ef5254d5143326478fe61867bc7",
++      "source": {
++        "repository": "TripleU613/omarchy-pkgs",
++        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++      },
++      "size_bytes": 19032
++    },
++    {
++      "name": "omarchy-mac",
++      "version": "0.2.3-2",
++      "arch": "aarch64",
++      "filename": "omarchy-mac-0.2.3-2-aarch64.pkg.tar.zst",
++      "sha256": "3d75a8bdcf7703ed40fdb17e543df185b6d95f1f97a8c8c752131493ae1b4cc5",
++      "source": {
++        "repository": "omacom/omarchy-mac-pkgs",
++        "commit": "ea0097a523191bcf3c6997e8d3a162ea13a1fe67"
++      },
++      "size_bytes": 71946
++    },
++    {
++      "name": "omarchy-mac-boot",
++      "version": "20261104-1",
++      "arch": "aarch64",
++      "filename": "omarchy-mac-boot-20261104-1-aarch64.pkg.tar.zst",
++      "sha256": "e38d1eff816d8edb602878f20241e5eb0e28005a94ef2fc45a4e8decd742f497",
++      "source": {
++        "repository": "omacom/omarchy-mac-pkgs",
++        "commit": "7e50e937b5f32a62f1c8fee9699467d23faa74d5"
++      },
++      "size_bytes": 96007
++    },
++    {
++      "name": "omarchy-settings",
++      "version": "4.5.0-3.7141",
++      "arch": "aarch64",
++      "filename": "omarchy-settings-4.5.0-3.7141-aarch64.pkg.tar.zst",
++      "sha256": "f81463ed30356ede17df0eaebfd61c5bcd2197e3367a67df04e46bfcfef9f94f",
++      "source": {
++        "repository": "omacom/omarchy",
++        "commit": "a948d8a6871f446b335258c827648ac5f4e9428b"
++      },
++      "size_bytes": 1789574
++    },
++    {
++      "name": "speakerguardd",
++      "version": "0.1.0.aurora3-1",
++      "arch": "aarch64",
++      "filename": "speakerguardd-0.1.0.aurora3-1-aarch64.pkg.tar.zst",
++      "sha256": "4910c0807f980172e52b908ba55d961b7deda57f43bda77e51f10c6eeb2bb7ca",
++      "source": {
++        "channel": "omacom edge aarch64",
++        "url": "https://pkgs.omarchy.org/edge/aarch64/speakerguardd-0.1.0.aurora3-1-aarch64.pkg.tar.zst",
++        "omacom_signature_sha256": "7cbcf28938f09cb7025e384ad171f6a580dad376242f90ccbb4bb6428dc01127"
++      },
++      "size_bytes": 230352
++    },
++    {
++      "name": "uboot-aurora",
++      "version": "2026.07.aurora6.j714s2-1",
++      "arch": "aarch64",
++      "filename": "uboot-aurora-2026.07.aurora6.j714s2-1-aarch64.pkg.tar.zst",
++      "sha256": "9618a5169fdbb62640a7850f7af00b0687faffca1e24c0d036b2396551ddd842",
++      "source": {
++        "repository": "TripleU613/omarchy-pkgs",
++        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++      },
++      "size_bytes": 401248
++    },
++    {
++      "name": "vulkan-aurora",
++      "version": "1:26.3.0_devel.20261109.j714s2.043a4c5-1",
++      "arch": "aarch64",
++      "filename": "vulkan-aurora-1:26.3.0_devel.20261109.j714s2.043a4c5-1-aarch64.pkg.tar.zst",
++      "sha256": "5810bcbd25cce15fcb230e58979ebea955d2fccbbf5c21a03caacca4d6844aa4",
++      "source": {
++        "repository": "TripleU613/omarchy-pkgs",
++        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++      },
++      "size_bytes": 4812285
++    }
++  ],
++  "limitations": [
++    "Developer runtime qualification only",
++    "No native headers or DKMS qualification",
++    "No physical installer or hardware qualification",
++    "No supported release or catalog promotion"
++  ],
++  "set_sha256": "11c310b1d7dc7fc1292c9174aacc7fdde380022cc38bd6cd5daaccdb79b8a26b"
++}
+diff --git a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+new file mode 100644
+index 0000000..3d72581
+--- /dev/null
++++ b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+@@ -0,0 +1,233 @@
++#!/usr/bin/env python3
++"""Validate and freeze the reviewed J714s developer image inputs."""
++from __future__ import annotations
++
++import argparse
++import hashlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import re
++import shutil
++import subprocess
++import sys
++import tempfile
++
++ROOT = Path(__file__).resolve().parents[4]
++INTEGRATION = Path(__file__).resolve().parents[1]
++MANIFEST = INTEGRATION / 'candidate-package-manifest.json'
++PROVENANCE = INTEGRATION / 'build-input-provenance.json'
++PROFILE = 'j714s-developer'
++
++
++def sha256(path: Path) -> str:
++    with path.open('rb') as stream:
++        return hashlib.file_digest(stream, 'sha256').hexdigest()
++
++
++def load_candidate_set():
++    path = ROOT / 'image-builder/builder/candidate_set.py'
++    spec = importlib.util.spec_from_file_location('j714s_candidate_set', path)
++    module = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(module)
++    return module
++
++
++def run(*args: str, **kwargs):
++    return subprocess.run(args, check=True, **kwargs)
++
++
++def verify_main_commit(commit: str) -> None:
++    if not re.fullmatch(r'[0-9a-f]{40}', commit):
++        raise ValueError('builder commit must be a full lowercase Git SHA')
++    remote = run('git', 'ls-remote', 'origin', 'refs/heads/main', cwd=ROOT,
++                 stdout=subprocess.PIPE, text=True).stdout.split()[0]
++    if remote != commit:
++        raise ValueError(f'builder commit is not current origin/main ({remote})')
++    run('git', 'cat-file', '-e', f'{commit}^{{commit}}', cwd=ROOT)
++
++
++def verify_source_records(candidate, package_dir: Path, manifest: dict,
++                          runtime: Path, settings: Path, runtime_source: dict) -> list[dict]:
++    if (manifest.get('schema') != 1 or manifest.get('candidate_only') is not True
++            or candidate.set_digest(manifest) != manifest.get('set_sha256')):
++        raise ValueError('checked-in package manifest has an invalid schema or set digest')
++    expected = {row['filename']: row for row in manifest['packages']}
++    if manifest.get('source', {}).get('repository') != runtime_source['repository'] or manifest.get('source', {}).get('commit') != runtime_source['commit']:
++        raise ValueError('runtime source identity differs from the checked-in package manifest')
++    if package_dir.is_symlink() or not package_dir.is_dir():
++        raise ValueError('package input must be a regular directory')
++    supplied = {p.name: p for p in package_dir.iterdir() if p.is_file()
++                and p.name.endswith('.pkg.tar.zst')}
++    runtime_inputs = {'omarchy': runtime, 'omarchy-settings': settings}
++    expected_runtime_names = {row['filename'] for row in expected.values()
++                              if row['name'] in runtime_inputs}
++    if set(supplied) != set(expected) - expected_runtime_names:
++        raise ValueError('package directory must contain the 13 non-runtime archives pinned by the manifest')
++    records = []
++    for filename, row in sorted(expected.items()):
++        archive = runtime_inputs[row['name']] if row['name'] in runtime_inputs else supplied[filename]
++        if archive.is_symlink() or not archive.is_file():
++            raise ValueError(f'package archive is not a regular file: {filename}')
++        fields = candidate.pkginfo(archive)
++        if fields.get('pkgname') != [row['name']] or fields.get('pkgver') != [row['version']] or fields.get('arch') != ['aarch64']:
++            raise ValueError(f'package metadata mismatch: {filename}')
++        if archive.stat().st_size != row['size_bytes'] or sha256(archive) != row['sha256']:
++            raise ValueError(f'package size or SHA-256 mismatch: {filename}')
++        if runtime_inputs.get(row['name']) == archive:
++            source = {'repository': runtime_source['repository'], 'commit': runtime_source['commit']}
++            if row['source'] != source:
++                raise ValueError(f'{row["name"]} source identity differs from the public manifest')
++        records.append({k: row[k] for k in ('name', 'version', 'arch', 'filename', 'sha256', 'source')})
++    return records
++
++
++def validate_signer(home: Path, policy: dict) -> None:
++    if home.is_symlink() or not home.is_dir():
++        raise ValueError('signing home must be an existing directory')
++    result = run('gpg', '--batch', '--homedir', str(home), '--with-colons', '--list-secret-keys',
++                 stdout=subprocess.PIPE, text=True).stdout
++    fingerprints = [line.split(':')[9].upper() for line in result.splitlines()
++                    if line.startswith('fpr:') and len(line.split(':')) > 9]
++    if not fingerprints or fingerprints[0] != policy['signing_fingerprint'].upper():
++        raise ValueError('supplied signing home does not contain the profile-approved signer')
++
++
++def validate_engine(engine_archive: Path) -> dict:
++    lock = json.loads((ROOT / 'Engine/source-lock.json').read_text())
++    identity = lock['validation_artifact']
++    if engine_archive.is_symlink() or not engine_archive.is_file():
++        raise ValueError('engine archive must be a regular file')
++    if engine_archive.name != identity['filename'] or engine_archive.stat().st_size != identity['size_bytes'] or sha256(engine_archive) != identity['sha256']:
++        raise ValueError('engine archive does not match the current Engine/source-lock.json')
++    # The checked-in engine verifier confirms the archive contents against the lock too.
++    with tempfile.TemporaryDirectory(prefix='j714s-engine-') as temporary:
++        destination = Path(temporary)
++        shutil.copyfile(engine_archive, destination / engine_archive.name)
++        run(sys.executable, str(ROOT / 'Engine/prepare-engine.py'), '--output', str(destination),
++            '--cache', str(destination / 'cache'))
++    return identity
++
++
++def validate_recovery(directory: Path, expected_sha: str) -> str:
++    verifier = ROOT / 'image-builder/builder/recovery_app.py'
++    run(sys.executable, str(verifier), str(directory), '--sha256', expected_sha)
++    actual = sha256(directory / 'omarchy-recovery-app.json')
++    if actual != expected_sha:
++        raise ValueError('Recovery inventory digest differs from provenance')
++    return actual
++
++
++def main() -> int:
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--profile', choices=(PROFILE,), default=PROFILE)
++    parser.add_argument('--packages', type=Path, required=True, help='directory with the 13 non-runtime manifest-pinned archives')
++    parser.add_argument('--runtime', type=Path, required=True, help='source-built omarchy package')
++    parser.add_argument('--settings', type=Path, required=True, help='source-built omarchy-settings package')
++    parser.add_argument('--recovery', type=Path, required=True, help='validated Recovery app directory')
++    parser.add_argument('--recovery-artifact', type=Path, required=True, help='downloaded CI artifact archive for the Recovery app')
++    parser.add_argument('--engine', type=Path, required=True, help='prebuilt engine archive matching Engine/source-lock.json')
++    parser.add_argument('--signing-home', type=Path, required=True, help='existing profile-approved signing home')
++    parser.add_argument('--candidate-set-tool', type=Path, required=True, help='pinned omacom candidate-set script')
++    parser.add_argument('--builder-commit', required=True, help='published current origin/main commit')
++    parser.add_argument('--output', type=Path, required=True, help='new output directory')
++    parser.add_argument('--archive', type=Path, required=True, help='new deterministic .tar.zst destination')
++    args = parser.parse_args()
++
++    try:
++        verify_main_commit(args.builder_commit)
++        candidate = load_candidate_set()
++        profile = __import__('image_profile').select(args.profile)
++        trust = profile['trust']
++        policy = candidate.load_policy(profile=args.profile)
++        metadata = json.loads(MANIFEST.read_text())
++        runtime_source = {key: metadata['source'][key] for key in ('repository', 'commit')}
++        provenance = json.loads(PROVENANCE.read_text())
++        tool_pin = provenance['candidate_set_signer_tool']
++        if (tool_pin.get('repository') != 'omacom/omarchy-mac-pkgs'
++                or tool_pin.get('path') != 'tools/release/candidate-set'):
++            raise ValueError('candidate-set signer tool pin has an unexpected origin')
++        records = verify_source_records(candidate, args.packages, metadata, args.runtime, args.settings,
++                                        runtime_source)
++        for name, path in (('omarchy', args.runtime), ('omarchy-settings', args.settings)):
++            if path.is_symlink() or not path.is_file():
++                raise ValueError(f'{name} archive must be a regular file')
++            if candidate.member(path, candidate.REVISION_FILES[name]).decode().strip() != runtime_source['commit']:
++                raise ValueError(f'{name} does not record the pinned runtime source')
++        if len(records) != 15 or len({row['name'] for row in records}) != 15:
++            raise ValueError('candidate set must contain the checked-in 15-package manifest')
++        if candidate.digest(trust / 'public.asc') != policy['public_key_sha256']:
++            raise ValueError('profile public-key fingerprint differs from the policy')
++        validate_signer(args.signing_home, policy)
++        tool = args.candidate_set_tool
++        if tool.is_symlink() or sha256(tool) != tool_pin['sha256']:
++            raise ValueError(f'candidate-set tool differs from pinned upstream {tool_pin["commit"]}')
++        identity = validate_engine(args.engine)
++        recovery = provenance['recovery']
++        if args.recovery_artifact.is_symlink() or not args.recovery_artifact.is_file() or sha256(args.recovery_artifact) != recovery['artifact_sha256']:
++            raise ValueError('Recovery CI artifact does not match public provenance')
++        validate_recovery(args.recovery, recovery['inventory_sha256'])
++        source_tree = run('git', 'rev-parse', f"{recovery['source_commit']}:Recovery", cwd=ROOT,
++                          stdout=subprocess.PIPE, text=True).stdout.strip()
++        if source_tree != recovery['source_tree']:
++            raise ValueError('Recovery source commit/tree differs from published metadata')
++
++        if args.output.exists() or args.output.is_symlink():
++            raise ValueError('output directory already exists')
++        args.output.mkdir(parents=True)
++        candidate_dir = args.output / 'candidate-set'
++        candidate_dir.mkdir()
++        for row in records:
++            src = args.runtime if row['name'] == 'omarchy' else args.settings if row['name'] == 'omarchy-settings' else args.packages / row['filename']
++            shutil.copy2(src, candidate_dir / row['filename'])
++        manifest = {'schema': 1, 'candidate_only': True,
++                    'set': 'j714s-dev-runtime-' + candidate.set_digest({'packages': records})[:12],
++                    'source': {**runtime_source, 'ref': metadata['source']['ref']},
++                    'platform_sources': metadata['platform_sources'],
++                    'packages': sorted(records, key=lambda row: row['name']),
++                    'limitations': metadata['limitations']}
++        manifest['set_sha256'] = candidate.set_digest(manifest)
++        manifest_path = candidate_dir / 'manifest.json'
++        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
++        environment = {**os.environ, 'CANDIDATE_SIGNING_GNUPGHOME': str(args.signing_home)}
++        run('bash', str(tool), 'sign', str(manifest_path), str(candidate_dir), env=environment)
++        summary = candidate.describe(candidate_dir, profile=args.profile)
++        if len(summary['packages']) != 15 or summary['signer'] != policy['primary_fingerprint'].upper():
++            raise ValueError('signed set did not pass developer profile admission')
++
++        validate_recovery(args.recovery, recovery['inventory_sha256'])
++        shutil.copytree(args.recovery, args.output / 'recovery')
++        engine_dir = args.output / 'engine'
++        engine_dir.mkdir()
++        shutil.copy2(args.engine, engine_dir / identity['filename'])
++        baseline = provenance['official_baseline']
++        source_provenance = {
++            'schema': 1, 'developer_only': True, 'builder_commit': args.builder_commit,
++            'set_sha256': manifest['set_sha256'], 'manifest_sha256': candidate.digest(manifest_path),
++            'receipt_sha256': candidate.digest(candidate_dir / 'signing.json'),
++            'development_signer': summary['signer'], 'runtime_source': manifest['source'],
++            'platform_sources': manifest['platform_sources'], 'recovery': recovery,
++            'native_mesa': provenance['native_mesa'], 'official_baseline': baseline,
++            'engine': identity, 'limitations': manifest['limitations']}
++        (args.output / 'source-provenance.json').write_text(json.dumps(source_provenance, indent=2) + '\n')
++        (args.output / 'candidate-set/ACTUAL-SIGNED-SET.json').write_text(json.dumps(summary, indent=2) + '\n')
++        if args.archive.exists() or args.archive.is_symlink():
++            raise ValueError('archive destination already exists')
++        with tempfile.TemporaryDirectory(prefix='j714s-input-tar-') as temporary:
++            tar_path = Path(temporary) / 'inputs.tar'
++            run('tar', '--sort=name', '--mtime=@0', '--owner=0', '--group=0', '--numeric-owner',
++                '-cf', str(tar_path), '-C', str(args.output), 'candidate-set', 'recovery', 'engine',
++                'source-provenance.json')
++            args.archive.parent.mkdir(parents=True, exist_ok=True)
++            run('zstd', '-T0', '-10', '--no-progress', str(tar_path), '-o', str(args.archive))
++        print(f'archive_sha256={sha256(args.archive)}')
++        print(f'PASS: validated {len(summary["packages"])} signed packages, Recovery, and locked engine inputs')
++    except (ValueError, OSError, KeyError, TypeError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
++        print(f'finish-inputs: {error}', file=sys.stderr)
++        return 1
++    return 0
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+diff --git a/README.md b/README.md
+index 1921aeb..34e20e5 100644
+--- a/README.md
++++ b/README.md
+@@ -193,6 +193,8 @@ The preserved release and cutover tools keep the original publisher's endpoints
+ 
+ Further reading:
+ 
++- [M5 / J714s candidate integration](Integration/M5/J714s-Normal-System/README.md): centralized developer-only source closure and remaining qualification; this is not a supported installer release.
++- [M5 Apple Silicon contributor and source inventory](SOURCES.md): exact source snapshots, contributor-reported results, licensing limits and open audit work. The inventory is point-in-time and not exhaustive.
+ - [Extraction provenance and boundaries](docs/extraction.md)
+ - [Validation and macOS handoff](docs/validation.md)
+ - [Catalog release](docs/catalog-release.md) and [release pipeline](docs/mac-release-pipeline.md)
+diff --git a/SOURCES.md b/SOURCES.md
+new file mode 100644
+index 0000000..c27741c
+--- /dev/null
++++ b/SOURCES.md
+@@ -0,0 +1,44 @@
++# M5 Apple Silicon contributor and source inventory
++
++This is a point-in-time inventory of contributors and source references linked from [`omacom/linux-aurora` issue #293](https://github.com/omacom/linux-aurora/issues/293), plus the exact source snapshots reviewed for the J714s normal-system candidate. GitHub reported 66 comments at the source snapshot time, 2026-11-09 16:33 UTC; the connected issue-comment fetch returned all 66. The source pass recorded 101 unique URL strings as discovery leads and checked selected repositories, branch heads, pull requests and source files. Some URL strings were mentions, attachment links or duplicated/garbled Markdown, and not every link was examined. This is a useful, maintained inventory, not an exhaustive search of the internet or a closed-world link audit.
++
++The maintained J714s integration record and its source closure are in [Integration/M5/J714s-Normal-System](Integration/M5/J714s-Normal-System/README.md), including the [metadata-only 15-package manifest](Integration/M5/J714s-Normal-System/candidate-package-manifest.json). The external branches and commits below are historical source identities; the central installer checkout is the project integration home.
++
++**Evidence key:** `tested` means a public hardware result is described; `reported` means a contributor-authored claim or result that this review did not reproduce; `PR` means proposed upstream integration only; `offline` means source/data analysis with no board result. Hardware results below are not this review's hardware validation. GitHub repository license metadata is not a legal opinion; `NOASSERTION` or missing means file-level notices and licensing still need review before redistribution.
++
++| Contributor / source | Branch / exact revision checked | Board / feature and evidence | License / integration status / coverage |
++|---|---|---|---|
++| **edimoldovan** — [linux-aurora](https://github.com/edimoldovan/linux-aurora), [m1n1](https://github.com/edimoldovan/m1n1), [kernel notes](https://github.com/edimoldovan/kernel), [u-boot](https://github.com/edimoldovan/u-boot), [omarchy-mac-pkgs](https://github.com/edimoldovan/omarchy-mac-pkgs) | Current branch heads checked: linux-aurora `integration/aurora` `31748f0e157720f4a2151b7e314d2722c05cffd4`; m1n1 `integration/aurora` `50fb132712f90af6f1873c2a30c12b4292e6baac`; kernel `master` `229740ba6e1a92781b64cde6f6c5a3aeff052260`; u-boot default `main` (exact branch head not resolved); mac-pkgs `main` `304512418c569061ed96e648cb70f7bba92fc8bd`. Specific referenced commits include Linux `c04e453c26ac` (18-core bring-up), `e0a190841586` (cpufreq), `13c28edbabb6` (zram/Landlock), `594f4b3a49ec`, `4602eba4b9d2`, `0fbd859e287d`, `9dee12b1266c` (input/power/display details); m1n1 `5bb6965d99b1`; U-Boot `70e990818a89`, `7a68531196`; packages `702a6ec36309`, `0a00f7a88711`. | J714c / 14-inch M5 Max T6050: Omarchy boots from internal disk through stage-1 m1n1 → ESP stage-2 → U-Boot → Limine → EFI kernel; full Omarchy login evidence is described in `OMARCHY-LOGIN.md`. Reports CPUs, NVMe, keyboard/trackpad/backlight, battery/sensors/lid/power, Wi-Fi/Bluetooth, sleep, sound and panel working; GPU/DCP were still in progress in Nov 7 status. #293 comments 20, 24, 27, 30, 33, 40–41. | High-value selected file headers checked: `macsmc-reboot.c` and DCP driver files are `GPL-2.0-only OR MIT`; `t6050-smc.dtsi` is `GPL-2.0+ OR MIT`. Repository metadata remains `NOASSERTION` for kernel/u-boot. [`omacom/linux-aurora#404`](https://github.com/omacom/linux-aurora/pull/404) is **open**, head `edimoldovan/linux-aurora:j714c/base` `66da9d75380100af827ac023927cff64eabef1d7`; PR body reports machine tests, but shipped config only compile-checked. |
++| **rolotrealanis98** — [m5pro-linux](https://github.com/rolotrealanis98/m5pro-linux), [m4-m5-linux tracker](https://github.com/rolotrealanis98/m4-m5-linux) | `m5pro-linux@main` snapshot `46d3b2e6d163b5a279c185933228bf72b8072a87`; tracker `main` snapshot `a3cd89378acf94edbf3f35186ea010804518b9be`. Feature work also referenced Aurora PRs: [#945](https://github.com/aurora-silicon/linux/pull/945) merged; [#936](https://github.com/aurora-silicon/linux/pull/936), [#939](https://github.com/aurora-silicon/linux/pull/939), [#1182](https://github.com/aurora-silicon/linux/pull/1182)/[#1183](https://github.com/aurora-silicon/linux/pull/1183) and [#1173](https://github.com/aurora-silicon/linux/pull/1173) open at the snapshot. #293 comments 12, 20, 29, 32, 38–43, 60, 62. | J716s / 16-inch M5 Pro T6050: tracker README ([snapshot](https://github.com/rolotrealanis98/m4-m5-linux/blob/a3cd89378acf94edbf3f35186ea010804518b9be/README.md)) reports untethered 18-core Omarchy, NVMe root, Hyprland, Wi-Fi, Bluetooth, sound, lid sleep and GPU acceleration. Comment #43 names transferable T6050 work: CPU/RVBAR handoff; N1; G17S GPU; DCP; AFE reset; SMC/power; WFI idle. Comment #62 adds PMP/PTD traces. **Date-resolved status:** the Nov 4 failed payload in the [J716s results snapshot](https://github.com/rolotrealanis98/m5pro-linux/blob/46d3b2e6d163b5a279c185933228bf72b8072a87/contrib/validated/integration/RESULTS.md) is an earlier round, followed by later dated results in that file and the [Aurora state snapshot](https://github.com/rolotrealanis98/m5pro-linux/blob/46d3b2e6d163b5a279c185933228bf72b8072a87/contrib/validated/aurora/STATE.md): DAILY-N1K (Nov 7) reports 18 CPUs, Linux-trained N1/Wi-Fi, Bluetooth and GPU pass. The Nov 8 DCP daily reports panel scanout and a VRR-enabled payload; the variable-refresh cadence remains unmeasured. Nov 7 R3-AUDIO-B6 reports clean speakers; poweroff-only SMC path has a hardware PASS. These are contributor-authored public result summaries (some raw logs remain private), so record as **reported with dated public evidence**, not independently reproduced here. The separate Nov 7 normal Omarchy U-Boot/Limine chain B1 report says “built, not booted”; that path remains unqualified. | GitHub metadata is `NOASSERTION`, but repository [`LICENSE.md`](https://github.com/rolotrealanis98/m5pro-linux/blob/46d3b2e6d163b5a279c185933228bf72b8072a87/LICENSE.md) assigns Linux kernel patches GPL-2.0-only, m1n1 patches GPL-2.0-or-later, and docs/tools MIT; individual file SPDX still governs. Tracker license is CC-BY-SA-4.0. The tracker says it is staged independently and awaits transfer/approval, not an omacom project. Results are J716s-specific; same-SoC reuse on J714s is a porting lead, not board qualification. |
++| **betizzel** — [omarchy-m5](https://github.com/betizzel/omarchy-m5) | `main` current head `4c44e63db2c7e4c47d71d769787b0f1a85dac602`; referenced commits `4db1498`, `63047c4`, `f3226fb`, `a5df9e4`. | J714s / 14-inch M5 Pro T6050, 15 cores: independently reports Arch from internal SSD, Hyprland/llvmpipe, keyboard/trackpad/backlight, fans, P-core DVFS; s2idle/lid wake; WFI idle and experimental internal DCP handoff. Public `docs/bringup.md` explains macOS host builds and one-time stub setup; commit `f3226fb` holds patches and bring-up notes. #293 comments 10, 34, 36–37. | No license detected in repo metadata. Current repo has later isolated Zink-launch-path commit; do not treat as proof the entire desktop path is stable. Machine is J714s only. Source and testing are distinct from edimoldovan/rolotrealanis98. |
++| **scottjones** — artifacts posted on #293 | No contributor repository/branch identified; supplied J815 ADT ZIP and test narrative. | Base M5 Air J815 / T8142: sanitized runtime ADT plus Linux 7.3 SMP boot evidence (all 10 CPUs, simplefb, timer/IPI, hash test). Tested using `aurora-silicon/aura` `ea46479`, `aurora-silicon/linux` `67c64c8`; no DCP, MTP, USB validation stated. #293 comments 3–4. | Attachment has no visible license metadata; do not redistribute until terms/provenance established. Different SoC from T6050 and not evidence for an M5 Pro installer. |
++| **birkskyum** — `omacom/linux-aurora` issue contributor | No own repo/commit found during first pass. | J716c M5 Max T6051 runtime ADT and PMGR/PMP metadata; confirms matching J714c/J716c `ptd-range`/PMP layout; conversion utility `ioreg2adt.py` and ADT-to-PMGR generated `t6051-pmgr.dtsi` are discussed. #293 body and comments 1, 6, 59. | Attachment provenance/licensing not checked. Useful source data; no direct normal-installer result. Comment #59 flags a T6050/T6051 filename/model naming inconsistency in generated DTSI. |
++| **joshuaswarren** (messages marked “[Joshua's agent]”) — offline analysis in #293 | No public source repo/commit identified in followed links. | Offline match of 295 PMGR DTSI entries to ADT; identifies exported PMP device id hard cap 15 vs ADT ids up to 37; highlights absent T6050 PMP-report driver row and hardware dependency. ANE ADT reads requested. #293 comments 26, 28, 31, 59, 61. | Offline only; explicitly not a board test. Need identify agent author/source ownership before importing patches or attribution. |
++| **aurora-silicon upstream** — [linux](https://github.com/aurora-silicon/linux), [aura](https://github.com/aurora-silicon/aura) | `linux@integration/aurora` current head `f9cf6f96937445e32f08ac5e7f8e41c12c817fcb`; `aura@main` head not resolved. | Shared kernel and bootloader foundation. PR #945 J716c DT merged; #936 ANS, #939 USB PHY, #1182/#1183 N1, #1173 G17S firmware initialization remain open as of fetch. Current upstream `linux` repo updated 16:25 UTC. | Linux/aura metadata `NOASSERTION`; inspect individual files and upstream policy. These are common dependencies; don't fold work into private fork without tracking upstream PR state and exact cherry-pick hashes. |
++| **TripleU613** — [omarchy-mac-installer](https://github.com/TripleU613/omarchy-mac-installer), [Omarchy-M5-Pro notes](https://github.com/TripleU613/Omarchy-M5-Pro) | Installer `main` source snapshot `c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9` at fetch; metadata MIT. This inventory does not infer integration from issue comments or branch names. | Main Mac installer / product integration. Comment #65 refers to installer fork, #21 links public repo. Compare exact package pins and patch manifests against upstream contributor commits and dated hardware evidence before claiming integrated coverage. | User project. The inventory was sourced from public GitHub state; it does not claim hardware validation. |
++
++## Open audit work
++
++- Resolve actual integration state by comparing installer package pins and patches to the exact source commits, including `omacom/m1n1#33/#34`, `omacom/linux-aurora#404/#413`, and Aurora PRs #936/#939/#1173/#1182/#1183. PR metadata/status was checked; not every PR diff or review conversation was inspected.
++- Follow every relevant repository/path and commit URL through all comments, including remaining item-specific patches in `rolotrealanis98/m5pro-linux/contrib/`, and map ownership/commit author plus exact SHA to the installer. Current repo heads are snapshots, not a complete commit attribution map.
++- Reconcile the inconsistent J716s evidence: current m5pro README claims complete daily support, but a linked results report says Nov 4 payload never booted and no feature was tested. Identify the newer dated result log and attach each feature claim to it.
++- Verify license notices at the file/patch level for every contributed patch and attachment. GitHub repo metadata is insufficient for redistribution decisions, especially where it is `NOASSERTION` or absent.
++- Distinguish board/firmware coverage: J714c/J714s/J716s are all T6050 but not interchangeable validation; J716c is T6051; J815 is base M5/T8142. Firmware matters (27.3 fixes M5 Pro/Max multi-core boot; comment #50 says the GPU/DCP work also carries 27.2-compatible data, while J714c results report 27.3).
++- Search omitted contributors/repositories not linked in #293 directly. The comment thread contains repeated tagged users and PR citations; this first inventory does not certify exhaustive attribution or page/review-discussion coverage.
++
++## J714s source-freeze comparison (2026-11-09)
++
++Read-only inspection of the exact [`omarchy-pkgs` source snapshot `02f4c65ec6510111ff3e63c8f9f9f142a0836362`](https://github.com/TripleU613/omarchy-pkgs/commit/02f4c65ec6510111ff3e63c8f9f9f142a0836362). The candidate is developer-only, outside normal package discovery/publication, and explicitly `hardware_tested=false`. The maintained source copy and metadata now live in [Integration/M5/J714s-Normal-System](Integration/M5/J714s-Normal-System/README.md). The source manifest lists the deleted Centauri file as deleted but does not include a content digest for that removed path; the frozen patch records the removal. The source closure includes:
++
++| Candidate component | Frozen source identity / code present | Highest-value source match and current coverage gap |
++|---|---|---|
++| **Kernel, 83 source entries** | `rolotrealanis98/linux` base `34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a`; frozen patch SHA-256 `616d8e7f21f68c63eb17f266665e517d43079eb378eac9f8a152eb9d8c653aed` (61 tracked changes + 22 new files). Includes J714s/T6050 DT, cpufreq, idle, Centauri N1 driver, G17 M5 initdata, SMC/AOP audio source, and Apple Type-C/USB PHY. Current public Rolo `integration/aurora` head is `7aee01a89865d0fa4a81da5e824602ac94d1367a`; compare reports divergence (139 commits ahead, 149 behind, 88 changed paths), so it is not equivalent to current head. | CPU/N1/GPU source is present; [candidate config](Integration/M5/J714s-Normal-System/kernel/config) defaults CPU governor to userspace, and hardware qualification for the J714s freeze is only prior split-payload evidence. Newer J716s DAILY-N1K is a dated contributor-reported pass, but normal U-Boot/Limine chain remains unqualified. The pinned base already has generic DCP, SMC reboot/power and AOP/mac-audio drivers. The 83-entry source manifest and frozen patch include J714s SMC/reboot and DCP/display DT descriptions, but the relevant consumers are disabled by the selected candidate config (`POWER_RESET_MACSMC`, `MACSMC_POWER`, `DRM_APPLE`, AOP audio and macaudio); the [board DT patch](Integration/M5/J714s-Normal-System/kernel/j714s-frozen-source.patch) marks the DCP/display nodes disabled. This is an enablement/firmware-pairing/qualification gap, not absence of the generic drivers. |
++| **m1n1 loader, 11 changed files** | `omacom/m1n1` base `02785a35e046901d5686ab9059b2c08b6256752a`; frozen patch SHA-256 `d634a7aba77bc72b5d4ed45ac964fd5c7b9bb0ab46cc7a70a6385771aaa1b1f8` (9 tracked + 2 new). Delta includes T6050 SMP bound, USB/PIPE safety and N1 host-tunable admission/copy. Candidate doc says base has live ANS adoption plus G17S handoff. Pinned [`LICENSE`](https://github.com/omacom/m1n1/blob/02785a35e046901d5686ab9059b2c08b6256752a/LICENSE), `src/smp.c` and `src/kboot_n1.c` are MIT. | Closely related to open `omacom/m1n1#33` (RVBAR relay, head `ff75a40df86272364a556c0c9a622c022c7bf03c`) and #34 (optional N1 training/handoff, head `9879c2f9b488ebfb0a614c6733fd656635969f37`); later open #35 DCP handoff (`5818f6bdd73b40b0628b04457028d45b7da231ba`) and #37 GPU handoff (`2bebfe7708c7077377ecc0d80d29bfb458335c0d`) are additional public source leads. All four were open at fetch. Candidate's normal chain remains unbooted; do not equate code overlap to accepted upstream PRs. |
++| **U-Boot** | Edi `edimoldovan/u-boot` commit `70e990818a895454780797beedc6a7bdac9e2fd6` (live ANS adoption) and `7a68531196` (T6050 NVMe boot path), pinned by candidate docs. | Reusable normal-boot code from Edi's J714c path. Candidate's own J714s U-Boot/Limine/EFI pair was assembled but not booted (Rolo `contrib/pending/installer/omarchy-chain/REPORT.md`, Nov 7). Needs normal-chain hardware evidence before qualification. |
++| **Poweroff / restart** | The pinned kernel base already has [`macsmc-reboot.c`](https://github.com/rolotrealanis98/linux/blob/34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a/drivers/power/reset/macsmc-reboot.c) (`GPL-2.0-only OR MIT`), and the candidate's patched J714s DT contains `apple,t6050-smc` and an `apple,smc-reboot` child with NVMEM cells. Selected candidate config turns `POWER_RESET_MACSMC` and `MACSMC_POWER` off. | Edi [`38e75c9f1c07`](https://github.com/edimoldovan/linux-aurora/commit/38e75c9f1c07) adds/records the J714c SMC DT/config poweroff path; its new DTSI is `GPL-2.0+ OR MIT`. Rolo's later J716s RESULTS records a hardware PASS for poweroff-only `macsmc-reboot`. Reuse the existing driver and board integration with candidate restrictions reviewed; J714s qualification is outstanding. |
++| **DCP display** | The pinned kernel base already has generic DCP files including [`drivers/gpu/drm/apple/Kconfig`](https://github.com/rolotrealanis98/linux/blob/34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a/drivers/gpu/drm/apple/Kconfig), `apple_drv.c` and firmware-versioned IOMFB code (`GPL-2.0-only OR MIT`). Candidate patch adds J714s DCP/display subsystem DT descriptions but sets the relevant nodes disabled; selected config turns `DRM_APPLE` off. No DCP is active in the candidate, but the generic driver source is present. | Public board/firmware integration leads: Edi [`9ffa4ecf3cb3`](https://github.com/edimoldovan/linux-aurora/commit/9ffa4ecf3cb3) (DCP internal display/brightness; driver files `GPL-2.0-only OR MIT`, DCP DTSI `GPL-2.0+ OR MIT`), backlight [`6845e948fc94`](https://github.com/edimoldovan/linux-aurora/commit/6845e948fc94), eDP connector [`9dee12b1266c`](https://github.com/edimoldovan/linux-aurora/commit/9dee12b1266c); Betizzel J714s experimental DCP/display code at [`omarchy-m5@f3226fb`](https://github.com/betizzel/omarchy-m5/commit/f3226fb); Rolo J716s `daily-dcp-lfix` and a VRR-enabled daily on Nov 8 (see the dated STATE and RESULTS snapshots above); panel scanout is reported, but variable-refresh cadence remains unmeasured. Open m1n1 #35 is another source lead. The remaining J714s gap is enabled board DT, matching firmware ABI/table and handoff, config and board validation—not a new generic DCP driver. |
++| **CPU / N1** | Kernel snapshot includes T6050/J714s CPU/DT/cpufreq/idle and Centauri driver; m1n1 snapshot includes bounded SMP/N1 handoff code. | Public sources: Edi J714c commits `c04e453c26ac` (18 cores), `e0a190841586` (cpufreq), `768d807c3cf9` (AFE/pcIO); Rolo latest public state reports J716s 18 CPU and Linux-trained N1 success. N1 exact PRs Aurora #1182/#1183 and m1n1 #34 were open at initial PR fetch. `omacom/omarchy-mac-pkgs` commit `702a6ec36309` adds an N1-specific iwd default, but the candidate README explicitly says fresh iwd association is not qualified; earlier Wi-Fi evidence used a wpa_supplicant-equivalent-PMK workaround. |
++| **Audio** | Pinned base has generic AOP audio and macaudio drivers; the freeze adds T6050 AOP/mac-audio match data and J714s audio DT. The selected candidate config disables both `CONFIG_SND_SOC_APPLE_AOP_AUDIO` and `CONFIG_SND_SOC_APPLE_MACAUDIO`; user-space speaker safeguards/profiles are outside this candidate. `aop_audio.rs` is `GPL-2.0-only OR MIT`; `macaudio.c` is `GPL-2.0-only`. | Public evidence is staged: Rolo J716s `R3-AUDIO-B6` (Nov 7) reports clean speaker output at bounded levels, and `FULL-SUPPORT-GAP-MAP.md`/README later report speakers/mics in daily. Edi J714c commits `f21e1ea10bbd` (speaker machine profile), `369cac02ce47` (sense RX), `8838ca614344` (mic array), plus omarchy-mac-pkgs `0a00f7a88711` (full-volume hold). Candidate does not select/qualify the existing audio stack; it needs configuration, userspace safeguards and a J714s result, not a driver rewrite by default. |
++| **Mesa/Vulkan** | `rolotrealanis98/mesa` base `043a4c58080c4951fea3797fe45fc6898ce77632`; candidate prepares native Gallium/Zink/Vulkan recipe/env and keeps package metadata. | Not a hardware qualification: native Mesa package still needs its normal package build and J714s test. J716s currently reported GPU support is a separate board/evidence set; Edi/Betizzel sources provide independent J714c/J714s GPU leads. |
++
++The frozen kernel base is also not the current public Rolo Aurora head. Review the exact 83-file patch as a closed source snapshot and carry later commits by explicit commit/patch ID; do not silently advance its branch. This map is targeted, not exhaustive, and does not claim all upstream/source overlaps have been resolved.
+diff --git a/image-builder/bin/build-mac-image b/image-builder/bin/build-mac-image
+index 524f921..667b790 100755
+--- a/image-builder/bin/build-mac-image
++++ b/image-builder/bin/build-mac-image
+@@ -50,7 +50,6 @@ ASAHI_KEYRING_FILE=asahi-alarm-keyring-20241216-1-any.pkg.tar.xz
+ ASAHI_KEYRING_SHA256=798f4b283ad2819aee950d042f26566ae1a68f87c12247301ce449bea3b2d81e
+ ASAHI_KEY=12CE6799A94A3F1B5DDFFE88F576553597FB8FEB
+ OMARCHY_REPOSITORY_KEY=40DFB630FF42BCFFB047046CF0134EE680CAC571
+-CANDIDATE_KEY=E11E851AF82E02AEF54C8794599A6024E3D35379
+ 
+ # The first transaction: a bootable base and the settings package, so its
+ # pacman platform guard is resident before any platform package arrives.
+@@ -68,7 +67,7 @@ TOOLCHAIN=(pacman arch-install-scripts btrfs-progs e2fsprogs dosfstools libarchi
+ 
+ usage() {
+   cat <<'USAGE'
+-Usage: bin/build-mac-image --inputs FILE [--candidates DIR] [--cache DIR] [--lab-access DIR] [--recovery-app DIR] [--dry-run] OUT
++Usage: bin/build-mac-image --inputs FILE [--image-profile production|j714s-developer] [--candidates DIR] [--cache DIR] [--lab-access DIR] [--recovery-app DIR] [--dry-run] OUT
+ 
+ Builds the Apple Silicon image for the candidate set in DIR from the inputs
+ record FILE (bin/mac-image-inputs resolve) into the empty or missing directory
+@@ -182,6 +181,12 @@ record_field() {
+   sed -n "s/^$1=//p" "$2"
+ }
+ 
++input_image_profile() {
++  local value
++  value=$(record_field image_profile "$1")
++  echo "${value:-production}"
++}
++
+ # The set a record names: a signed candidate set, or a channel set
+ # (channel_set=, mac-image-inputs resolve --channel-set).
+ record_kind() {
+@@ -214,10 +219,10 @@ import_channel_set() {
+ 
+ host_main() {
+   local inputs="" candidates="" cache="" lab_access="" recovery_app="" out commit status clean=true started=$SECONDS dry_run=false
+-  local cache_mounts=() lab_mounts=() recovery_mounts=() kind recovery_digest
++  local cache_mounts=() lab_mounts=() recovery_mounts=() kind recovery_digest image_profile=production
+   while (($#)); do
+     case $1 in
+-      --inputs|--candidates|--cache|--lab-access|--recovery-app)
++      --inputs|--candidates|--cache|--lab-access|--recovery-app|--image-profile)
+         (($# > 1)) && [[ -n $2 ]] || usage_error "$1 requires a value"
+         case $1 in
+           --inputs) inputs=$2 ;;
+@@ -225,6 +230,7 @@ host_main() {
+           --cache) cache=$2 ;;
+           --lab-access) lab_access=$2 ;;
+           --recovery-app) recovery_app=$2 ;;
++          --image-profile) image_profile=$2 ;;
+         esac
+         shift 2
+         ;;
+@@ -241,10 +247,13 @@ host_main() {
+     command -v "$tool" >/dev/null 2>&1 || fail "missing command: $tool"
+   done
+   "$BASH" "$ROOT/bin/mac-image-inputs" check "$inputs" >/dev/null
++  python3 "$ROOT/builder/image_profile.py" trust "$image_profile" >/dev/null || usage_error "unknown image profile: $image_profile"
++  [[ $(input_image_profile "$inputs") == "$image_profile" ]] || fail "--image-profile does not match the profile recorded in the inputs"
+   inputs=$(cd -- "$(dirname -- "$inputs")" && pwd)/$(basename -- "$inputs")
+   kind=$(record_kind "$inputs")
+   if [[ $kind == channel ]]; then
+     [[ -z $candidates ]] || usage_error "a channel record takes no --candidates"
++    [[ $image_profile == production ]] || fail "a channel set supports only the production image profile"
+     [[ -z $lab_access ]] || fail "a lab image is built from a candidate set only, not from a channel record"
+   else
+     [[ -n $candidates && -d $candidates ]] || usage_error "--candidates names no directory"
+@@ -285,7 +294,7 @@ host_main() {
+     python3 "$ROOT/builder/candidate_set.py" import --input "$candidates" --output "$host_work/candidates" \
+       --receipt-sha256 "$(record_field candidate_receipt_sha256 "$inputs")" \
+       --manifest-sha256 "$(record_field candidate_manifest_sha256 "$inputs")" \
+-      --source-commit "$(record_field candidate_source_commit "$inputs")" >"$host_work/import.txt" ||
++      --source-commit "$(record_field candidate_source_commit "$inputs")" --image-profile "$image_profile" >"$host_work/import.txt" ||
+       fail "the candidate set does not verify against the inputs record"
+     [[ $(sed -n 's/^signer=//p' "$host_work/import.txt") == "$(record_field candidate_signer "$inputs")" ]] ||
+       fail "the candidate set is signed by another key than the inputs record names"
+@@ -339,6 +348,7 @@ host_main() {
+     -e MAC_IMAGE_BUILDER_CLEAN="$clean" \
+     -e MAC_IMAGE_BUILDER_IMAGE="$(docker image inspect --format '{{.Id}}' "$host_image")" \
+     -e MAC_IMAGE_WORKFLOW_RUN="${GITHUB_RUN_ID:-local}" \
++    -e MAC_IMAGE_PROFILE="$image_profile" \
+     "$host_image" /bin/bash /src/bin/build-mac-image --in-container &
+   host_docker=$!
+   wait "$host_docker" || fail "the build failed (logs in $out/logs)"
+@@ -360,6 +370,9 @@ apple_names=()
+ lane=""
+ test_image_pin=""
+ profile=release
++image_profile=production
++candidate_profile=production
++candidate_trust_dir="$ROOT/builder/candidate-trust"
+ lab_access_dir=/lab-access
+ lab_access_sha256=""
+ package_set_digest=""
+@@ -511,7 +524,7 @@ prepare_toolchain() {
+   # carries this key, and a channel build never trusts it.
+   trust_key "$ROOT/builder/keys/omarchy-repository.gpg" "$OMARCHY_REPOSITORY_KEY" "the Omarchy repository key"
+   [[ $(set_kind) == channel ]] ||
+-    trust_key "$ROOT/builder/candidate-trust/public.asc" "$CANDIDATE_KEY" "the candidate test key"
++    trust_key "$candidate_trust_dir/public.asc" "$(jq -r .signing_fingerprint "$candidate_trust_dir/policy.json")" "the candidate profile key"
+ }
+ 
+ trust_key() {
+@@ -846,7 +859,7 @@ available_base() {
+ precheck_transaction() {
+   local resolved refused name
+   # Every image carries the complete reviewed Aurora support stack.
+-  for name in $(jq -r '.support_packages[]' "$ROOT/builder/candidate-trust/policy.json"); do
++  for name in $(jq -r '.support_packages[]' "$candidate_trust_dir/policy.json"); do
+     jq -e --arg name "$name" '.packages[] | select(.name == $name and .group == "support")' \
+       "$candidates/import.json" >/dev/null || fail "Aurora support package is missing: $name"
+   done
+@@ -859,7 +872,7 @@ precheck_transaction() {
+   while read -r name; do
+     grep -Eq "^omarchy-candidates $name " <<<"$resolved" || fail "$name does not resolve from the candidate set"
+   done < <(jq -r '.packages[].name' "$candidates/import.json")
+-  for refused in $(jq -r '.refused_packages[]' "$ROOT/builder/candidate-trust/policy.json"); do
++  for refused in $(jq -r '.refused_packages[]' "$candidate_trust_dir/policy.json"); do
+     ! grep -Eq "^[^ ]+ $refused " <<<"$resolved" || fail "the package set pulls in the refused $refused"
+   done
+ }
+@@ -1132,6 +1145,8 @@ apply_presets() {
+ finalize_root() {
+   bash "$ROOT/builder/finalize-root" --root "$target" >>"$logs/finalize.log" 2>&1 ||
+     fail "could not finalize the image root (logs/finalize.log)"
++  python3 "$ROOT/builder/stage1_qualification.py" seed-cmdline "$target" "$candidates" --profile "$candidate_profile" >>"$logs/finalize.log" 2>&1 ||
++    fail "could not seed the reviewed candidate command line (logs/finalize.log)"
+ }
+ 
+ # Sets node_filename, node_url, node_size and node_sha256 from the pin, or fails.
+@@ -1345,6 +1360,11 @@ stage_board_boot_payloads() {
+   mkdir -p "$target/boot/efi/aurora" "$target/boot/efi/m1n1"
+   install -m 0644 "$stage1" "$target/boot/efi/aurora/stage1-j700.bin"
+   install -m 0644 "$stage2" "$target/boot/efi/m1n1/boot-j700.bin"
++  local qualification
++  qualification=$(python3 "$ROOT/builder/stage1_qualification.py" --profile "$candidate_profile") || fail "invalid Stage 1 qualification policy"
++  if [[ $qualification != null ]]; then
++    install -m 0644 "$stage1" "$target/boot/efi/aurora/stage1.bin"
++  fi
+ }
+ 
+ # Repository names in pacman configuration FILE, in its order.
+@@ -1619,19 +1639,25 @@ payload_name() {
+ }
+ 
+ write_installer_data() {
++  local qualification
++  qualification=$(python3 "$ROOT/builder/stage1_qualification.py" --profile "$candidate_profile") || fail "invalid Stage 1 qualification policy"
+   jq -S -n --arg package "$1" --argjson esp "$ESP_SIZE" --argjson boot "$BOOT_SIZE" --argjson root "$ROOT_SIZE" \
++    --argjson qualification "$qualification" \
+     --arg volume_id "$ESP_VOLUME_ID" \
+     --arg recovery_app_manifest "$(field recovery_app_manifest_sha256)" \
+     --args '{os_list: [{
+       name: "Omarchy", default_os_name: "Omarchy", omarchy_target: "apple-silicon-full-os",
+       boot_object: "m1n1.bin", next_object: "m1n1/boot.bin", package: $package, icon: "omarchy-volume.icns",
+-      supported_fw: $ARGS.positional,
++      supported_fw: (if $qualification == null then $ARGS.positional
++        else ($ARGS.positional + [$qualification.qualified_machines[][]] | unique) end),
+       partitions: [
+         {name: "EFI", type: "EFI", size: "\($esp)B", format: "fat", volume_id: $volume_id,
+           copy_firmware: true, copy_installer_data: true, source: "esp"},
+         {name: "Boot", type: "Linux", size: "\($boot)B", image: "boot.img"},
+         {name: "Root", type: "Linux", size: "\($root)B", expand: true, image: "root.img"}]}
+-      + (if $recovery_app_manifest != "" then {recovery_gui: "omarchy-native-v1"} else {} end)]}' \
++      + (if $recovery_app_manifest != "" then {recovery_gui: "omarchy-native-v1"} else {} end)
++      + (if $qualification != null then {aurora_stage1: $qualification,
++          allowed_device_classes: ($qualification.qualified_machines | keys)} else {} end)]}' \
+     "${SUPPORTED_FW[@]}" >"$2"
+ }
+ 
+@@ -1684,6 +1710,7 @@ write_provenance() {
+ # The inputs IMAGE names (mac-image-check IMAGE_INPUTS): a channel image names
+ # its set and the channel database's sha256 in place of the candidate set's.
+ image_inputs() {
++  [[ $(input_image_profile /inputs) == production ]] || echo image_profile
+   if [[ $(set_kind) == channel ]]; then
+     echo channel_set channel_signer channel_manifest_sha256 omarchy_channel omarchy_db_sha256
+   else
+@@ -1750,7 +1777,10 @@ interrupted() {
+ 
+ container_main() {
+   (($# == 0)) || usage_error "--in-container takes no arguments"
++  candidate_profile=${MAC_IMAGE_PROFILE:-production}
++  candidate_trust_dir=$(python3 "$ROOT/builder/image_profile.py" trust "$candidate_profile") || fail "unknown image profile: $candidate_profile"
+   lane=$(field omarchy_channel)
++  [[ $(input_image_profile /inputs) == "$candidate_profile" ]] || fail "image profile differs from the checked inputs"
+   if [[ -d $lab_access_dir ]]; then
+     [[ $lane == edge ]] || fail "a lab image is built for the edge lane only"
+     profile=lab
+@@ -1796,7 +1826,7 @@ build_payload() {
+   seal_images
+   step "inspecting the images"
+   python3 "$ROOT/bin/mac-image-check" image "$lane" "$work/final/root.img" "$work/final/boot.img" "$work/final/esp" \
+-    --candidates "$candidates" --report /out/INSPECTION --profile "$profile" ||
++    --candidates "$candidates" --report /out/INSPECTION --profile "$profile" --image-profile "$candidate_profile" ||
+     fail "the images do not pass inspection (INSPECTION)"
+   step "packaging"
+   zip=/out/$(payload_name)
+@@ -1805,7 +1835,7 @@ build_payload() {
+   find "$work/final" -exec touch -h -d "$(field resolved_at)" {} +
+   (cd "$work/final" && bsdtar --format zip -cf "$zip" esp boot.img root.img omarchy-volume.icns)
+   write_installer_data "${zip##*/}" /out/installer_data.json
+-  python3 "$ROOT/bin/mac-image-check" payload "$lane" "$zip" /out/installer_data.json --profile "$profile" ||
++  python3 "$ROOT/bin/mac-image-check" payload "$lane" "$zip" /out/installer_data.json --profile "$profile" --image-profile "$candidate_profile" ||
+     fail "the payload does not pass the layout check"
+   write_provenance "$zip" >/out/PROVENANCE
+   write_image >/out/IMAGE
+diff --git a/image-builder/bin/mac-image-check b/image-builder/bin/mac-image-check
+index 202c8e5..3115e6e 100755
+--- a/image-builder/bin/mac-image-check
++++ b/image-builder/bin/mac-image-check
+@@ -68,6 +68,8 @@ import zipfile
+ ROOT = Path(__file__).resolve().parents[1]
+ sys.path.insert(0, str(ROOT / "builder"))
+ import recovery_app  # noqa: E402
++import stage1_qualification  # noqa: E402
++import image_profile as image_profile_data  # noqa: E402
+ ROOT_UUID = "4f4d5801-524f-4f54-8000-000000000001"
+ BOOT_UUID = "4f4d5801-424f-4f54-8000-000000000001"
+ ESP_UUID = "4F4D-5801"
+@@ -143,12 +145,16 @@ def require(condition: bool, message: str) -> None:
+         raise CheckError(message)
+ 
+ 
+-def expected_metadata(package: str, native_recovery: bool = False) -> dict:
++def expected_metadata(package: str, native_recovery: bool = False, image_profile: str = "production") -> dict:
+     """The one Omarchy target every Mac installs: no board restriction (the
+     catalog and the engine refuse the Macs it does not support), and every
+     Mac's OS firmware, of which the engine's per-device table picks each
+     Mac's."""
+-    return {
++    qualification = stage1_qualification.load(profile=image_profile)
++    supported_fw = ["13.5", "14.8.3", "26.6.2"]
++    if qualification is not None:
++        supported_fw = sorted(set(supported_fw) | {version for versions in qualification["qualified_machines"].values() for version in versions})
++    result = {
+         "os_list": [
+             {
+                 **({"recovery_gui": "omarchy-native-v1"} if native_recovery else {}),
+@@ -173,10 +179,14 @@ def expected_metadata(package: str, native_recovery: bool = False) -> dict:
+                     {"image": "boot.img", "name": "Boot", "size": f"{BOOT_SIZE}B", "type": "Linux"},
+                     {"expand": True, "image": "root.img", "name": "Root", "size": f"{ROOT_SIZE}B", "type": "Linux"},
+                 ],
+-                "supported_fw": ["13.5", "14.8.3", "26.6.2"],
++                "supported_fw": supported_fw,
+             }
+         ]
+     }
++    if qualification is not None:
++        result["os_list"][0]["aurora_stage1"] = qualification
++        result["os_list"][0]["allowed_device_classes"] = sorted(qualification["qualified_machines"])
++    return result
+ 
+ 
+ # ── payload ────────────────────────────────────────────────────────────────
+@@ -227,7 +237,7 @@ def check_plaintext_root(header: bytes, where: str) -> None:
+ 
+ 
+ def check_payload(lane: str, package: Path, installer_data: Path, profile: str = "release",
+-                  recovery_digest: str | None = None) -> dict[str, str]:
++                  recovery_digest: str | None = None, image_profile: str = "production") -> dict[str, str]:
+     check_profile(lane, profile)
+     name = package.name
+     match = PAYLOAD_NAME.fullmatch(name)
+@@ -244,7 +254,7 @@ def check_payload(lane: str, package: Path, installer_data: Path, profile: str =
+     native_recovery = metadata.get("os_list", [{}])[0].get("recovery_gui") == "omarchy-native-v1"
+     require(recovery_digest is None or native_recovery == bool(recovery_digest),
+             "Recovery metadata does not match the pinned inputs")
+-    require(metadata == expected_metadata(name, native_recovery), f"{installer_data} is not the installer_data for {name}")
++    require(metadata == expected_metadata(name, native_recovery, image_profile), f"{installer_data} is not the installer_data for {name}")
+ 
+     try:
+         archive = zipfile.ZipFile(package)
+@@ -281,6 +291,9 @@ def check_payload(lane: str, package: Path, installer_data: Path, profile: str =
+             require(not any(n.startswith(recovery_app.PREFIX) for n in members),
+                     "Recovery app present without native Recovery metadata")
+         required = set(REQUIRED_MEMBERS) | {"esp/aurora/stage1-j700.bin", "esp/m1n1/boot-j700.bin"}
++        qualification = stage1_qualification.load(profile=image_profile)
++        if qualification is not None:
++            required.add(stage1_qualification.COMMON_STAGE1)
+         missing = sorted(required - set(members))
+         require(not missing, "missing members: " + ", ".join(missing))
+         require("esp/omarchy" in directories, "missing members: esp/omarchy/")
+@@ -305,6 +318,9 @@ def check_payload(lane: str, package: Path, installer_data: Path, profile: str =
+                 "the J700 Stage 1 has an invalid configuration block")
+         require(archive.read("esp/m1n1/boot-j700.bin") == archive.read("esp/m1n1/boot.bin"),
+                 "the J700 Stage 2 differs from the common bundle")
++        if qualification is not None:
++            require(archive.read(stage1_qualification.COMMON_STAGE1) == stage1,
++                    "the common Stage 1 differs from the matched package's J700 Stage 1")
+ 
+         keep = {
+             "boot.img": 0x488,
+@@ -502,7 +518,16 @@ def runtime_providers(candidates: Path | None) -> dict[str, str]:
+     return providers
+ 
+ 
+-def check_state(root: Path, providers: dict[str, str] | None = None) -> None:
++def required_image_packages(image_profile: str = "production") -> set[str]:
++    selected = image_profile_data.select(image_profile)
++    required = set(IMAGE_PACKAGES)
++    policy = _module("candidate_set").load_policy(selected["trust"])
++    if image_profile == "j714s-developer" and "linux-aurora-headers" not in policy["boot_packages"]:
++        required.remove("linux-aurora-headers")
++    return required
++
++
++def check_state(root: Path, providers: dict[str, str] | None = None, image_profile: str = "production") -> None:
+     check_provisioning(root)
+     check_pristine(root)
+     first_boot = root / "etc/systemd/system/multi-user.target.wants/omarchy-first-boot.service"
+@@ -514,7 +539,8 @@ def check_state(root: Path, providers: dict[str, str] | None = None) -> None:
+         require((root / destination.lstrip("/")).is_file(), f"{destination} is missing")
+     packages = installed_packages(root)
+     packages |= {role for role, name in (providers or {}).items() if name in packages}
+-    missing = sorted((set(IMAGE_PACKAGES) | set(providers or {})) - packages)
++    required_packages = required_image_packages(image_profile)
++    missing = sorted((required_packages | set(providers or {})) - packages)
+     require(not missing, f"the image lacks {missing}")
+     require(not (root / "var/lib/systemd/random-seed").exists(), "the image keeps a random seed")
+     require(not list((root / "etc/ssh").glob("ssh_host_*")) if (root / "etc/ssh").is_dir() else True,
+@@ -558,6 +584,17 @@ def check_profile(lane: str, profile: str) -> None:
+     require(profile != "lab" or lane == LAB_LANE, f"a lab image is refused on the {lane} lane")
+ 
+ 
++def recorded_image_profile(fields: dict[str, list[str]], prefix: str = "input.") -> str:
++    values = fields.get(prefix + "image_profile", ["production"])
++    require(len(values) == 1, "image profile is not unique")
++    name = values[0]
++    try:
++        image_profile_data.select(name)
++    except ValueError as error:
++        raise CheckError(str(error)) from error
++    return name
++
++
+ def check_lab_access(root: Path, where: str, profile: str) -> str:
+     """The lab overlay's access_sha256 in a lab tree, "" in a release tree."""
+     lab = _module("lab_access")
+@@ -582,11 +619,11 @@ def check_initramfs_lab_access(root: Path) -> None:
+ 
+ 
+ def check_tree(root: Path, factory: Path | None = None, profile: str = "release",
+-               providers: dict[str, str] | None = None) -> str:
++               providers: dict[str, str] | None = None, image_profile: str = "production") -> str:
+     require(root.is_dir(), f"{root} is not a directory")
+     check_fstab(root)
+     check_boot(root)
+-    check_state(root, providers)
++    check_state(root, providers, image_profile)
+     check_secret_material(root, "the image")
+     digest = check_lab_access(root, "the image", profile)
+     check_initramfs_lab_access(root)
+@@ -599,9 +636,9 @@ def check_tree(root: Path, factory: Path | None = None, profile: str = "release"
+ 
+ 
+ def inspect_tree(lane: str, root: Path, factory: Path | None, candidates: Path, report: Path | None,
+-                 lab_digest: str = "", profile: str = "release") -> None:
++                 lab_digest: str = "", profile: str = "release", image_profile: str = "production") -> None:
+     inspection = _inspection()
+-    result = inspection.inspect(root, candidates, lane, factory, profile=profile)
++    result = inspection.inspect(root, candidates, lane, factory, profile=profile, image_profile=image_profile)
+     if lab_digest:
+         result["profile"] = "lab"
+         result["lab_access_sha256"] = lab_digest
+@@ -627,7 +664,7 @@ def check_subvolumes(listed: list[str]) -> None:
+ 
+ 
+ def check_image(lane: str, root_image: Path, boot_image: Path, esp: Path, candidates: Path, report: Path | None,
+-                profile: str = "release") -> None:
++                profile: str = "release", image_profile: str = "production") -> None:
+     check_profile(lane, profile)
+     require(os.geteuid() == 0, "image checks mount the images and need root")
+     for image, capacity in ((root_image, ROOT_SIZE), (boot_image, BOOT_SIZE)):
+@@ -663,7 +700,7 @@ def check_image(lane: str, root_image: Path, boot_image: Path, esp: Path, candid
+             factory.mkdir()
+             run("mount", "-o", "ro,subvol=@factory", root_loop, str(factory))
+             mounts.append(str(factory))
+-            digest = check_tree(tree, factory, profile, runtime_providers(candidates))
++            digest = check_tree(tree, factory, profile, runtime_providers(candidates), image_profile)
+             for subvolume, point in (("@", tree), ("@home", tree / "home"), ("@log", tree / "var/log"),
+                                      ("@pkg", tree / "var/cache/pacman/pkg"), ("@factory", factory)):
+                 check_secret_material(point, subvolume)
+@@ -671,7 +708,7 @@ def check_image(lane: str, root_image: Path, boot_image: Path, esp: Path, candid
+             # The lab overlay lives in @ (and @factory); the others carry none.
+             for subvolume in ("@", "@home", "@log", "@pkg"):
+                 check_lab_access(top / subvolume, f"{subvolume} (unmounted)", profile if subvolume == "@" else "release")
+-            inspect_tree(lane, tree, factory, candidates, report, digest, profile)
++            inspect_tree(lane, tree, factory, candidates, report, digest, profile, image_profile)
+         finally:
+             for mount in reversed(mounts):
+                 subprocess.run(["umount", mount], check=False)
+@@ -787,6 +824,9 @@ def check_provenance(lane: str, directory: Path) -> None:
+             "PROVENANCE's candidate sources do not match INSPECTION's runtime sources")
+     check_receipt_record(lane, report.get("install_receipt"), fields, payload)
+     channel = is_channel(fields, "input.")
++    candidate_profile = recorded_image_profile(fields)
++    require(not channel or candidate_profile == "production",
++            "a channel image cannot use the J714s developer profile")
+     if channel:
+         # The -dev runtime ships no source revision; the channel database and its archives name it.
+         require(report.get("set_kind") == "channel"
+@@ -806,7 +846,7 @@ def check_provenance(lane: str, directory: Path) -> None:
+     require("hardware_profile" not in fields and "hardware_profile" not in report,
+             "PROVENANCE or INSPECTION records a retired hardware profile")
+     check_payload(lane, payload, installer_data, profile,
+-                  fields.get("input.recovery_app_manifest_sha256", [""])[0])
++                  fields.get("input.recovery_app_manifest_sha256", [""])[0], candidate_profile)
+ 
+ 
+ def check_receipt_record(lane: str, receipt: object, fields: dict[str, list[str]], payload: Path) -> None:
+@@ -908,8 +948,11 @@ def check_descriptor(lane: str, directory: Path) -> None:
+     provenance = directory / "PROVENANCE"
+     require(inputs.is_file() and provenance.is_file(), "the inputs record and PROVENANCE are not beside IMAGE")
+     input_fields = parse_fields(inputs)
++    candidate_profile = recorded_image_profile(input_fields, "")
+     provenance_fields = parse_fields(provenance)
+     require(is_channel(input_fields) == channel, "IMAGE and the inputs record name different kinds of set")
++    require(not channel or candidate_profile == "production",
++            "a channel image cannot use the J714s developer profile")
+     for key in image_inputs:
+         require(input_fields.get(key) == fields[key], f"IMAGE {key} does not match the inputs record")
+         require(provenance_fields.get(f"input.{key}") == fields[key], f"IMAGE {key} does not match PROVENANCE")
+@@ -937,7 +980,7 @@ def check_descriptor(lane: str, directory: Path) -> None:
+     if channel:
+         check_native_recovery(input_fields.get("recovery_app_manifest_sha256", [""])[0], "the inputs record")
+     digests = check_payload(lane, payload, installer_data, profile,
+-                            input_fields.get("recovery_app_manifest_sha256", [""])[0])
++                            input_fields.get("recovery_app_manifest_sha256", [""])[0], candidate_profile)
+     recorded = {}
+     for value in fields.get("image_sha256", []):
+         require("|" in value, "IMAGE has a malformed image_sha256")
+@@ -995,9 +1038,9 @@ def image_name(lane: str, directory: Path) -> str:
+     return name
+ 
+ 
+-USAGE = """Usage: mac-image-check payload <edge|rc|stable> PAYLOAD.zip INSTALLER_DATA.json [--profile lab]
+-       mac-image-check image <edge|rc|stable> ROOT.img BOOT.img ESP_DIR --candidates DIR [--report FILE] [--profile lab]
+-       mac-image-check tree <edge|rc|stable> ROOT_TREE [FACTORY_TREE] --candidates DIR [--report FILE] [--profile lab]
++USAGE = """Usage: mac-image-check payload <edge|rc|stable> PAYLOAD.zip INSTALLER_DATA.json [--profile lab] [--image-profile production|j714s-developer]
++       mac-image-check image <edge|rc|stable> ROOT.img BOOT.img ESP_DIR --candidates DIR [--report FILE] [--profile lab] [--image-profile production|j714s-developer]
++       mac-image-check tree <edge|rc|stable> ROOT_TREE [FACTORY_TREE] --candidates DIR [--report FILE] [--profile lab] [--image-profile production|j714s-developer]
+        mac-image-check provenance <edge|rc|stable> BUILD_DIR
+        mac-image-check descriptor <edge|rc|stable> BUILD_DIR
+        mac-image-check name <edge|rc|stable> BUILD_DIR"""
+@@ -1007,15 +1050,23 @@ def main(argv: list[str]) -> int:
+     rest: list[str] = []
+     options: dict[str, Path] = {}
+     profile = "release"
++    image_profile = "production"
+     arguments = iter(argv[1:])
+     for arg in arguments:
+-        if arg in ("--candidates", "--report", "--profile"):
++        if arg in ("--candidates", "--report", "--profile", "--image-profile"):
+             value = next(arguments, None)
+             if value is None or (arg == "--profile" and value not in PROFILES):
+                 print(USAGE, file=sys.stderr)
+                 return 64
+             if arg == "--profile":
+                 profile = value
++            elif arg == "--image-profile":
++                try:
++                    image_profile_data.select(value)
++                except ValueError:
++                    print(USAGE, file=sys.stderr)
++                    return 64
++                image_profile = value
+             else:
+                 options[arg[2:]] = Path(value)
+         else:
+@@ -1037,15 +1088,15 @@ def main(argv: list[str]) -> int:
+         return 64
+     try:
+         if mode == "payload":
+-            check_payload(lane, Path(paths[0]), Path(paths[1]), profile)
++            check_payload(lane, Path(paths[0]), Path(paths[1]), profile, image_profile=image_profile)
+         elif mode == "image":
+             check_image(lane, Path(paths[0]), Path(paths[1]), Path(paths[2]), options["candidates"], options.get("report"),
+-                        profile)
++                        profile, image_profile)
+         elif mode == "tree":
+             factory = Path(paths[1]) if len(paths) == 2 else None
+             check_profile(lane, profile)
+-            digest = check_tree(Path(paths[0]), factory, profile, runtime_providers(options["candidates"]))
+-            inspect_tree(lane, Path(paths[0]), factory, options["candidates"], options.get("report"), digest, profile)
++            digest = check_tree(Path(paths[0]), factory, profile, runtime_providers(options["candidates"]), image_profile)
++            inspect_tree(lane, Path(paths[0]), factory, options["candidates"], options.get("report"), digest, profile, image_profile)
+         elif mode == "provenance":
+             check_provenance(lane, Path(paths[0]))
+         elif mode == "name":
+diff --git a/image-builder/bin/mac-image-inputs b/image-builder/bin/mac-image-inputs
+index 89fc76e..8536103 100755
+--- a/image-builder/bin/mac-image-inputs
++++ b/image-builder/bin/mac-image-inputs
+@@ -103,6 +103,7 @@ record_body() {
+   [[ -z ${recovery_app_manifest:-} ]] || printf 'recovery_app_manifest_sha256=%s\n' "$recovery_app_manifest"
+   printf 'omarchy_channel=%s\nomarchy_server=%s\nomarchy_db_sha256=%s\n' "$omarchy_channel" "$omarchy_server" "$omarchy_db"
+   [[ -z ${release_tag:-} ]] || printf 'release_tag=%s\nmac_revision=%s\n' "$release_tag" "$mac_revision"
++  [[ $image_profile == production ]] || printf 'image_profile=%s\n' "$image_profile"
+   printf 'asahi_alarm_server=%s\nasahi_alarm_db_sha256=%s\n' "$asahi_alarm_server" "$asahi_alarm_db"
+   printf 'alarm_server=%s\n' "$alarm_server"
+   for repository in "${ALARM_REPOSITORIES[@]}"; do
+@@ -148,6 +149,7 @@ valid_server() {
+ load_record() {
+   local file=$1 line key value hex='^[0-9a-f]{64}$'
+   declare -A seen=()
++  image_profile=production
+   [[ -f $file && ! -L $file ]] || fail "$file is not a regular file"
+   (($(wc -c <"$file") <= 8192)) || fail "$file is not an inputs record"
+   while IFS= read -r line; do
+@@ -172,6 +174,7 @@ load_record() {
+       omarchy_db_sha256) omarchy_db=$value ;;
+       release_tag) release_tag=$value ;;
+       mac_revision) mac_revision=$value ;;
++      image_profile) image_profile=$value ;;
+       asahi_alarm_server) asahi_alarm_server=$value ;;
+       asahi_alarm_db_sha256) asahi_alarm_db=$value ;;
+       alarm_server) alarm_server=$value ;;
+@@ -186,12 +189,14 @@ load_record() {
+   [[ ${resolved_at:-} =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ &&
+     ${omarchy_channel:-} =~ ^(edge|rc|stable)$ && ${omarchy_db:-} =~ $hex ]] || fail "$file is not an inputs record"
+   [[ -z ${recovery_app_manifest:-} || $recovery_app_manifest =~ $hex ]] || fail "invalid Recovery app digest"
++  python3 "$ROOT/builder/image_profile.py" trust "$image_profile" >/dev/null || fail "$file names an unknown image profile"
+   lane_inputs "$omarchy_channel" "${release_tag:-}" >/dev/null || exit 1
+   [[ ( -z ${release_tag:-} && -z ${seen[mac_revision]:-} ) || ${mac_revision:-} =~ ^[1-9][0-9]{0,2}$ ]] ||
+     fail "$file is not an inputs record"
+   # Either a candidate set or a channel set, never parts of both. A channel set
+   # is named for its channel and the database it was resolved from.
+   if [[ -n ${channel_set:-} ]]; then
++    [[ $image_profile == production ]] || fail "$file: a channel set supports only the production image profile"
+     [[ -z ${candidate_set:-}${candidate_source_commit:-}${candidate_signer:-}${candidate_receipt:-}${candidate_manifest:-} &&
+       $channel_set == "omarchy-$omarchy_channel-${omarchy_db:0:12}" &&
+       ${channel_signer:-} =~ ^[0-9A-F]{40}$ && ${channel_manifest:-} =~ $hex ]] || fail "$file is not an inputs record"
+@@ -284,7 +289,7 @@ resolve() {
+     recovery_app_manifest=$(python3 "$ROOT/builder/recovery_app.py" "$recovery_app") || fail "invalid Recovery app input"
+   fi
+   if [[ -z $channel_mode ]]; then
+-    described=$(python3 "$ROOT/builder/candidate_set.py" describe --input "$candidates") ||
++    described=$(python3 "$ROOT/builder/candidate_set.py" describe --input "$candidates" --image-profile "$image_profile") ||
+       fail "the candidate set in $candidates does not verify"
+     candidate_set=$(sed -n 's/^set=//p' <<<"$described")
+     candidate_source_commit=$(sed -n 's/^source_commit=//p' <<<"$described")
+@@ -342,12 +347,12 @@ case $mode in
+ esac
+ 
+ positionals=()
+-cache="" candidates="" channel_mode="" channel=edge omarchy_server="" asahi_alarm_server=$DEFAULT_ASAHI_ALARM_SERVER
++cache="" candidates="" channel_mode="" channel=edge omarchy_server="" asahi_alarm_server=$DEFAULT_ASAHI_ALARM_SERVER image_profile=production
+ alarm_server="" release_tag="" mac_revision=""
+ recovery_app=""
+ while (($#)); do
+   case $1 in
+-    --cache|--candidates|--channel|--recovery-app|--omarchy-server|--asahi-alarm-server|--alarm-server|--release-tag|--mac-revision)
++    --cache|--candidates|--channel|--recovery-app|--omarchy-server|--asahi-alarm-server|--alarm-server|--release-tag|--mac-revision|--image-profile)
+       (($# > 1)) && [[ -n $2 ]] || usage_error "$1 requires a value"
+       [[ $mode == resolve || ( $1 == --cache && ( $mode == rootfs || $mode == dbs || $mode == packages ) ) ]] ||
+         usage_error "$1 does not apply to $mode"
+@@ -362,6 +367,7 @@ while (($#)); do
+         --omarchy-server) omarchy_server=$2 ;;
+         --release-tag) release_tag=$2 ;;
+         --mac-revision) mac_revision=$2 ;;
++        --image-profile) image_profile=$2 ;;
+         --asahi-alarm-server) asahi_alarm_server=$2 ;;
+         --alarm-server) alarm_server=$2 ;;
+       esac
+@@ -392,10 +398,12 @@ case $mode in
+     [[ -z $mac_revision || $mac_revision =~ ^[1-9][0-9]{0,2}$ ]] || usage_error "the Mac revision must be 1 to 999"
+     if [[ -n $channel_mode ]]; then
+       [[ -z $candidates ]] || usage_error "--candidates and --channel-set exclude each other"
++      [[ $image_profile == production ]] || usage_error "--channel-set supports only the production image profile"
+       [[ -n $recovery_app ]] || usage_error "--channel-set requires --recovery-app: every public image carries the native Recovery app"
+     else
+       [[ -n $candidates && -d $candidates ]] || usage_error "--candidates names no directory"
+     fi
++    python3 "$ROOT/builder/image_profile.py" trust "$image_profile" >/dev/null || usage_error "unknown image profile: $image_profile"
+     omarchy_channel=$channel
+     # shellcheck disable=SC2059
+     [[ -n $omarchy_server ]] || printf -v omarchy_server "$DEFAULT_OMARCHY_SERVER" "$(sed -n 's/^OMARCHY_MIRROR=//p' <<<"$contract")"
+diff --git a/image-builder/builder/candidate_set.py b/image-builder/builder/candidate_set.py
+index 5f4f8f0..1892868 100755
+--- a/image-builder/builder/candidate_set.py
++++ b/image-builder/builder/candidate_set.py
+@@ -3,9 +3,9 @@
+ 
+ A set is the directory the candidate-set tool of omacom/omarchy-mac-pkgs signs:
+ manifest.json, signing.json and signing.json.sig, and each package archive
+-with its detached .sig. Trust comes only from candidate-trust/ beside this
+-file: the signer's fingerprints, the digest of its public key and the package
+-set the plan names. The key file that travels with a set is never read.
++with its detached .sig. Trust comes only from the selected, repository-pinned
++image profile: the signer's fingerprints, the digest of its public key and the
++package set the plan names. The key file that travels with a set is never read.
+ 
+ Besides the runtime and boot packages the plan names, a set may carry the
+ rest of the Apple default set's closure that the Apple repository order takes
+@@ -45,6 +45,8 @@ import sys
+ import tempfile
+ 
+ TRUST = Path(__file__).resolve().parent / 'candidate-trust'
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from image_profile import select as select_image_profile
+ HEX40 = re.compile(r'[0-9a-f]{40}')
+ HEX64 = re.compile(r'[0-9a-f]{64}')
+ ARCHIVE = re.compile(r'[A-Za-z0-9@._+:-]+\.pkg\.tar\.(xz|zst)')
+@@ -144,7 +146,8 @@ def vercmp(a, b):
+     return result
+ 
+ 
+-def load_policy(trust=TRUST):
++def load_policy(trust=None, profile='production'):
++    trust = select_image_profile(profile)['trust'] if trust is None else trust
+     policy = json.loads((trust / 'policy.json').read_text())
+     require(policy.get('schema') == 1, 'unsupported candidate policy')
+     require(digest(trust / 'public.asc') == policy['public_key_sha256'], 'trust anchor checksum mismatch')
+@@ -241,11 +244,12 @@ def verify_payloads(payloads, policy):
+     return owners
+ 
+ 
+-def snapshot(root, destination, receipt_sha256, source_commit, manifest_sha256=None, trust=TRUST):
++def snapshot(root, destination, receipt_sha256, source_commit, manifest_sha256=None, trust=None, profile='production'):
+     require(HEX64.fullmatch(receipt_sha256) is not None, 'invalid receipt hash')
+     require(manifest_sha256 is None or HEX64.fullmatch(manifest_sha256) is not None, 'invalid manifest hash')
+     require(HEX40.fullmatch(source_commit) is not None, 'invalid source commit')
+     require(root.is_dir() and not root.is_symlink(), 'unsafe input directory')
++    trust = select_image_profile(profile)['trust'] if trust is None else trust
+     policy = load_policy(trust)
+     destination.mkdir(mode=0o700)  # Exclusive: a failed import is never reused.
+     for name in ('signing.json', 'signing.json.sig', 'manifest.json'):
+@@ -371,7 +375,8 @@ def snapshot(root, destination, receipt_sha256, source_commit, manifest_sha256=N
+     return summary
+ 
+ 
+-def describe(root, trust=TRUST):
++def describe(root, trust=None, profile='production'):
++    trust = select_image_profile(profile)['trust'] if trust is None else trust
+     """Verifies the set in a scratch copy and prints the values an inputs record pins."""
+     receipt = json.loads((root / 'signing.json').read_text())
+     manifest = json.loads((root / 'manifest.json').read_text())
+@@ -393,14 +398,17 @@ def main(argv=None):
+     imported.add_argument('--receipt-sha256', required=True)
+     imported.add_argument('--manifest-sha256', required=True)
+     imported.add_argument('--source-commit', required=True)
++    imported.add_argument('--image-profile', choices=('production', 'j714s-developer'), default='production')
+     described = commands.add_parser('describe')
+     described.add_argument('--input', type=Path, required=True)
++    described.add_argument('--image-profile', choices=('production', 'j714s-developer'), default='production')
+     args = parser.parse_args(argv)
+     try:
+         if args.command == 'import':
+-            summary = snapshot(args.input, args.output, args.receipt_sha256, args.source_commit, args.manifest_sha256)
++            summary = snapshot(args.input, args.output, args.receipt_sha256, args.source_commit,
++                              args.manifest_sha256, profile=args.image_profile)
+         else:
+-            summary = describe(args.input)
++            summary = describe(args.input, profile=args.image_profile)
+     except (ValueError, OSError, KeyError, TypeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+         print(f'candidate_set: {error}', file=sys.stderr)
+         return 1
+diff --git a/image-builder/builder/image_profile.py b/image-builder/builder/image_profile.py
+new file mode 100644
+index 0000000..4a7eee0
+--- /dev/null
++++ b/image-builder/builder/image_profile.py
+@@ -0,0 +1,42 @@
++#!/usr/bin/env python3
++"""Select the immutable trust and Stage 1 data for an image build."""
++from __future__ import annotations
++
++from pathlib import Path
++import sys
++
++ROOT = Path(__file__).resolve().parent
++PROFILES = {
++    "production": {
++        "trust": ROOT / "candidate-trust",
++        "stage1": None,
++    },
++    "j714s-developer": {
++        "trust": ROOT / "profiles/j714s-developer/candidate-trust",
++        "stage1": ROOT / "profiles/j714s-developer/stage1-qualification.json",
++    },
++}
++
++
++def select(name: str = "production") -> dict:
++    try:
++        return {"name": name, **PROFILES[name]}
++    except (KeyError, TypeError):
++        raise ValueError(f"unknown image profile: {name}") from None
++
++
++def main(argv: list[str]) -> int:
++    if len(argv) != 3 or argv[1] not in ("trust", "stage1"):
++        print("usage: image_profile.py trust|stage1 PROFILE", file=sys.stderr)
++        return 64
++    try:
++        value = select(argv[2])[argv[1]]
++    except ValueError as error:
++        print(f"image_profile: {error}", file=sys.stderr)
++        return 1
++    print("" if value is None else value)
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv))
+diff --git a/image-builder/builder/inspection.py b/image-builder/builder/inspection.py
+index 84fdae7..5d27d09 100644
+--- a/image-builder/builder/inspection.py
++++ b/image-builder/builder/inspection.py
+@@ -73,6 +73,7 @@ def _load(name: str, file: str):
+ 
+ 
+ candidate_set = _load("candidate_set", "candidate_set.py")
++stage1_qualification = _load("stage1_qualification", "stage1_qualification.py")
+ limine = _load("apple_limine", "apple_limine.py")
+ installed_system = _load("verify_installed_system", "verify_installed_system.py")
+ # The raw Stage 1 the engine enrolls on a MacBook Neo.
+@@ -283,7 +284,7 @@ def check_refused(root: Path, policy: dict) -> str:
+     return "none of " + ", ".join(policy["refused_packages"]) + " installed"
+ 
+ 
+-def check_installed_payloads(root: Path, candidates: Candidates) -> str:
++def check_installed_payloads(root: Path, candidates: Candidates, image_profile: str = "production") -> str:
+     release = candidates.kernel_release()
+     expected = {
+         "usr/lib/asahi-boot/m1n1.bin": candidates.boot_owners["usr/lib/asahi-boot/m1n1.bin"],
+@@ -304,6 +305,12 @@ def check_installed_payloads(root: Path, candidates: Candidates) -> str:
+     require(stage2.is_file() and not stage2.is_symlink()
+             and stage2.read_bytes() == (root / "boot/efi/m1n1/boot.bin").read_bytes(),
+             "the J700 Stage 2 does not match the inspected common bundle")
++    qualification = stage1_qualification.load(profile=image_profile)
++    if qualification is not None:
++        common = root / "boot/efi/aurora/stage1.bin"
++        require(common.is_file() and not common.is_symlink()
++                and common.read_bytes() == candidates.member(candidates.boot_owners[STAGE1], STAGE1),
++                "the common Stage 1 does not match the authenticated m1n1-aurora package")
+     return f"m1n1, U-Boot, the kernel and {len(candidates.dtbs())} device trees match the set's archives"
+ 
+ 
+@@ -435,13 +442,18 @@ def check_supported_models(root: Path, candidates: Candidates, report: dict, pol
+     return f"{len(models)} Macs: " + " ".join(name.removesuffix(".dtb") for name in models)
+ 
+ 
+-def check_limine(root: Path, candidates: Candidates, report: dict) -> str:
++def check_limine(root: Path, candidates: Candidates, report: dict, image_profile: str = "production") -> str:
+     sections = limine.validate_artifacts(root, KERNEL)
+     release = candidates.kernel_release()
++    if stage1_qualification.expected_arguments(stage1_qualification.load(profile=image_profile)):
++        require(candidates.packages[KERNEL]["version"] == stage1_qualification.J714S_KERNEL_VERSION
++                and release == stage1_qualification.J714S_KERNEL_RELEASE,
++                "J714s budgets require the exact candidate kernel package and release")
+     require(sections[".linux"] == candidates.member(KERNEL, f"usr/lib/modules/{release}/vmlinuz"),
+             "the UKI's kernel is not the set's")
+     report["uki"] = {"release": release, "initramfs_bytes": len(sections[".initrd"]),
+                      "cmdline": sections[".cmdline"].rstrip(b"\0 \n").decode(errors="replace")}
++    stage1_qualification.check_arguments(report["uki"]["cmdline"], image_profile)
+     return f"Limine at BOOTAA64.EFI boots omarchy_{KERNEL}.efi ({release}) with the set's kernel"
+ 
+ 
+@@ -783,7 +795,9 @@ def check_factory(factory: Path, root: Path, candidates: Candidates) -> str:
+ 
+ 
+ def inspect(root: Path, candidates_dir: Path, channel: str, factory: Path | None = None,
+-            trust: Path = candidate_set.TRUST, profile: str = "release") -> dict:
++            trust: Path | None = None, profile: str = "release", image_profile: str = "production") -> dict:
++    selected = _load("image_profile", "image_profile.py").select(image_profile)
++    trust = selected["trust"] if trust is None else trust
+     policy = candidate_set.load_policy(trust)
+     candidates = Candidates(candidates_dir)
+     report: dict = {
+@@ -803,12 +817,12 @@ def inspect(root: Path, candidates_dir: Path, channel: str, factory: Path | None
+         ("minimum-versions", lambda: check_minimum_versions(root, policy)),
+         ("refused-packages", lambda: check_refused(root, policy)),
+         ("apple-packages", lambda: check_apple_packages(root, report)),
+-        ("installed-boot-payloads", lambda: check_installed_payloads(root, candidates)),
++        ("installed-boot-payloads", lambda: check_installed_payloads(root, candidates, image_profile)),
+         ("candidate-files", lambda: check_candidate_files(root, candidates, report)),
+         ("package-mtrees", lambda: check_package_mtrees(root, candidates)),
+         ("m1n1-stage2", lambda: m1n1_stage2(root, candidates, report)),
+         ("aurora-device-trees", lambda: check_supported_models(root, candidates, report, policy)),
+-        ("limine-uki", lambda: check_limine(root, candidates, report)),
++        ("limine-uki", lambda: check_limine(root, candidates, report, image_profile)),
+         ("embedded-initramfs", lambda: check_embedded_initramfs(root, report)),
+         ("boot-splash", lambda: check_boot_splash(root, report)),
+         ("boot-maintenance", lambda: check_maintenance(root)),
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+new file mode 100644
+index 0000000..2825047
+--- /dev/null
++++ b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+@@ -0,0 +1,132 @@
++{
++  "schema": 1,
++  "primary_fingerprint": "5C2445B5C37B584B5FC75D8711DFC2D674A06D68",
++  "signing_fingerprint": "5C2445B5C37B584B5FC75D8711DFC2D674A06D68",
++  "public_key_sha256": "63c0264500f5d09227ff4687459c187bfbcada20b3af66f5be6a63759e3d31bf",
++  "source_repositories": [
++    "omacom/omarchy",
++    "omacom/omarchy-mac"
++  ],
++  "platform_repositories": [
++    "omacom/omarchy-mac-pkgs",
++    "omacom/omarchy-mac",
++    "TripleU613/omarchy-mac-pkgs"
++  ],
++  "boot_repository": "TripleU613/omarchy-pkgs",
++  "runtime_packages": [
++    "omarchy",
++    "omarchy-settings",
++    "omarchy-mac",
++    "omarchy-mac-boot"
++  ],
++  "boot_packages": [
++    "linux-aurora",
++    "m1n1-aurora",
++    "uboot-aurora",
++    "limine-mkinitcpio-hook"
++  ],
++  "channel_runtime_packages": [
++    "omarchy-mac-boot"
++  ],
++  "platform_packages": [
++    "omarchy-mac",
++    "omarchy-mac-boot"
++  ],
++  "refused_packages": [
++    "omarchy-apple-boot",
++    "omarchy-first-boot",
++    "linux-asahi",
++    "m1n1",
++    "grub",
++    "aura",
++    "m1n1-neo",
++    "uboot-asahi"
++  ],
++  "minimum_versions": {
++    "omarchy-mac-boot": "20260921-10",
++    "limine-mkinitcpio-hook": "1.39.0-2",
++    "m1n1-aurora": "1.6.1.aurora20-3"
++  },
++  "channel": {
++    "repository": "omarchy",
++    "primary_fingerprint": "40DFB630FF42BCFFB047046CF0134EE680CAC571",
++    "signing_fingerprint": "40DFB630FF42BCFFB047046CF0134EE680CAC571",
++    "public_key": "omarchy-channel.asc",
++    "public_key_sha256": "15d6aac44df688165b2ea35fe0b23af239bbc66a6909c10a5c219e8d94b707de",
++    "lanes": {
++      "edge": {
++        "runtime_packages": {
++          "omarchy": "omarchy-dev",
++          "omarchy-settings": "omarchy-settings-dev",
++          "omarchy-mac": "omarchy-mac",
++          "omarchy-mac-boot": "omarchy-mac-boot"
++        }
++      },
++      "rc": {
++        "runtime_packages": {
++          "omarchy": "omarchy",
++          "omarchy-settings": "omarchy-settings",
++          "omarchy-mac": "omarchy-mac",
++          "omarchy-mac-boot": "omarchy-mac-boot"
++        }
++      },
++      "stable": {
++        "runtime_packages": {
++          "omarchy": "omarchy",
++          "omarchy-settings": "omarchy-settings",
++          "omarchy-mac": "omarchy-mac",
++          "omarchy-mac-boot": "omarchy-mac-boot"
++        }
++      }
++    }
++  },
++  "support_packages": [
++    "aurora-audio",
++    "alsa-ucm-conf-aurora",
++    "speakerguardd",
++    "omarchy-aurora-firmware",
++    "mesa-aurora",
++    "vulkan-aurora",
++    "aurora-bless"
++  ],
++  "device_trees": [
++    "t6000-j314s",
++    "t6000-j316s",
++    "t6001-j314c",
++    "t6001-j316c",
++    "t6001-j375c",
++    "t6002-j375d",
++    "t6020-j414s",
++    "t6020-j416s",
++    "t6020-j474s",
++    "t6021-j414c",
++    "t6021-j416c",
++    "t6021-j475c",
++    "t6022-j180d",
++    "t6022-j475d",
++    "t6030-j514s",
++    "t6030-j516s",
++    "t6031-j514c",
++    "t6031-j516c",
++    "t6034-j514m",
++    "t6034-j516m",
++    "t8103-j274",
++    "t8103-j293",
++    "t8103-j313",
++    "t8103-j456",
++    "t8103-j457",
++    "t8112-j413",
++    "t8112-j415",
++    "t8112-j473",
++    "t8112-j493",
++    "t8122-j433",
++    "t8122-j434",
++    "t8122-j504",
++    "t8122-j613",
++    "t8122-j615",
++    "t8140-j700",
++    "t6050-j714s"
++  ],
++  "developer_only": true,
++  "headers_qualification": "Not included in this runtime image; no native header or DKMS qualification. Required for production release."
++}
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc b/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
+new file mode 100644
+index 0000000..a7f17f0
+--- /dev/null
++++ b/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
+@@ -0,0 +1,10 @@
++-----BEGIN PGP PUBLIC KEY BLOCK-----
++
++mDMEavHvrxYJKwYBBAHaRw8BAQdAh2Y6uu6gAtUPG5OrXxqhsPJkk8/alz834BtF
++HtstWOK0QlRyaXBsZVU2MTMgSjcxNHMgZGV2ZWxvcGVyIGltYWdlIGlucHV0cyAo
++bm90IGEgcHJvZHVjdGlvbiByZWxlYXNlKYiWBBMWCgA+FiEEXCRFtcN7WEtfx12H
++Ed/C1nSgbWgFAmrx768CGwMFCQASdQAFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AA
++CgkQEd/C1nSgbWi1lAEAm2f3GjmA1tGBckkfHbRQZkGHCMjkv0oWMhXTz0peB8YA
++/31rmcFPO2zfKPSQ4rUhZlPir2guXZ7tXM2fsZiSAM4M
++=J1jB
++-----END PGP PUBLIC KEY BLOCK-----
+diff --git a/image-builder/builder/profiles/j714s-developer/stage1-qualification.json b/image-builder/builder/profiles/j714s-developer/stage1-qualification.json
+new file mode 100644
+index 0000000..4cef994
+--- /dev/null
++++ b/image-builder/builder/profiles/j714s-developer/stage1-qualification.json
+@@ -0,0 +1,13 @@
++{
++  "kind": "common-raw-v1",
++  "qualified_machines": {
++    "j714sap": [
++      "27.3"
++    ]
++  },
++  "qualified_system_firmware": {
++    "j714sap": [
++      "mBoot-20457.60.65.0.1"
++    ]
++  }
++}
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+new file mode 100644
+index 0000000..ff7ae11
+--- /dev/null
++++ b/image-builder/builder/stage1_qualification.py
+@@ -0,0 +1,164 @@
++"""Read the reviewed common Stage 1 qualification used by this image source.
++
++This is the engine's existing aurora_stage1 metadata contract, not a device
++admission list. The shipped null policy qualifies no new machines.
++"""
++from __future__ import annotations
++
++import json
++from pathlib import Path
++import re
++import hashlib
++import subprocess
++import shlex
++import sys
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++from image_profile import select as select_image_profile
++COMMON_STAGE1 = "esp/aurora/stage1.bin"
++DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
++SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
++J714S_KERNEL_VERSION = "7.3.0.aurora15.j714s2-1"
++J714S_KERNEL_RELEASE = "7.3.0-15.j714s2-1-j714s-candidate-ARCH"
++J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
++
++
++def _unique_object(pairs):
++    result = {}
++    for key, value in pairs:
++        if key in result:
++            raise ValueError("duplicate Stage 1 qualification key")
++        result[key] = value
++    return result
++
++
++def load(path: Path | None = None, profile: str = "production") -> dict | None:
++    if path is None:
++        path = select_image_profile(profile)["stage1"]
++        if path is None:
++            return None
++    if path.is_symlink() or not path.is_file() or path.stat().st_size > 8192:
++        raise ValueError("missing or unsafe Stage 1 qualification policy")
++    document = json.loads(path.read_text(), object_pairs_hook=_unique_object)
++    if document is None:
++        return None
++    required = {"kind", "qualified_machines"}
++    if (not isinstance(document, dict) or not required <= document.keys()
++            or document.keys() - required - {"qualified_system_firmware"}
++            or document["kind"] != "common-raw-v1"):
++        raise ValueError("invalid Stage 1 qualification contract")
++    machines = document["qualified_machines"]
++    if not isinstance(machines, dict) or not machines:
++        raise ValueError("Stage 1 qualification must name exact machines")
++    for board, versions in machines.items():
++        if (not DEVICE_CLASS.fullmatch(board) or not isinstance(versions, list) or not versions
++                or not all(isinstance(version, str) and version and len(version) <= 128
++                           and all(0x20 <= ord(character) < 0x7f for character in version)
++                           for version in versions)
++                or len(set(versions)) != len(versions)):
++            raise ValueError("invalid Stage 1 machine/OS firmware qualification")
++    if "qualified_system_firmware" in document:
++        system = document["qualified_system_firmware"]
++        if not isinstance(system, dict) or not system or system.keys() - machines.keys():
++            raise ValueError("invalid Stage 1 system firmware qualification")
++        for versions in system.values():
++            if (not isinstance(versions, list) or not versions
++                    or not all(isinstance(version, str) and SYSTEM_FIRMWARE.fullmatch(version)
++                               for version in versions)
++                    or len(set(versions)) != len(versions)):
++                raise ValueError("invalid Stage 1 system firmware qualification")
++    expected_arguments(document)
++    return document
++
++
++def supported_firmware(base: list[str], policy: dict | None) -> list[str]:
++    if policy is None:
++        return base
++    return sorted(set(base) | {version for versions in policy["qualified_machines"].values()
++                              for version in versions})
++
++
++def expected_arguments(policy: dict | None) -> tuple[str, ...]:
++    if policy is None or "j714sap" not in policy["qualified_machines"]:
++        return ()
++    if (policy["qualified_machines"] != {"j714sap": ["27.3"]}
++            or policy.get("qualified_system_firmware") != {"j714sap": ["mBoot-20457.60.65.0.1"]}):
++        raise ValueError("J714s budgets require the exact single-board candidate firmware profile")
++    return J714S_ARGUMENTS
++
++
++def _inside_file(root: Path, relative: str) -> Path:
++    path = root / relative
++    if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
++        raise ValueError("missing or unsafe candidate kernel file: " + relative)
++    return path
++
++
++def seed_cmdline(root: Path, candidates: Path, profile: str = "production") -> None:
++    """Seed only the exact private candidate, before its first normal UKI.
++
++    The outer builder has authenticated/imported this set. Recheck archive
++    identity and its installed kernel/DTB bytes, not the build host's DT.
++    """
++    if root.resolve() == Path("/"):
++        raise ValueError("refusing to seed the running root")
++    arguments = expected_arguments(load(profile=profile))
++    if not arguments:
++        return
++    summary = json.loads((candidates / "import.json").read_text())
++    packages = [entry for entry in summary["packages"] if entry.get("name") == "linux-aurora"]
++    if len(packages) != 1 or packages[0].get("version") != J714S_KERNEL_VERSION:
++        raise ValueError("J714s budgets require the exact candidate linux-aurora package")
++    package = packages[0]
++    name = package["filename"]
++    if not isinstance(name, str) or Path(name).name != name or name in (".", ".."):
++        raise ValueError("invalid candidate kernel archive name")
++    archive = _inside_file(candidates, name)
++    with archive.open("rb") as stream:
++        if hashlib.file_digest(stream, "sha256").hexdigest() != package.get("sha256"):
++            raise ValueError("candidate kernel archive digest mismatch")
++    directory = "usr/lib/modules/" + J714S_KERNEL_RELEASE + "/"
++    for member in (directory + "pkgbase", directory + "vmlinuz", directory + "dtbs/t6050-j714s.dtb"):
++        installed = _inside_file(root, member).read_bytes()
++        supplied = subprocess.check_output(["bsdtar", "-xOf", str(archive), member])
++        if not installed or installed != supplied:
++            raise ValueError("candidate kernel file differs from its package: " + member)
++        if member.endswith("/pkgbase") and installed != b"linux-aurora\n":
++            raise ValueError("candidate kernel has the wrong pkgbase")
++    grub = _inside_file(root, "etc/default/grub")
++    data = grub.read_text()
++    baseline = 'GRUB_CMDLINE_LINUX="zswap.enabled=0 rootfstype=btrfs"'
++    assignments = [line for line in data.splitlines() if re.match(
++        r"^\s*(?:export\s+)?GRUB_CMDLINE_LINUX\s*\+?=", line)]
++    if assignments != [baseline] or any(word in data.replace("-", "_") for word in
++            ("macsmc.m5_pcio_budget=", "macsmc.m5_n1_budget=")):
++        raise ValueError("candidate finalizer command line is not the normal baseline")
++    data = data.replace(baseline, baseline[:-1] + " " + " ".join(arguments) + '"')
++    grub.write_text(data)
++
++
++def check_arguments(cmdline: str, profile: str = "production") -> None:
++    expected = expected_arguments(load(profile=profile))
++    if "'" in cmdline or "\\" in cmdline:
++        raise ValueError("candidate command line quotes or escapes a word")
++    words = shlex.split(cmdline)
++    # The kernel treats '-' and '_' as equivalent in parameter names. An
++    # alias must not evade the duplicate/changed-budget check.
++    actual = [word for word in words if word.split("=", 1)[0].replace("-", "_") in
++              ("macsmc.m5_pcio_budget", "macsmc.m5_n1_budget")]
++    if sorted(actual) != sorted(expected):
++        raise ValueError("UKI budgets do not match the reviewed single-board candidate profile")
++
++
++if __name__ == "__main__":
++    try:
++        if len(sys.argv) == 1:
++            print(json.dumps(load(), separators=(",", ":"), sort_keys=True))
++        elif len(sys.argv) == 3 and sys.argv[1] == "--profile":
++            print(json.dumps(load(profile=sys.argv[2]), separators=(",", ":"), sort_keys=True))
++        elif len(sys.argv) == 6 and sys.argv[1] == "seed-cmdline" and sys.argv[4] == "--profile":
++            seed_cmdline(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[5])
++        else:
++            raise ValueError("invalid Stage 1 qualification command")
++    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:
++        raise SystemExit(str(error))
+diff --git a/image-builder/test/all b/image-builder/test/all
+index dc27fa3..7e8df92 100755
+--- a/image-builder/test/all
++++ b/image-builder/test/all
+@@ -23,12 +23,15 @@ done
+ for script in bin/mac-image-check bin/mac-release-guard bin/edge-dispatch-filter builder/*.py test/*.py; do
+   python3 -m py_compile "$script"
+ done
++python3 -m py_compile ../Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+ echo "ok - shell syntax and Python compilation"
+ 
+ python3 test/test_candidate_set.py
+ python3 test/test_channel_set.py
+ python3 test/test_recovery_app.py
+ python3 test/test_inspection.py
++python3 test/test_stage1_qualification.py
++python3 test/test_image_profile.py
+ python3 test/test_mac_image_check.py
+ python3 test/test_lab_access.py
+ python3 test/test_release_guard.py
+@@ -39,4 +42,6 @@ for test_file in test/*-test.sh; do
+   "$BASH" "$test_file"
+ done
+ 
++"$BASH" ../Integration/M5/J714s-Normal-System/tests/prepare.sh
++
+ echo "Image producer source checks passed; building an image needs an aarch64 Linux host with Docker."
+diff --git a/image-builder/test/build-mac-image-test.sh b/image-builder/test/build-mac-image-test.sh
+index ca3080b..5f20ff0 100755
+--- a/image-builder/test/build-mac-image-test.sh
++++ b/image-builder/test/build-mac-image-test.sh
+@@ -968,11 +968,11 @@ if command -v pacman >/dev/null 2>&1; then
+     field() { sed -n "s/^$1=//p" "$channel/inputs"; }
+     fail() { builder_fail "$@"; }
+     read_repository_order
+-    render_config "$scratch/repos" "$scratch/cache" | sed 's/^Architecture = .*/Architecture = auto/' >"$scratch/channel.conf"
++    render_config "$scratch/repos" "$scratch/cache" | sed 's/^Architecture = .*/Architecture = aarch64/' >"$scratch/channel.conf"
+     [[ $(resolved "$scratch/channel.conf") == "omarchy 0.52.0-1" ]] ||
+       fail "a channel image takes hyprland from [omarchy]: $(resolved "$scratch/channel.conf")"
+   )
+-  render_config "$scratch/repos" "$scratch/cache" | sed 's/^Architecture = .*/Architecture = auto/' >"$scratch/candidate.conf"
++  render_config "$scratch/repos" "$scratch/cache" | sed 's/^Architecture = .*/Architecture = aarch64/' >"$scratch/candidate.conf"
+   [[ $(resolved "$scratch/candidate.conf") == "extra 0.51.1-2" ]] ||
+     fail "a candidate set's order still takes it from Arch Linux ARM: $(resolved "$scratch/candidate.conf")"
+   pass "pacman takes a package both [omarchy] and Arch Linux ARM carry from [omarchy] in a channel image"
+@@ -1008,7 +1008,7 @@ if command -v pacman >/dev/null 2>&1; then
+     'm1n1-neo|1.6.1.aurora16-1|%PROVIDES%\nm1n1=1.6.1.aurora16\n\n%CONFLICTS%\nm1n1\n\n'
+   boot_db asahi-alarm 'm1n1|1.6.1-1|' 'uboot-asahi|2026.07.asahi2-1|' 'asahi-scripts|20260127.1-1|'
+   {
+-    printf '[options]\nArchitecture = auto\nSigLevel = Never\n'
++    printf '[options]\nArchitecture = aarch64\nSigLevel = Never\n'
+     for repository in omarchy-candidates omarchy asahi-alarm; do
+       printf '[%s]\nServer = file:///nonexistent/%s\n' "$repository" "$repository"
+     done
+diff --git a/image-builder/test/mac-image-inputs-test.sh b/image-builder/test/mac-image-inputs-test.sh
+index 3a7de76..daa8b05 100755
+--- a/image-builder/test/mac-image-inputs-test.sh
++++ b/image-builder/test/mac-image-inputs-test.sh
+@@ -206,6 +206,8 @@ refuse "a channel set named for another channel" sed 's/^channel_set=omarchy-edg
+ refuse "a lowercase channel signer" \
+   sed 's/^channel_signer=.*/channel_signer=40dfb630ff42bcffb047046cf0134ee680cac571/' "$work/channel-inputs"
+ refuse "a channel record without its manifest digest" sed '/^channel_manifest_sha256=/d' "$work/channel-inputs"
++refuse "a channel record with the developer image profile" \
++  awk '{ print } /^channel_manifest_sha256=/ { print "image_profile=j714s-developer" }' "$work/channel-inputs"
+ 
+ mkdir "$work/channel-packages"
+ "$BASH" "$inputs" packages "$work/channel-inputs" "$work/channel-packages" --cache "$work/cache" >/dev/null ||
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index f34cd7a..47370b0 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -102,6 +102,39 @@ class CandidateSetTest(unittest.TestCase):
+         summary = self.verify()
+         self.assertIn("uboot-aurora", {p["name"] for p in summary["packages"]})
+ 
++    def test_j714s_developer_profile_accepts_its_exact_15_roles(self):
++        from image_profile import select
++
++        signer = fixtures.Signer(self.base / "j714s-signer")
++        self.addCleanup(signer.close)
++        profile = json.loads(select("j714s-developer")["trust"].joinpath("policy.json").read_text())
++        profile.update(primary_fingerprint=signer.fingerprint, signing_fingerprint=signer.fingerprint,
++                       public_key_sha256=c.digest(signer.trust / "public.asc"))
++        (signer.trust / "policy.json").write_text(json.dumps(profile))
++        names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
++        self.assertEqual(len(names), 15)
++        release = "7.3.0-15.j714s2-1-j714s-candidate-ARCH"
++        contents = fixtures.default_contents()
++        kernel = contents["linux-aurora"]
++        kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
++        kernel[f"usr/lib/modules/{release}/dtbs/t6050-j714s.dtb"] = fixtures.dtb("t6050-j714s")
++        contents["linux-aurora"] = kernel
++        input_set = self.base / "j714s-15-role-set"
++        def developer_sources(manifest):
++            for package in manifest["packages"]:
++                if package["name"] in profile["boot_packages"] + profile["support_packages"]:
++                    package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
++
++        receipt = fixtures.make_set(input_set, signer, names=names,
++                                    versions={"linux-aurora": "7.3.0.aurora15.j714s2-1"},
++                                    contents=contents, manifest_edit=developer_sources)
++        output = self.base / "j714s-15-role-import"
++        summary = c.snapshot(input_set, output, receipt, fixtures.SOURCE, trust=signer.trust)
++        imported = {package["name"] for package in summary["packages"]}
++        self.assertEqual(imported, set(names))
++        self.assertNotIn("linux-aurora-headers", imported)
++        self.assertIn("t6050-j714s", profile["device_trees"])
++
+     def test_the_replaced_asahi_boot_chain_is_refused(self):
+         for name, version in (("aura", "0.1.0.r20261023-1"), ("m1n1-neo", "1.6.1.aurora16-1"),
+                               ("uboot-asahi", "2026.07.asahi2-1")):
+diff --git a/image-builder/test/test_image_profile.py b/image-builder/test/test_image_profile.py
+new file mode 100644
+index 0000000..ae59280
+--- /dev/null
++++ b/image-builder/test/test_image_profile.py
+@@ -0,0 +1,43 @@
++#!/usr/bin/env python3
++"""Named image profiles preserve production defaults and fail closed."""
++import importlib.machinery
++import importlib.util
++from pathlib import Path
++import sys
++import unittest
++
++ROOT = Path(__file__).resolve().parents[1]
++sys.path.insert(0, str(ROOT / "builder"))
++from image_profile import select
++
++loader = importlib.machinery.SourceFileLoader("profile_mac_image_check", str(ROOT / "bin/mac-image-check"))
++spec = importlib.util.spec_from_loader(loader.name, loader)
++check = importlib.util.module_from_spec(spec)
++loader.exec_module(check)
++
++
++class ImageProfileTest(unittest.TestCase):
++    def test_production_is_the_default_and_keeps_the_production_trust(self):
++        production = select("production")
++        self.assertEqual(production["trust"], ROOT / "builder/candidate-trust")
++        self.assertIsNone(production["stage1"])
++        self.assertIsNone(check.stage1_qualification.load())
++        self.assertIn("linux-aurora-headers", check.required_image_packages())
++
++    def test_developer_profile_is_explicit_and_has_its_own_trust_and_qualification(self):
++        developer = select("j714s-developer")
++        self.assertNotEqual(developer["trust"], select("production")["trust"])
++        self.assertEqual(check.stage1_qualification.load(profile="j714s-developer")["qualified_machines"],
++                         {"j714sap": ["27.3"]})
++        self.assertEqual(check.required_image_packages("production") -
++                         check.required_image_packages("j714s-developer"), {"linux-aurora-headers"})
++
++    def test_unknown_profile_is_rejected(self):
++        with self.assertRaisesRegex(ValueError, "unknown image profile"):
++            select("j714s-only-ish")
++        with self.assertRaisesRegex(ValueError, "unknown image profile"):
++            check.stage1_qualification.load(profile="j714s-only-ish")
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/image-builder/test/test_mac_image_check.py b/image-builder/test/test_mac_image_check.py
+index 4bab51c..8b43a37 100755
+--- a/image-builder/test/test_mac_image_check.py
++++ b/image-builder/test/test_mac_image_check.py
+@@ -254,6 +254,12 @@ class ChannelBuildDirectoryTest(unittest.TestCase):
+             with self.subTest(mode=mode), self.assertRaisesRegex(check.CheckError, "lab profile for a channel image"):
+                 getattr(check, f"check_{mode}")("edge", self.out)
+ 
++    def test_a_channel_build_cannot_name_the_developer_image_profile(self):
++        self.build(inputs=dict(self.inputs, image_profile="j714s-developer"))
++        for mode in ("provenance", "descriptor"):
++            with self.subTest(mode=mode), self.assertRaisesRegex(check.CheckError, "channel image cannot use"):
++                getattr(check, f"check_{mode}")("edge", self.out)
++
+     def test_the_image_target_and_inspection_must_name_the_channel_build(self):
+         cases = {
+             "the image target's channel_db_sha256 does not match": dict(
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+new file mode 100644
+index 0000000..b832881
+--- /dev/null
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -0,0 +1,85 @@
++import importlib.util
++import json
++import hashlib
++from pathlib import Path
++import tempfile
++import unittest
++
++
++ROOT = Path(__file__).resolve().parents[1]
++spec = importlib.util.spec_from_file_location("stage1_qualification", ROOT / "builder/stage1_qualification.py")
++qualification = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(qualification)
++
++
++class Stage1QualificationTest(unittest.TestCase):
++    def setUp(self):
++        self.tmp = tempfile.TemporaryDirectory()
++        self.addCleanup(self.tmp.cleanup)
++        self.path = Path(self.tmp.name) / "policy.json"
++        self.policy = {
++            "kind": "common-raw-v1",
++            "qualified_machines": {"j714sap": ["27.3"]},
++            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++        }
++
++    def test_source_default_qualifies_no_new_machines(self):
++        policy = json.loads((ROOT / 'builder/candidate-trust/policy.json').read_text())
++        self.assertIn('linux-aurora-headers', policy['boot_packages'])
++        self.assertIsNone(qualification.load())
++
++    def test_source_profile_contract(self):
++        trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
++        policy = json.loads((trust / 'policy.json').read_text())
++        self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
++        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora15.j714s2-1')
++        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-15.j714s2-1-j714s-candidate-ARCH')
++        self.assertEqual(policy['primary_fingerprint'], '5C2445B5C37B584B5FC75D8711DFC2D674A06D68')
++        self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
++        self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
++        self.assertNotIn('linux-aurora-headers', policy['boot_packages'])
++        self.assertIn('t6050-j714s', policy['device_trees'])
++
++    def test_exact_qualification_round_trips_and_only_adds_its_os_firmware(self):
++        self.path.write_text(json.dumps(self.policy))
++        self.assertEqual(qualification.load(self.path), self.policy)
++        self.assertEqual(qualification.supported_firmware(["13.5", "26.6.2"], self.policy),
++                         ["13.5", "26.6.2", "27.3"])
++        self.assertNotIn("j714cap", qualification.load(self.path)["qualified_machines"])
++
++    def test_missing_symlink_duplicate_or_malformed_input_is_not_silently_disabled(self):
++        with self.assertRaises(ValueError):
++            qualification.load(self.path)
++        other = self.path.with_name("other")
++        other.write_text("null")
++        self.path.symlink_to(other)
++        with self.assertRaises(ValueError):
++            qualification.load(self.path)
++        self.path.unlink()
++        for value in ('{"kind":"a","kind":"b"}', '{', '[]'):
++            with self.subTest(value=value):
++                self.path.write_text(value)
++                with self.assertRaises(ValueError):
++                    qualification.load(self.path)
++
++    def test_invalid_machine_or_system_firmware_constraints_are_refused(self):
++        cases = [
++            {**self.policy, "qualified_machines": {}},
++            {**self.policy, "qualified_machines": {"apple,j714s": ["27.3"]}},
++            {**self.policy, "qualified_machines": {"j714sap": []}},
++            {**self.policy, "qualified_machines": {"j714sap": [None]}},
++            {**self.policy, "qualified_system_firmware": {"j714cap": ["mBoot-20457.60.65.0.1"]}},
++            {**self.policy, "qualified_system_firmware": {"j714sap": []}},
++            {**self.policy, "qualified_system_firmware": {"j714sap": ["mBoot-*"]}},
++            {**self.policy, "qualified_system_firmware": {"j714sap": [None]}},
++            {**self.policy, "enabled": True},
++        ]
++        for value in cases:
++            with self.subTest(value=value):
++                self.path.write_text(json.dumps(value))
++                with self.assertRaises(ValueError):
++                    qualification.load(self.path)
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.56.0
+

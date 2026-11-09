@@ -1,0 +1,289 @@
+From b7c276d84eb3289d8bd6e93914611e46da9ba644 Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Mon, 9 Nov 2026 13:31:53 -0500
+Subject: [PATCH 5/6] Add native J714s kernel headers build check
+
+---
+ .github/workflows/native-j714s-headers.yml    | 120 +++++++++++++++
+ .../tools/native-headers-check.sh             | 142 ++++++++++++++++++
+ 2 files changed, 262 insertions(+)
+ create mode 100644 .github/workflows/native-j714s-headers.yml
+ create mode 100755 Integration/M5/J714s-Normal-System/tools/native-headers-check.sh
+
+diff --git a/.github/workflows/native-j714s-headers.yml b/.github/workflows/native-j714s-headers.yml
+new file mode 100644
+index 0000000..8267b07
+--- /dev/null
++++ b/.github/workflows/native-j714s-headers.yml
+@@ -0,0 +1,120 @@
++name: Native J714s kernel and headers package check
++
++# Manual artifact-only build. This runs the pinned upstream Omarchy package
++# builder on a native ARM host, produces both split packages in one makepkg
++# invocation, and checks their coherence without installing or publishing them.
++on:
++  workflow_dispatch:
++
++permissions:
++  contents: read
++
++defaults:
++  run:
++    shell: bash
++
++jobs:
++  native-package:
++    if: github.repository == 'TripleU613/omarchy-mac-installer' && github.ref == 'refs/heads/main'
++    runs-on: ubuntu-24.04-arm
++    timeout-minutes: 240
++    env:
++      RECIPE_BASE: 30a33ee435db8f4a158ca41f82e91cc34bcd2e3b
++      BUILDER_SOURCE: omacom/omarchy-pkgs@30a33ee435db8f4a158ca41f82e91cc34bcd2e3b
++    steps:
++      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
++        with:
++          persist-credentials: false
++
++      - name: Check native ARM runner and install package inspection tools
++        run: |
++          set -euo pipefail
++          [[ $(uname -m) == aarch64 ]]
++          sudo apt-get update -qq
++          sudo apt-get install --yes --no-install-recommends \
++            build-essential binutils file kmod libarchive-tools xz-utils zstd
++          WORK=$RUNNER_TEMP/native-j714s-headers
++          echo "WORK=$WORK" >> "$GITHUB_ENV"
++          mkdir -p "$WORK/evidence"
++          {
++            git rev-parse HEAD
++            uname -a
++            nproc
++            free -h
++            df -h / "$RUNNER_TEMP"
++            docker version --format '{{.Server.Version}} {{.Server.Arch}}'
++          } | tee "$WORK/evidence/host.txt"
++
++      - name: Prepare the pinned recipe and upstream package builder
++        run: |
++          set -euo pipefail
++          export XDG_CACHE_HOME="$WORK/cache"
++          Integration/M5/J714s-Normal-System/prepare "$WORK/prepared"
++          git --git-dir="$WORK/cache/omarchy-pkgs" worktree add --detach \
++            "$WORK/upstream" "$RECIPE_BASE"
++          # Restore only the pinned package metadata required by the upstream
++          # planner; Integration/prepare deliberately strips it from exports.
++          git --git-dir="$WORK/cache/omarchy-pkgs" show \
++            "$RECIPE_BASE:pkgbuilds/linux-aurora/.omarchy/package.json" \
++            > "$WORK/linux-aurora.package.json"
++          rm -rf "$WORK/upstream/pkgbuilds/linux-aurora"
++          cp -a "$WORK/prepared/pkgbuilds/linux-aurora" "$WORK/upstream/pkgbuilds/"
++          mkdir -p "$WORK/upstream/pkgbuilds/linux-aurora/.omarchy"
++          mv "$WORK/linux-aurora.package.json" \
++            "$WORK/upstream/pkgbuilds/linux-aurora/.omarchy/package.json"
++          {
++            printf 'installer_main=%s\n' "$(git rev-parse HEAD)"
++            printf 'recipe_base=%s\n' "$RECIPE_BASE"
++            printf 'builder_source=%s\n' "$BUILDER_SOURCE"
++            git -C "$WORK/upstream" rev-parse HEAD
++            printf 'builder_dockerfile_blob=%s\n' "$(git -C "$WORK/upstream" rev-parse HEAD:build/Dockerfile)"
++            printf 'builder_dockerfile_sha256=%s\n' "$(sha256sum "$WORK/upstream/build/Dockerfile" | cut -d' ' -f1)"
++            printf '%s\n' 'pacman_repository_db_hashes=not-retained-by-standard-bin-build'
++          } | tee "$WORK/evidence/source.txt"
++          grep -nE '^(FROM |SigLevel|Server = https://arm-)' \
++            "$WORK/upstream/build/Dockerfile" > "$WORK/evidence/builder-repository-config.txt"
++
++      - name: Build the runtime and headers split packages together
++        env:
++          CONTAINER_ENGINE: docker
++          OMARCHY_PUBLISHED_REPO_URL: ''
++        run: |
++          set -euo pipefail
++          cd "$WORK/upstream"
++          ./bin/build --arch aarch64 --package linux-aurora 2>&1 | tee "$WORK/evidence/build.log"
++          [[ -d build-output/edge/aarch64 ]]
++          mapfile -t archives < <(find build-output/edge/aarch64 -maxdepth 1 -type f -name '*.pkg.tar.zst' -print | sort)
++          (( ${#archives[@]} > 0 ))
++          printf '%s\n' "${archives[@]}" | tee "$WORK/evidence/packages.txt"
++          for archive in "${archives[@]}"; do
++            name=${archive##*/}
++            bsdtar -xOf "$archive" .BUILDINFO > "$WORK/evidence/$name.BUILDINFO"
++          done
++          {
++            for image in omarchy-pkg-builder:latest-aarch64-edge docker.io/library/alpine:3.21; do
++              if docker image inspect "$image" --format '{{.Id}} {{json .RepoDigests}}' > "$WORK/evidence/.image-inspect" 2>/dev/null; then
++                printf '%s ' "$image"
++                cat "$WORK/evidence/.image-inspect"
++              else
++                printf '%s %s\n' "$image" 'image id/digest not available locally after build'
++              fi
++            done
++          } | tee "$WORK/evidence/container-images.txt"
++          rm -f "$WORK/evidence/.image-inspect"
++
++      - name: Check split-package metadata, ELF architecture, and external C module
++        run: |
++          set -euo pipefail
++          bash Integration/M5/J714s-Normal-System/tools/native-headers-check.sh \
++            "$WORK/upstream/build-output/edge/aarch64" 2>&1 | tee "$WORK/evidence/check.log"
++
++      - name: Upload unsigned packages and build evidence
++        if: always()
++        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
++        with:
++          name: native-j714s-kernel-headers-${{ github.run_id }}
++          path: |
++            ${{ runner.temp }}/native-j714s-headers/evidence/
++            ${{ runner.temp }}/native-j714s-headers/upstream/build-output/edge/aarch64/*.pkg.tar.zst
++          if-no-files-found: warn
++          retention-days: 14
+diff --git a/Integration/M5/J714s-Normal-System/tools/native-headers-check.sh b/Integration/M5/J714s-Normal-System/tools/native-headers-check.sh
+new file mode 100755
+index 0000000..ba91f40
+--- /dev/null
++++ b/Integration/M5/J714s-Normal-System/tools/native-headers-check.sh
+@@ -0,0 +1,142 @@
++#!/bin/bash
++# Verify one matching J714s runtime and headers split-package build.
++set -euo pipefail
++
++fail() {
++  printf 'native-j714s-headers: %s\n' "$*" >&2
++  exit 1
++}
++
++if (( $# != 1 )) || [[ ! -d $1 ]]; then
++  fail 'usage: native-headers-check.sh /directory/containing/packages'
++fi
++packages=$(realpath "$1")
++runtime_packages=()
++headers_packages=()
++for archive in "$packages"/*.pkg.tar.zst; do
++  [[ -f $archive ]] || continue
++  case $(bsdtar -xOf "$archive" .PKGINFO | sed -n 's/^pkgname = //p') in
++    linux-aurora) runtime_packages+=("$archive") ;;
++    linux-aurora-headers) headers_packages+=("$archive") ;;
++  esac
++done
++(( ${#runtime_packages[@]} == 1 )) || fail 'expected exactly one archive whose .PKGINFO names linux-aurora'
++(( ${#headers_packages[@]} == 1 )) || fail 'expected exactly one archive whose .PKGINFO names linux-aurora-headers'
++
++expected_pkgver='7.3.0.aurora15.j714s2-1'
++expected_release='7.3.0-15.j714s2-1-j714s-candidate-ARCH'
++work=$(mktemp -d)
++trap 'rm -rf -- "$work"' EXIT
++mkdir -p "$work/runtime" "$work/headers" "$work/external-module"
++
++pkginfo_value() {
++  local archive=$1 key=$2
++  bsdtar -xOf "$archive" .PKGINFO | sed -n "s/^${key} = //p"
++}
++
++check_pkginfo() {
++  local archive=$1 name=$2
++  [[ $(pkginfo_value "$archive" pkgname) == "$name" ]] || fail "$name archive has unexpected package name"
++  [[ $(pkginfo_value "$archive" pkgbase) == linux-aurora ]] || fail "$name archive has unexpected package base"
++  [[ $(pkginfo_value "$archive" pkgver) == "$expected_pkgver" ]] || fail "$name archive has unexpected package version"
++  [[ $(pkginfo_value "$archive" arch) == aarch64 ]] || fail "$name archive is not aarch64"
++}
++
++check_pkginfo "${runtime_packages[0]}" linux-aurora
++check_pkginfo "${headers_packages[0]}" linux-aurora-headers
++bsdtar -xf "${runtime_packages[0]}" -C "$work/runtime"
++bsdtar -xf "${headers_packages[0]}" -C "$work/headers"
++
++runtime_root=$work/runtime/usr/lib/modules/$expected_release
++headers_root=$work/headers/usr/lib/modules/$expected_release/build
++[[ -s $runtime_root/version ]] || fail 'runtime package is missing its release version file'
++[[ $(<"$runtime_root/version") == "$expected_release" ]] || fail 'runtime package release file differs from its module directory'
++[[ -s $runtime_root/pkgbase && $(<"$runtime_root/pkgbase") == linux-aurora ]] || fail 'runtime package has no matching pkgbase file'
++[[ -s $runtime_root/vmlinuz ]] || fail 'runtime package is missing vmlinuz'
++[[ -s $runtime_root/modules.dep && -s $runtime_root/modules.alias ]] || fail 'runtime package is missing module dependency metadata'
++[[ -n $(find "$runtime_root" -type f \( -name '*.ko' -o -name '*.ko.zst' -o -name '*.ko.xz' -o -name '*.ko.gz' \) -print -quit) ]] || fail 'runtime package contains no loadable kernel module files'
++[[ -n $(find "$runtime_root/dtbs" -type f -name '*t6050*.dtb' -print -quit 2>/dev/null) ]] || fail 'runtime package has no T6050 device tree'
++
++for required in Makefile .config Module.symvers System.map version vmlinux include/generated/autoconf.h arch/arm64/include; do
++  [[ -e $headers_root/$required ]] || fail "headers package is missing $required"
++done
++[[ $(<"$headers_root/version") == "$expected_release" ]] || fail 'headers release file differs from runtime package'
++grep -qx 'CONFIG_MODULES=y' "$headers_root/.config" || fail 'headers configuration does not enable modules'
++
++elf_count=0
++check_elf() {
++  local path=$1 machine
++  machine=$(readelf -h "$path" | sed -n 's/^[[:space:]]*Machine:[[:space:]]*//p')
++  [[ $machine == AArch64 ]] || fail "packaged ELF is not AArch64: $path ($machine)"
++  ((elf_count += 1))
++}
++
++audit_tree() {
++  local root=$1 path kind temp
++  while IFS= read -r -d '' path; do
++    case "$path" in
++      *.ko.zst)
++        temp=$work/module-elf
++        zstd -q -d -c -- "$path" > "$temp"
++        [[ $(file -b "$temp") == ELF* ]] || fail "compressed module is not ELF: $path"
++        check_elf "$temp"
++        ;;
++      *.ko.xz)
++        temp=$work/module-elf
++        xz -d -c -- "$path" > "$temp"
++        [[ $(file -b "$temp") == ELF* ]] || fail "compressed module is not ELF: $path"
++        check_elf "$temp"
++        ;;
++      *.ko.gz)
++        temp=$work/module-elf
++        gzip -d -c -- "$path" > "$temp"
++        [[ $(file -b "$temp") == ELF* ]] || fail "compressed module is not ELF: $path"
++        check_elf "$temp"
++        ;;
++      *)
++        kind=$(file -b -- "$path")
++        [[ $kind == ELF* ]] && check_elf "$path"
++        ;;
++    esac
++  done < <(find "$root" -type f -print0)
++}
++
++audit_tree "$work/runtime"
++(( elf_count > 0 )) || fail 'runtime package contains no auditable ELF files'
++runtime_elf_count=$elf_count
++audit_tree "$work/headers"
++(( elf_count > runtime_elf_count )) || fail 'headers package contains no auditable ELF files'
++headers_elf_count=$((elf_count - runtime_elf_count))
++
++cat > "$work/external-module/Makefile" <<'EOF'
++obj-m += j714s_header_probe.o
++EOF
++cat > "$work/external-module/j714s_header_probe.c" <<'EOF'
++#include <linux/init.h>
++#include <linux/module.h>
++
++static int __init j714s_header_probe_init(void)
++{
++	return 0;
++}
++
++static void __exit j714s_header_probe_exit(void)
++{
++}
++
++module_init(j714s_header_probe_init);
++module_exit(j714s_header_probe_exit);
++MODULE_LICENSE("GPL");
++EOF
++make -C "$headers_root" M="$work/external-module" modules
++[[ -s $work/external-module/j714s_header_probe.ko ]] || fail 'external C module was not produced'
++vermagic=$(modinfo -F vermagic "$work/external-module/j714s_header_probe.ko")
++[[ $vermagic == "$expected_release "* ]] || fail "external module vermagic does not match $expected_release"
++check_elf "$work/external-module/j714s_header_probe.ko"
++
++printf 'PASS: matching %s runtime and headers packages\n' "$expected_pkgver"
++printf 'PASS: release, T6050 DTB, module metadata and AArch64 package ELF checks\n'
++printf 'PASS: external C module compiled; vermagic=%s\n' "$vermagic"
++printf 'ELF files checked: runtime=%d headers=%d external-module=1\n' "$runtime_elf_count" "$headers_elf_count"
++printf 'Package SHA-256:\n'
++sha256sum "${runtime_packages[0]}" "${headers_packages[0]}"
+-- 
+2.56.0
+

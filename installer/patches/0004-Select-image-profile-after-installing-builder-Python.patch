@@ -1,0 +1,55 @@
+From cb4028843abd8af09071f6e12bd42968cc20ca77 Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Mon, 9 Nov 2026 12:59:04 -0500
+Subject: [PATCH 4/6] Select image profile after installing builder Python
+
+---
+ image-builder/bin/build-mac-image          |  4 +++-
+ image-builder/test/build-mac-image-test.sh | 12 ++++++++++++
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/image-builder/bin/build-mac-image b/image-builder/bin/build-mac-image
+index 667b790..8a6e1ed 100755
+--- a/image-builder/bin/build-mac-image
++++ b/image-builder/bin/build-mac-image
+@@ -510,6 +510,9 @@ prepare_toolchain() {
+   pacman -Su --noconfirm --needed arch-install-scripts btrfs-progs dosfstools e2fsprogs gnupg jq python \
+     >>"$logs/toolchain.log" 2>&1 || fail "could not install the build tools (logs/toolchain.log)"
+ 
++  candidate_trust_dir=$(python3 "$ROOT/builder/image_profile.py" trust "$candidate_profile") ||
++    fail "unknown image profile: $candidate_profile"
++
+   fetch \
+     --output "$work/$ASAHI_KEYRING_FILE" "$(field asahi_alarm_server)/$ASAHI_KEYRING_FILE" ||
+     fail "could not download $ASAHI_KEYRING_FILE"
+@@ -1778,7 +1781,6 @@ interrupted() {
+ container_main() {
+   (($# == 0)) || usage_error "--in-container takes no arguments"
+   candidate_profile=${MAC_IMAGE_PROFILE:-production}
+-  candidate_trust_dir=$(python3 "$ROOT/builder/image_profile.py" trust "$candidate_profile") || fail "unknown image profile: $candidate_profile"
+   lane=$(field omarchy_channel)
+   [[ $(input_image_profile /inputs) == "$candidate_profile" ]] || fail "image profile differs from the checked inputs"
+   if [[ -d $lab_access_dir ]]; then
+diff --git a/image-builder/test/build-mac-image-test.sh b/image-builder/test/build-mac-image-test.sh
+index 5f20ff0..51982f0 100755
+--- a/image-builder/test/build-mac-image-test.sh
++++ b/image-builder/test/build-mac-image-test.sh
+@@ -1083,3 +1083,15 @@ declare -f build_payload | awk '/prepare_toolchain/ { toolchain = NR } /mac-imag
+   END { exit !(toolchain && check > toolchain) }' ||
+   fail "build_payload checks /inputs after prepare_toolchain"
+ pass "the in-container inputs check waits for the toolchain's python3"
++
++# The named profile is validated on the host, but the imported build rootfs
++# also lacks python3 until prepare_toolchain installs it. Resolve the trust
++# directory only after that package transaction and before candidate-key use.
++! declare -f container_main | grep -q 'image_profile.py.* trust' ||
++  fail "container_main selects the image profile before python3 is installed"
++declare -f prepare_toolchain | awk '/could not install the build tools/ { tools = NR }
++  /image_profile.py.* trust/ { profile = NR }
++  /trust_key .*candidate_trust_dir\/public.asc/ { candidate_key = NR }
++  END { exit !(tools && profile > tools && candidate_key > profile) }' ||
++  fail "prepare_toolchain does not select the profile after Python and before trusting its key"
++pass "the container selects the named profile after toolchain Python is installed"
+-- 
+2.56.0
+
