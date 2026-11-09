@@ -34,7 +34,7 @@ from them. Not booted through the normal U-Boot/Limine chain yet.
   host-tunable admission/copy it depends on.
   Hardware result on J714s, 2026-11-08: association, DHCP, default route,
   device-bound DNS and HTTPS passed
-  ([Omarchy-M5-Pro `198389e`](https://github.com/TripleU613/Omarchy-M5-Pro/commit/198389e167106031f6ea4b60f0ba90150d252a9b)).
+  ([`omarchy-m5-pro/STATUS-2026-11-08.md`](omarchy-m5-pro/STATUS-2026-11-08.md)).
   Workaround needed: NetworkManager rejects the passphrase/SAE form with
   `CONNECT = -95`; store the network's 64-hex WPA2 PMK instead (derived
   locally from passphrase + SSID, never on a command line). Reconnect after
