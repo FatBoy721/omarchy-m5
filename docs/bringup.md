@@ -630,8 +630,8 @@ This local trial keeps the verified DCP/battery and default bundles intact.
 Native rendering/compute and Vulkan-backed Zink now pass on this J714s in
 the separate **simpledrm / Linux-DCP-off** profile. The two exercised boots
 used `7.3.0-g929e67a1da3e`; the second also verified the corrected loader's
-watchdog retention. These are short headless GPU checks, not accelerated
-desktop, GPU+DCP, suspend or sustained-load qualification.
+watchdog retention. Those headless checks are separate from the Zink desktop
+checkpoint below; GPU+DCP, suspend and sustained-load qualification remain open.
 
 Sources:
 
@@ -875,10 +875,10 @@ Kernel/DT, bundle and preserved fallback hashes, commands, UTC timestamps
 and log paths are recorded in `build/gpu-simpledrm-trial-20261108.json`.
 The installed boot object and original recovery artifacts were not changed.
 
-**Remaining qualification:** check real keyboard/trackpad behavior and an
-accelerated Hyprland session with visible output before relying on the GPU
-desktop. Keep GPU+DCP, suspend/resume and longer thermal/power behavior as
-separate experiments; these short offscreen tests do not establish them.
+**Remaining qualification:** the Zink desktop checkpoint below adds visible
+output and normal-client rendering, but owner confirmation of its physical
+input responsiveness is still pending. Keep GPU+DCP, suspend/resume and longer
+thermal/power behavior as separate experiments.
 If touch AFE errors recur, capture the complete startup log and compare
 against the fallback rather than extending timeouts or guessing SMC resets.
 
@@ -925,11 +925,104 @@ Replace `renderDNNN` with the discovered GPU node, not an assumed number.
 Zink exercises Vulkan-backed rendering/compute, not Vulkan conformance.
 Inspect kernel logs for rejected submissions, firmware mismatch, UAT/DART
 faults, timeouts and resets; a renderer string alone is not a pass.
-Only after these checks, stop the old compositor session normally and try
-`"$P/bin/mesa-j714s-gpu" native /usr/local/bin/Hyprland`, checking actual
-visible output. Outside this wrapper the software desktop remains available
-with `env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe start-hyprland`.
+Only after these checks, install the private Aquamarine fix and use the Zink
+desktop launcher below, ending any previous session normally first. Outside
+that launcher the software desktop remains available with
+`env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe start-hyprland`.
 No DCP sleep, N1, audio or PMC/PMP activation is qualified by this trial.
+
+#### Accelerated Hyprland: Zink on simpledrm
+
+The 2026-11-09 desktop check used the same GPU kernel/firmware and the existing
+patched Hyprland 0.57.1. The display remained `eDP-1`, 3024x1890 at 60 Hz,
+with Linux DCP off. Native Gallium reached the wallpaper but the user reported
+very slow interaction and incorrect rendering; the captured Kitty window had
+black contents. A Zink-only Kitty client rendered text/colours correctly inside
+that same native compositor. Moving the whole compositor to Zink then gave a
+correct normal Kitty client and a short active-text sample near the panel's
+60 Hz rate. These are functional/timing samples, not comparable benchmark runs
+or a long desktop soak.
+
+The running compositor mapped the private Mesa EGL, GBM, Gallium and
+`libvulkan_asahi.so`, with `GALLIUM_DRIVER=zink` and the private Asahi ICD.
+No software driver or shim was selected, and the kernel log was unchanged
+across the Zink desktop check. A captured debug overlay was enabled only
+temporarily and restored to its previous value. The native session, user's
+Lua config and system graphics packages were preserved. The owner was
+unavailable to confirm the final Zink session's physical input/latency.
+
+The installed launcher was then exercised on a spare VT through the standard
+`start-hyprland --path /usr/local/bin/Hyprland` session supervisor. A child
+started by that compositor, without per-client driver overrides, passed all
+13 rendering/compute scenes and all 14 indexed-draw cases (4096/4096 pixels
+each). A separate normal Kitty child rendered its live text and colour check.
+The temporary session was stopped, both earlier sessions remained intact,
+and the active VT was restored. No new kernel messages appeared.
+
+**Allocator failure:** Aquamarine found the GPU render node, but still reopened
+the display-only KMS descriptor when creating its GBM allocators. On this
+machine private GBM failed on `/dev/dri/card0` and succeeded on the Aurora
+render node. The
+[`Aquamarine patch`](../patches/aquamarine/0001-allocate-on-render-node.patch)
+prefers the already-resolved render descriptor for those allocators, while
+keeping KMS ownership, polling and leases on the display descriptor. It targets
+Aquamarine v0.16.0, `b77d67648336223a6c8fb88844ae316e7b72b574`.
+The patch also applied to a clean checkout of that pin and rebuilt successfully
+with the tracked cross-toolchain; the original hardware-tested binary was not
+overwritten by that second build.
+
+Build against the same saved target SDK as Hyprland above, including the
+target's `/usr/share/hwdata/pnp.ids` and matching GCC 16.1.1 C++ headers.
+The tracked toolchain defaults to `build/hyprland-dcp-sysroot`; override
+`M5_DESKTOP_SYSROOT` and `M5_DESKTOP_CXX_VERSION` only to match another target.
+Start with a new source directory; never reset an existing modified tree:
+
+```sh
+git init build/aquamarine-gpu-source
+git -C build/aquamarine-gpu-source remote add origin https://github.com/hyprwm/aquamarine.git
+git -C build/aquamarine-gpu-source fetch --depth=1 origin b77d67648336223a6c8fb88844ae316e7b72b574
+git -C build/aquamarine-gpu-source checkout --detach FETCH_HEAD
+git -C build/aquamarine-gpu-source apply "$PWD/patches/aquamarine/0001-allocate-on-render-node.patch"
+cmake -S build/aquamarine-gpu-source -B build/aquamarine-gpu-repro-out -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE="$PWD/scripts/aarch64-desktop-toolchain.cmake" \
+  -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+  -DCMAKE_INSTALL_PREFIX=/opt/aquamarine-j714s-gpu-b77d67648336 \
+  -DCMAKE_INSTALL_LIBDIR=lib
+cmake --build build/aquamarine-gpu-repro-out --target aquamarine --parallel
+DESTDIR="$PWD/build/aquamarine-gpu-stage" cmake --install build/aquamarine-gpu-repro-out
+```
+
+This stages a private `/opt` tree; it does not install onto the target.
+Include Aquamarine's `LICENSE` with any binary distribution. Transfer and
+checksum the staged tree before installing it on the Mac. Never overwrite
+libraries mapped by a running compositor: stop that session normally first,
+or use a distinct prefix and matching launcher. Rebuild when target library
+ABIs change; do not replace system Aquamarine or Mesa to force compatibility.
+
+Once the private Mesa/Aquamarine trees and patched `/usr/local/bin/Hyprland`
+are installed, install and run the explicit launcher on the Mac:
+
+```sh
+sudo install -Dm755 scripts/start-hyprland-gpu.sh /usr/local/bin/start-hyprland-gpu
+# From a logged-in console, after ending any previous compositor normally:
+start-hyprland-gpu
+```
+
+The launcher selects Zink/Borealis and applies the combined library path
+**after** `mesa-j714s-gpu`, because the Mesa wrapper deliberately resets
+`LD_LIBRARY_PATH`. Setting Aquamarine's path before that wrapper silently
+selects the old system backend instead. It uses the standard `start-hyprland`
+supervisor with an explicit path to the patched compositor and forwards
+Hyprland arguments after `--`. No login manager, autologin, global driver
+selection or boot policy is changed by this launcher.
+
+Native Gallium remains an experimental headless-test option, not the desktop
+default. Its passing GLES scenes did not cover the failing client workload.
+Published [native-client shader findings](https://github.com/rolotrealanis98/m5pro-linux/blob/c9dbba61122f2472f9c38d9d9f31144e5e77a2be/contrib/pending/gpu/gl-native/APP-REGRESSIONS.md)
+describe separate offline fixes; those fixes are not deployed or claimed
+hardware-validated here. This desktop check does not qualify GPU+DCP, suspend,
+general application compatibility, sustained thermal behavior or Omarchy's
+full system installation.
 
 ### Standalone (no second machine - one 1TR ceremony per image)
 
@@ -1068,6 +1161,38 @@ area. They move between boots; `dmesg | grep oslog@` lists them.
 Console: `console=tty0` on m1n1's framebuffer handed over as simplefb is
 the only console needing no cable. dockchannel-UART (m1n1 secondary
 channel) and serial0 (0x505200000, Samsung UART) both need the debug cable.
+
+### Omarchy installation preflight (not installed)
+
+The official aarch64 `omarchy` and `omarchy-settings` **4.5.0-3** archives
+were downloaded and their detached signatures verified against the pinned
+Omarchy channel key. This was an isolated host-side audit: neither package
+was installed on the Mac, and no target keyring or repository was changed.
+GPU Hyprland working does not mean the full Omarchy installation is complete.
+
+The actual package scripts expose several blockers to an unattended stock
+installation on this existing root:
+
+- `/` is ext4, whereas `omarchy-apply-system` unconditionally runs the Snapper
+  root setup and enables the Limine/Snapper integration. There is no ext4
+  exemption in that setup path.
+- The Mac's working USB/SSH connection uses enabled, active
+  `systemd-networkd`; NetworkManager is not installed. The hardware setup
+  disables networkd in favour of NetworkManager, so the tether must be
+  deliberately migrated and verified before adopting it.
+- Firewall setup enables UFW for the next boot with incoming traffic denied
+  and no SSH allowance. It must not silently remove the recovery connection.
+- `omarchy-settings` replaces system policy defaults, and platform lifecycle
+  setup also dispatches boot integration. The current device-specific
+  m1n1/GPU boot and rollback artifacts must not be replaced by stock boot roles.
+
+The official [Mac installer checkpoint](https://github.com/omacom/omarchy-mac-installer/tree/c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9)
+does not include J714s/T6050 in its hardware catalog. Do not bypass that check
+or install another model's boot image. Choose an explicitly adapted desktop
+on the preserved ext4/custom-boot installation, with its feature limitations
+stated, or a backed-up migration to the stock disk/boot model before proceeding.
+That decision and the owner-attended native boot enrollment above are still
+pending; no repartitioning, stock system-apply or boot-role installation was run.
 
 ## Sleep (s2idle)
 

@@ -34,8 +34,9 @@
 # Repeat with zink: this exercises Borealis Vulkan through zink, including
 # pixel readback, compute SSBO results and shared-memory compute. It is not
 # a standalone Vulkan conformance test. No shim is installed or preloaded.
-# Launch a new compositor only after stopping the old one via normal session
-# management: .../mesa-j714s-gpu native /usr/local/bin/Hyprland
+# For the desktop, install the private Aquamarine fix and use
+# scripts/start-hyprland-gpu.sh after ending the previous session normally.
+# It selects Zink/Borealis; native Gallium is not desktop-qualified.
 # Exit that process; outside the launcher restore explicit software rendering:
 #   env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe start-hyprland
 # This uses the untouched distro libraries and existing session/configuration.

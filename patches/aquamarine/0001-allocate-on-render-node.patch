@@ -1,0 +1,81 @@
+From: omarchy-m5 <omarchy-m5@users.noreply.github.com>
+Subject: [PATCH] backend: allocate graphics buffers on the resolved render node
+
+A display-only KMS device can resolve to a separate render GPU. Reopening
+its primary DRM descriptor still yields the display device, which cannot
+create a hardware GBM allocator. Prefer the existing render-node descriptor
+for the primary and auxiliary GBM allocators, matching the renderer's own
+device selection. Keep the primary descriptor for KMS, polling and leases.
+
+Include cmath directly for std::round when building with the target's
+GCC 16.1.1 C++ headers rather than relying on transitive includes.
+
+Base: Aquamarine v0.16.0 (b77d67648336223a6c8fb88844ae316e7b72b574).
+
+---
+diff --git i/src/backend/Backend.cpp w/src/backend/Backend.cpp
+index dbd7147..7924fbf 100644
+--- i/src/backend/Backend.cpp
++++ w/src/backend/Backend.cpp
+@@ -161,8 +161,10 @@ bool Aquamarine::CBackend::start() {
+ 
+     // TODO: obviously change this when (if) we add different allocators.
+     for (auto const& b : implementations) {
+-        if (b->drmFD() >= 0) {
+-            auto fd = reopenDRMNode(b->drmFD());
++        const int renderFD    = b->drmRenderNodeFD();
++        const int allocatorFD = renderFD >= 0 ? renderFD : b->drmFD();
++        if (allocatorFD >= 0) {
++            auto fd = reopenDRMNode(allocatorFD);
+             if (fd < 0) {
+                 // this is critical, we cannot create an allocator properly
+                 log(AQ_LOG_CRITICAL, "Failed to create an allocator (reopenDRMNode failed)");
+diff --git i/src/backend/drm/DRM.cpp w/src/backend/drm/DRM.cpp
+index 688ed97..d9e1a68 100644
+--- i/src/backend/drm/DRM.cpp
++++ w/src/backend/drm/DRM.cpp
+@@ -6,6 +6,7 @@
+ #include <aquamarine/backend/drm/Atomic.hpp>
+ #include <aquamarine/allocator/GBM.hpp>
+ #include <aquamarine/allocator/DRMDumb.hpp>
++#include <cmath>
+ #include <cstdint>
+ #include <format>
+ #include <hyprutils/math/Mat3x3.hpp>
+@@ -863,9 +864,11 @@ bool Aquamarine::CDRMBackend::initMgpu() {
+     if (!rendererRequired)
+         return true;
+ 
++    const int renderFD = gpu->renderNodeFd >= 0 ? gpu->renderNodeFd : gpu->fd;
++
+     SP<CGBMAllocator> newAllocator;
+     if (primary || backend->primaryAllocator->type() != AQ_ALLOCATOR_TYPE_GBM) {
+-        newAllocator            = CGBMAllocator::create(backend->reopenDRMNode(gpu->fd), backend);
++        newAllocator            = CGBMAllocator::create(backend->reopenDRMNode(renderFD), backend);
+         rendererState.allocator = newAllocator;
+     } else {
+         newAllocator            = ((CGBMAllocator*)backend->primaryAllocator.get())->self.lock();
+@@ -877,7 +880,7 @@ bool Aquamarine::CDRMBackend::initMgpu() {
+         return false;
+     }
+ 
+-    rendererState.renderer = CDRMRenderer::attempt(backend.lock(), gpu->renderNodeFd >= 0 ? gpu->renderNodeFd : gpu->fd);
++    rendererState.renderer = CDRMRenderer::attempt(backend.lock(), renderFD);
+ 
+     if (!rendererState.renderer) {
+         backend->log(AQ_LOG_ERROR, "drm: initMgpu: no renderer");
+@@ -1538,11 +1541,12 @@ void Aquamarine::CDRMBackend::onReady() {
+     // init a drm renderer to gather gl formats.
+     // if we are secondary, initMgpu will have done that
+     if (!primary && rendererRequired) {
+-        auto a = CGBMAllocator::create(backend->reopenDRMNode(gpu->fd), backend);
++        const int renderFD = gpu->renderNodeFd >= 0 ? gpu->renderNodeFd : gpu->fd;
++        auto      a        = CGBMAllocator::create(backend->reopenDRMNode(renderFD), backend);
+         if (!a)
+             backend->log(AQ_LOG_ERROR, "drm: onReady: no renderer for gl formats");
+         else {
+-            auto r = CDRMRenderer::attempt(backend.lock(), gpu->renderNodeFd >= 0 ? gpu->renderNodeFd : gpu->fd);
++            auto r = CDRMRenderer::attempt(backend.lock(), renderFD);
+             if (!r)
+                 backend->log(AQ_LOG_ERROR, "drm: onReady: no renderer for gl formats");
+             else {

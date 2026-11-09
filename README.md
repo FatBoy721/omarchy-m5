@@ -42,7 +42,7 @@ The experimental Aurora/DCP path and its limits are described below.
 | Sleep (s2idle) | ✅ On the default kernel, `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping stop during sleep. The default simpledrm path leaves the panel lit |
 | Battery / charger | Verified on Aurora: battery telemetry, charging/discharging and charger notifications. Still disabled on the default fallback kernel |
 | Wi-Fi / Bluetooth (N1) | Not yet qualified on J714s; a separate driver/firmware trial is pending |
-| GPU | Native GL/compute and Vulkan-backed Zink checks pass on this J714s, using an isolated simpledrm trial with Linux DCP off. Accelerated desktop, GPU+DCP and sustained-load qualification remain open |
+| GPU | Native GL/compute and Vulkan-backed Zink checks pass on this J714s. Isolated Zink/Borealis Hyprland renders on simpledrm at 3024x1890 / 60 Hz in short automatic checks. Native Gallium desktop rendering is defective; GPU+DCP and sustained-load qualification remain open |
 
 Today the machine boots Arch from the internal SSD on **all 15 cores**; the
 kernel is staged over the USB tether (`boot-m5.sh`). Apple fixed the
@@ -120,13 +120,20 @@ Aurora Linux PR #1173, Mesa PR #194 and the minimal m1n1 GPU handoff, retaining
 build trees; `scripts/build-mesa-gpu.sh` packages Mesa and its Vulkan loader
 under `/opt`, without replacing system graphics libraries.
 
+The [GPU desktop launch path](docs/bringup.md#accelerated-hyprland-zink-on-simpledrm)
+now uses **Zink/Borealis**, with a private Aquamarine render-node allocator
+fix. Captured Kitty text/colours and a short active-update timing sample
+worked near the panel's 60 Hz rate, with no new kernel messages. This is real
+M5 GPU rendering, not a software fallback. Native Gallium could start the
+desktop but produced black Kitty content and poor responsiveness, so it is
+not the desktop default. The user's config and system graphics packages are
+unchanged; use `start-hyprland-gpu` on the GPU kernel.
+
 Both original recovery bundles and the installed boot object are unchanged.
 The corrected trial loader also passed a live watchdog-preservation check.
-Touch firmware reached READY on both GPU boots, but physical input and an
-accelerated Hyprland session still need checking. The
-[GPU runbook](docs/bringup.md#gpu-trial-isolated-j714s) records the tested
-artifacts, source pins, live calibration guard, earlier control findings and
-remaining limits. **GPU + DCP is not yet qualified.**
+Final physical-input/latency confirmation for the Zink session is pending.
+The [GPU runbook](docs/bringup.md#gpu-trial-isolated-j714s) records the source
+pins, calibration guard and remaining limits. **GPU + DCP is not yet qualified.**
 
 The [standalone milestone](docs/bringup.md#standalone-no-second-machine---one-1tr-ceremony-per-image)
 now packages that same kernel/DT/initramfs with a native loader that checks this
@@ -135,6 +142,11 @@ parser and boot routine were exercised from RAM: SSD-root Linux, all 15 CPUs
 and both GPU smoke modes passed. The full image is staged for an **attended
 Recovery enrollment**, not installed yet; an unplugged cold boot remains to
 be verified. No CTRR guard, disk layout or installed boot object was changed.
+
+Omarchy itself is **not installed yet**. The
+[package preflight](docs/bringup.md#omarchy-installation-preflight-not-installed)
+found stock Btrfs/boot assumptions and network/firewall changes that would put
+this ext4/custom-boot setup's SSH recovery path at risk if applied unattended.
 
 ## Aura Mach-O Stage 1 (optional, untested on hardware)
 
