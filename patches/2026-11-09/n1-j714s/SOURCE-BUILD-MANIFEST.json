@@ -1,0 +1,56 @@
+{
+  "scope": "Frozen source deltas used by the native N1 integration; not a complete clean-base source bundle",
+  "kernel_base": "34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a",
+  "inherited_D415_tracked_patch_sha256": "a900d2394bdbd8c8eadbbce8bdb2a5552f56088b2edc1d81a3c41062855630c4",
+  "inherited_D415_baseline_not_republished": true,
+  "public_N1_recipe": "f60c7be55712f9f0e9abd95d72786fa4179cb292",
+  "loader_base": "02785a35e046901d5686ab9059b2c08b6256752a",
+  "kernel_release": "7.3.0-j714s-n1-kerneltrain-review-g34f2f5bb4d03-dirty",
+  "published_sources": {
+    "kernel-n1-integration.patch": {
+      "bytes": 33580,
+      "sha256": "05bba405c4cd2bbbe2c0c7b89806c4bba5b3868eaa747f0da6643c6cac5b6e34"
+    },
+    "loader-0028-rebased.patch": {
+      "bytes": 7194,
+      "sha256": "32b460c4ebb0bac46ffd326d871f927afc9176f31999028a1136aa8bcad715d8"
+    },
+    "n1.config": {
+      "bytes": 218,
+      "sha256": "bf19190d229d79042976396e740e8e19c8f9109677238abed1a03a37003b329d"
+    }
+  },
+  "build_exit": 0,
+  "matching_in_tree_module_count": 1646,
+  "raw_S2_payload_start": "0x390000",
+  "source_and_actual_helper_host_review": "PASS",
+  "actual_storage_parser_inflate_positive_and_three_negative_host_cases": "PASS",
+  "native_result": "PCIe train, firmware replies, apple_centauri association/DHCP/device-bound DNS/HTTPS; all15 CPUs and desktop",
+  "runtime_limit": "Saved equivalent-PMK WPA2 credential workaround; no native malformed-list injection, reconnect-after-reboot or long-soak claim",
+  "artifacts": {
+    "out/arch/arm64/boot/Image": {
+      "bytes": 51825152,
+      "sha256": "d7bfc590ca641dff2062bd7bc359b473dc202eb8180e1d44bd674a88a55283dd"
+    },
+    "out/arch/arm64/boot/Image.gz": {
+      "bytes": 19257525,
+      "sha256": "e0bd5bf5b5546bab6062b74e77b983ce09a5065f337c01abcce13530acf52522"
+    },
+    "out/arch/arm64/boot/dts/apple/t6050-j714s.dtb": {
+      "bytes": 43815,
+      "sha256": "0cb91aaab849a4185a62755554e4f8eec5c454e71a5cdb965acc1f4addc28471"
+    },
+    "out/.config": {
+      "bytes": 333076,
+      "sha256": "5cb04b5c08655bc91de3fb95ea1257c23c2ba88ff9b5586541d113475fcd214e"
+    },
+    "m1n1/build/m1n1.bin": {
+      "bytes": 3735552,
+      "sha256": "20bcd954e4865f6c5d19c47a926f37374db48cb3066cc234a438ac6f9edd437d"
+    },
+    "m1n1/build/m1n1-raw.elf": {
+      "bytes": 6632144,
+      "sha256": "f687dff178eb31f3c209a20b548825e6fb700d64c86e4541d685134eeff65262"
+    }
+  }
+}
