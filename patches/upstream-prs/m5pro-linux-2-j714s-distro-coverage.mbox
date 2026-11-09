@@ -1,0 +1,88 @@
+From 241e094542a5e61c296eb759eaeff9799067d5fe Mon Sep 17 00:00:00 2001
+From: TripleU613 <TripleU613@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 22:15:56 -0500
+Subject: [PATCH 1/2] distro: J714s pass in test-update-payload, J714s evidence
+ in GAPS #23
+
+test-update-payload.sh: when $M5_ARTIFACTS/t6050-j714s.dtb exists, build
+and verify a payload with --board j714s, check that boot.bin carries the
+apple,j714s DTB, and that the j716s verify then reports stale. Without
+that file the script runs exactly as before (J716s only, same output).
+It checks the board -> DTB path of m5pro-update-payload, not the DT.
+
+GAPS.md #23: list the J714s results that exist elsewhere with their
+labels (REPORTED 15/15 CPUs on a 27.3b1 stub; NATIVE on a different
+kernel/loader: 1 CPU, keyboard/trackpad bind, hwmon, battery hang; no J714s
+GPU result found in the sources reviewed) and the draft aurora J714s DT (omacom/linux-aurora #414).
+None of these ran on this chain.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ contrib/distro/GAPS.md                      | 2 +-
+ contrib/distro/tools/test-update-payload.sh | 9 +++++++++
+ 2 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/contrib/distro/GAPS.md b/contrib/distro/GAPS.md
+index 61e306d..8fd1b61 100644
+--- a/contrib/distro/GAPS.md
++++ b/contrib/distro/GAPS.md
+@@ -41,7 +41,7 @@ weeks, **L** <= 2 months, **XL** = new driver or upstream work with no date. "Ce
+ | 20 | Stub refresh after macOS updates is manual and needs `recreate` + ceremony; firmware must be re-extracted to stay paired | `refresh-stub-firmware.sh:17-22`; `extract-tpmtfw.py:29-30` | installer "Refresh" action chaining recreate -> firmware -> known-good stage-1 -> ceremony; parameterise its size guards (lines 57, 79, 142) | S |
+ | 21 | No backup of the M5 exists; the installer's resize is live APFS | `boot-and-recovery.md:244`, `:29-31` | installer requires an acknowledged backup (as omarchy-mac-installer does) | S |
+ | 22 | Startup-disk switching from Linux (`asahi-bless`) and NVRAM access untested on M5; the stub stays the default boot volume, macOS only via power-hold | `bringup.md:157-159` | test `asahi-bless` read-only first | S |
+-| 23 | J714s (14-inch) is untested on this chain; several tools default to J714s, the J716s work is the only hardware proof | `CHECKLIST.md` table | a J714s tester; board taken from the DT everywhere (`m5pro-update-payload` already does) | S + hardware |
++| 23 | J714s (14-inch) is untested on this chain; several tools default to J714s, the J716s work is the only hardware proof. Known J714s results elsewhere, none on this chain: REPORTED 15/15 CPUs, built-in keyboard and trackpad confirmed by hand, llvmpipe only (betizzel, recreated 27.3b1 stub, their own kernel and stage-1 m1n1; [linux-aurora #293](https://github.com/omacom/linux-aurora/issues/293#issuecomment-6700663901)); NATIVE on TripleU613's own asahi-wip 7.2 kernel and loader: 1 CPU (`maxcpus=1`, 26.x stub), keyboard/trackpad interfaces bound (separately, the owner confirmed keyboard typing and reported the trackpad working on that chain), 11 hwmon keys registered (the 2 battery keys were left out of that build), `macsmc-power` hard hang (kernel without omacom/linux-aurora #413's battery-string fix). No J714s GPU result found in the sources reviewed (the #293 thread, the omacom and aurora PRs, and this repository). Aurora-tree J714s DT: draft [omacom/linux-aurora #414](https://github.com/omacom/linux-aurora/pull/414), not booted | `CHECKLIST.md` table; `tools/test-update-payload.sh` runs a J714s pass when `t6050-j714s.dtb` is supplied (board-to-DTB path only) | a J714s tester; board taken from the DT everywhere (`m5pro-update-payload` already does) | S + hardware |
+ | 24 | Packages, scripts and the hook were not run under `makepkg`/pacman (no aarch64 Arch here); only `bash -n`, `shellcheck`, and the payload builder against real artifacts in a fake ESP | this folder | `makepkg` + `namcap` in an aarch64 Arch container, then one install on the M5 over the tether | S |
+ 
+ ## Shortest path to "someone else can install it"
+diff --git a/contrib/distro/tools/test-update-payload.sh b/contrib/distro/tools/test-update-payload.sh
+index 3cf628a..fe66ebe 100755
+--- a/contrib/distro/tools/test-update-payload.sh
++++ b/contrib/distro/tools/test-update-payload.sh
+@@ -21,4 +21,13 @@ if run verify; then echo "verify should report stale"; exit 1; fi
+ run build; run status; run rollback
+ printf '\x28\xb5\x2f\xfd' > "$S/z.img"; if run build --initramfs "$S/z.img" 2>/dev/null; then echo "zstd accepted"; exit 1; fi
+ python3 -I "$here/mk-stage1.py" inspect "$S/esp/m1n1/boot.bin" | head -6
++# J714s (GAPS.md #23): same tool, --board j714s must pack t6050-j714s.dtb. Runs only when
++# $A/t6050-j714s.dtb exists; checks the board -> DTB path, not the DT's content.
++if [ -f "$A/t6050-j714s.dtb" ]; then
++    cp "$A/t6050-j714s.dtb" "$K/dtbs/apple/"
++    run14() { "$BASH5" "$U" --root "$S/root" --esp "$S/esp" --board j714s "$@"; }
++    run14 build; run14 verify
++    grep -qa 'apple,j714s' "$S/esp/m1n1/boot.bin" || { echo "j714s payload lacks the j714s DTB"; exit 1; }
++    if run verify; then echo "j716s verify should report stale after a j714s build"; exit 1; fi
++fi
+ echo OK
+
+From 69505fc2a602d58075511645d14ecd5e4ed4b1e4 Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Sun, 8 Nov 2026 16:00:42 -0500
+Subject: [PATCH 2/2] distro: record verified J714s native reference results
+
+The previous row described only the historical one-core run and said no
+J714s GPU result existed. Public evidence now records all 15 CPUs,
+16 enabled GPU cores, four GPU tests and a hardware-rendered Hyprland
+session on a separate integrated chain.
+
+Keep this distribution chain explicitly untested and keep the optional
+payload check scoped to board-to-DTB selection. The draft board DT still
+needs human sign-off and is not validated unchanged by that result.
+
+Assisted-by: LLM
+---
+ contrib/distro/GAPS.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/contrib/distro/GAPS.md b/contrib/distro/GAPS.md
+index 8fd1b61..3ad9503 100644
+--- a/contrib/distro/GAPS.md
++++ b/contrib/distro/GAPS.md
+@@ -41,7 +41,7 @@ weeks, **L** <= 2 months, **XL** = new driver or upstream work with no date. "Ce
+ | 20 | Stub refresh after macOS updates is manual and needs `recreate` + ceremony; firmware must be re-extracted to stay paired | `refresh-stub-firmware.sh:17-22`; `extract-tpmtfw.py:29-30` | installer "Refresh" action chaining recreate -> firmware -> known-good stage-1 -> ceremony; parameterise its size guards (lines 57, 79, 142) | S |
+ | 21 | No backup of the M5 exists; the installer's resize is live APFS | `boot-and-recovery.md:244`, `:29-31` | installer requires an acknowledged backup (as omarchy-mac-installer does) | S |
+ | 22 | Startup-disk switching from Linux (`asahi-bless`) and NVRAM access untested on M5; the stub stays the default boot volume, macOS only via power-hold | `bringup.md:157-159` | test `asahi-bless` read-only first | S |
+-| 23 | J714s (14-inch) is untested on this chain; several tools default to J714s, the J716s work is the only hardware proof. Known J714s results elsewhere, none on this chain: REPORTED 15/15 CPUs, built-in keyboard and trackpad confirmed by hand, llvmpipe only (betizzel, recreated 27.3b1 stub, their own kernel and stage-1 m1n1; [linux-aurora #293](https://github.com/omacom/linux-aurora/issues/293#issuecomment-6700663901)); NATIVE on TripleU613's own asahi-wip 7.2 kernel and loader: 1 CPU (`maxcpus=1`, 26.x stub), keyboard/trackpad interfaces bound (separately, the owner confirmed keyboard typing and reported the trackpad working on that chain), 11 hwmon keys registered (the 2 battery keys were left out of that build), `macsmc-power` hard hang (kernel without omacom/linux-aurora #413's battery-string fix). No J714s GPU result found in the sources reviewed (the #293 thread, the omacom and aurora PRs, and this repository). Aurora-tree J714s DT: draft [omacom/linux-aurora #414](https://github.com/omacom/linux-aurora/pull/414), not booted | `CHECKLIST.md` table; `tools/test-update-payload.sh` runs a J714s pass when `t6050-j714s.dtb` is supplied (board-to-DTB path only) | a J714s tester; board taken from the DT everywhere (`m5pro-update-payload` already does) | S + hardware |
++| 23 | J714s (14-inch) remains untested on this distribution chain. A different integrated chain now has native 15-CPU correctness, 16 enabled GPU cores, four GPU tests and hardware-rendered Hyprland | [Public J714s results and exact component pins](https://github.com/TripleU613/Omarchy-M5-Pro/blob/8d2ba1b/STATUS-2026-11-08.md); draft board DT [omacom/linux-aurora#414](https://github.com/omacom/linux-aurora/pull/414) still needs human sign-off and is not thereby validated unchanged | exercise these distro packages on J714s; the optional test-update-payload pass covers board-to-DTB selection only | S + hardware |
+ | 24 | Packages, scripts and the hook were not run under `makepkg`/pacman (no aarch64 Arch here); only `bash -n`, `shellcheck`, and the payload builder against real artifacts in a fake ESP | this folder | `makepkg` + `namcap` in an aarch64 Arch container, then one install on the M5 over the tether | S |
+ 
+ ## Shortest path to "someone else can install it"

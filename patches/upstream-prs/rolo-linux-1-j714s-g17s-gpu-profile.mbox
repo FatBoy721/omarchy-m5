@@ -1,0 +1,170 @@
+From 77782baf9d4923e42b3bc20f2bb816789c5afba8 Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Sun, 8 Nov 2026 16:31:46 -0500
+Subject: [PATCH] drm/asahi: add a J714s G17S board profile and fuse guard
+
+J714s and J716s share the G17S GPU ID but have different voltage bins.
+Select a J714s board profile using the root compatible, retaining the
+existing J716s assumptions for fields not measured on this J714s.
+Reject unexpected geometry, out-of-range masks and an empty enabled-core
+set before firmware initialization.
+
+The main and auxiliary voltage tables come from ADT metadata on one
+J714s running macOS 27.3 beta 1 (26C5035r). Selection covers the model,
+not a measured per-unit bin match; other units and SKUs remain unverified.
+This is a review candidate rather than a universal voltage-table claim.
+
+The complete InitData module and extracted production mask predicate
+pass host checks. Equivalent functional fragments ran in a larger
+integration with 16 enabled GPU cores and hardware rendering; the
+isolated patch has not been full-kernel-built or booted on this base.
+Existing firmware identity checks remain unchanged.
+
+Link: https://github.com/aurora-silicon/linux/pull/1173
+Assisted-by: LLM
+---
+ drivers/gpu/drm/asahi/driver.rs             | 23 +++++++++-
+ drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs | 48 +++++++++++++++++++++
+ drivers/gpu/drm/asahi/hw/t6050.rs           | 15 +++++++
+ 3 files changed, 85 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/asahi/driver.rs b/drivers/gpu/drm/asahi/driver.rs
+index ef1534619ff92..4be694f7219e4 100644
+--- a/drivers/gpu/drm/asahi/driver.rs
++++ b/drivers/gpu/drm/asahi/driver.rs
+@@ -3,7 +3,7 @@
+ //! Top-level GPU driver implementation.
+ 
+ use crate::module_parameters;
+-use kernel::bindings;
++use kernel::{bindings, c_str};
+ use kernel::{
+     device::{
+         Core,
+@@ -414,6 +414,27 @@ impl AsahiPlatformDriver {
+                 id.variant, id.num_dies);
+             ENODEV
+         })?;
++        // Same root-compatible lookup as the existing M3 board helper. GPU ID alone
++        // cannot distinguish J714s from J716s, whose voltage bins differ.
++        let is_j714s = if let Some(root) = of::root() {
++            root.get_property::<KVec<u8>>(c_str!("compatible"))?
++                .split(|b| *b == 0)
++                .any(|s| s == b"apple,j714s")
++        } else {
++            false
++        };
++        let cfg = if is_j714s {
++            if !hw::t6050::j714s_core_masks_valid(&id) {
++                dev_err!(
++                    pdev.as_ref(),
++                    "J714s GPU core geometry or fuse masks invalid; refusing firmware init\n"
++                );
++                return Err(ENODEV);
++            }
++            &hw::t6050::CONFIG_J714S
++        } else {
++            cfg
++        };
+         Self::probe_g17(pdev, res, cfg)
+     }
+ 
+diff --git a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
+index 68c828d1b5e17..b3507d2553b97 100644
+--- a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
++++ b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
+@@ -1609,6 +1609,26 @@ const J716S_AUX_PERF_STATES: [M5AuxPerfState; 14] = one_lane([
+     (1620, 1000, 1000),
+ ]);
+ 
++// J714s ADT metadata from one tested unit, macOS 27.3 beta 1 (26C5035r).
++// These voltage bins are not a claim about every J714s unit.
++// Auxiliary SRAM follows the table's 775000 uV floor and published max(floor, core) rule.
++pub(crate) const J714S_AUX_PERF_STATES: [M5AuxPerfState; 14] = one_lane([
++    (24, 125, 775),
++    (338, 600, 775),
++    (486, 635, 775),
++    (636, 640, 775),
++    (796, 680, 775),
++    (888, 700, 775),
++    (988, 740, 775),
++    (1084, 765, 775),
++    (1182, 790, 790),
++    (1278, 830, 830),
++    (1374, 860, 860),
++    (1470, 895, 895),
++    (1578, 955, 955),
++    (1620, 985, 985),
++]);
++
+ /// An auxiliary-domain performance state: MHz, then core and SRAM mV of each of its two voltage
+ /// lanes. A one-lane board leaves the second lane 0.
+ pub(crate) type M5AuxPerfState = (u32, [u32; 2], [u32; 2]);
+@@ -2262,6 +2282,15 @@ pub(crate) const J716S: Board = Board {
+     g17d_forms: false,
+ };
+ 
++/// Owner J714s: its measured voltage tables, with the existing G17S bare-metal profile.
++/// All other fields retain J716S's existing assumptions, not new J714s measurements.
++pub(crate) const J714S: Board = Board {
++    perf_states: &J714S_GPU_PERF_STATES,
++    aux_perf_states: &J714S_AUX_PERF_STATES,
++    relative_frequency: relative_frequency(&J714S_GPU_PERF_STATES, 1),
++    ..J716S
++};
++
+ /// J775D's performance controllers run from P3.
+ const J775D_PERF_FLOOR: usize = 3;
+ 
+@@ -2614,6 +2643,25 @@ pub(crate) const J716S_GPU_PERF_STATES: [M5PerfState; 14] = two_tables([
+     (1620, 1050, 1035, 1050, 1035),
+ ]);
+ 
++// J714s ADT metadata from one tested unit, macOS 27.3 beta 1 (26C5035r).
++// These voltage bins are not a claim about every J714s unit.
++pub(crate) const J714S_GPU_PERF_STATES: [M5PerfState; 14] = two_tables([
++    (0, 125, 125, 775, 775),
++    (338, 590, 590, 775, 775),
++    (486, 620, 620, 775, 775),
++    (636, 655, 655, 775, 775),
++    (796, 705, 705, 775, 775),
++    (888, 730, 730, 775, 775),
++    (988, 760, 760, 775, 775),
++    (1084, 785, 785, 785, 785),
++    (1182, 800, 800, 800, 800),
++    (1278, 840, 840, 840, 840),
++    (1374, 880, 865, 880, 865),
++    (1470, 925, 910, 925, 910),
++    (1578, 1000, 985, 1000, 985),
++    (1620, 1025, 1010, 1025, 1010),
++]);
++
+ /// Four-table states (MHz, four core-voltage tables, four SRAM-voltage tables), the rest 0.
+ const fn four_tables(states: [(u32, [u32; 4], [u32; 4]); 14]) -> [M5PerfState; 14] {
+     let mut out = [(0, [0; M5_PERF_LANES], [0; M5_PERF_LANES]); 14];
+diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
+index 76d1b7f16fa9d..8abb12335ed9d 100644
+--- a/drivers/gpu/drm/asahi/hw/t6050.rs
++++ b/drivers/gpu/drm/asahi/hw/t6050.rs
+@@ -142,6 +142,21 @@ pub(crate) const CONFIG: Config = Config {
+     },
+ };
+ 
++/// Owner J714s voltage bins; selected only for the J714s root compatible.
++pub(crate) const CONFIG_J714S: Config = Config {
++    m5: Some(&crate::g17::fw::m5::initdata::J714S),
++    ..CONFIG
++};
++
++/// Require actual nonzero fuse masks before starting firmware on the owner J714s.
++/// The ID describes two clusters of ten physical slots; enabled cores come from the masks.
++pub(crate) fn j714s_core_masks_valid(id: &G17Id) -> bool {
++    id.family == 0xb && id.variant == 3 && id.num_dies == 1
++        && id.num_clusters == 2 && id.num_cores == 10 && id.core_masks.len() == 2
++        && id.core_masks.iter().all(|mask| *mask & !0x3ff == 0)
++        && id.core_masks.iter().any(|mask| *mask != 0)
++}
++
+ /// M5 Max: ID variant 4, GPU variant C, HAL generation 300 like the M5 Pro.
+ pub(crate) const CONFIG_MAX: Config = Config {
+     chip_id: 0x6050,

@@ -1,0 +1,274 @@
+From 2d3e386483f911dfe643c37e1e4fd99ec2a55414 Mon Sep 17 00:00:00 2001
+From: TripleU613 <TripleU613@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 21:59:15 -0500
+Subject: [PATCH 1/2] smp: let the build override MAX_CPUS (default stays 32)
+
+MAX_CPUS sizes secondary_stacks[MAX_CPUS][0x10000], which is most of the
+zero-filled raw image: each CPU slot costs 64 KiB of file size. 32 is
+needed for T6032 (M3 Ultra) and stays the default. A build for a smaller
+SoC can now pass EXTRA_CFLAGS=-DMAX_CPUS=<n> (C and start.S both see it,
+like the other -D build switches), e.g. 24 for T6050 (M5 Pro/Max, at most
+18 cores), saving 0x80000. That keeps a T6050 stage 1 below the stage-1
+size limit reported on the iBoot raw-image path (0x410000 boots,
+0x4D0000 does not).
+
+A build with a smaller MAX_CPUS does not support SoCs with more cores:
+smp.c already refuses a cpu-id >= MAX_CPUS ("increase MAX_CPUS").
+
+Tested: OFFLINE, host build only (clang 23.1.3). The default build is
+unchanged; with -DMAX_CPUS=24 the CHAINLOADING stage 1 and the
+ESP_STAGE2 stage 2 are both 0x3A0000 and rebuild byte-identically. Not
+booted on hardware in this form. Rolando Trevino's m5pro-linux 0014 makes
+the same reduction as a fixed edit.
+
+Prepared with AI assistance (Claude Opus 5.5); the owner reviews and signs
+off before submission.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/smp_asm.h | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/smp_asm.h b/src/smp_asm.h
+index 6b7c1791e..0feb9e0c6 100644
+--- a/src/smp_asm.h
++++ b/src/smp_asm.h
+@@ -3,7 +3,10 @@
+ #ifndef __SMP_ASM_H__
+ #define __SMP_ASM_H__
+ 
+-#define MAX_CPUS     32
++/* Override at build time, e.g. EXTRA_CFLAGS=-DMAX_CPUS=24, to shrink secondary_stacks. */
++#ifndef MAX_CPUS
++#define MAX_CPUS 32
++#endif
+ #define MAX_EL3_CPUS 4
+ 
+ #define SECONDARY_STACK_SIZE 0x10000
+
+From 707042e5e1eab74b5b369f1823959ab680b760ad Mon Sep 17 00:00:00 2001
+From: TripleU613 <TripleU613@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 22:43:24 -0500
+Subject: [PATCH 2/2] smp: T8152: refuse a MAX_CPUS below 12 up front; bound
+ MAX_CPUS; host test
+
+Review follow-up to the MAX_CPUS override.
+Correction to the override commit's text: only the generic smp_init()
+path refuses a cpu-id >= MAX_CPUS. The T8152 path indexes cpu_nodes,
+cpu_info, spin_table and secondary_stacks by a literal 0..11
+(smp_init_t8152, smp_start_t8152, smp_secondary_entry via smp_id()).
+
+- smp_init_t8152() now returns -1 before touching any per-CPU array
+  when MAX_CPUS < 12. smp_start_t8152() already returns while
+  smp_initialized is false, so no T8152 secondary is started and
+  smp_secondary_entry() is never reached; m1n1 stays on one CPU.
+- _Static_assert(MAX_CPUS > 0 && MAX_CPUS <= 64): the started/failed
+  CPU masks are u64.
+- tests/run-t8152-smp-bounds.sh builds the real smp_init_t8152() (taken
+  from src/smp.c) against a fake 12-CPU J873g ADT with ASan/UBSan for
+  MAX_CPUS 8, 11, 12, 24 and 32. Below 12 it must refuse with no
+  out-of-bounds access; from 12 it must take all 12 CPUs. On the code
+  before this commit, 8 and 11 report "index out of bounds".
+
+Changing MAX_CPUS needs a clean rebuild (`make clean`): it lives in a
+header, and objects built with another value would be reused.
+
+Tested: OFFLINE (host builds and the host test). Not booted.
+
+Prepared with AI assistance (Claude Opus 5.5); the owner reviews and signs
+off before submission.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/smp.c                     |   7 ++
+ tests/run-t8152-smp-bounds.sh |  25 +++++++
+ tests/t8152_smp_bounds_host.c | 123 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 155 insertions(+)
+ create mode 100644 tests/run-t8152-smp-bounds.sh
+ create mode 100644 tests/t8152_smp_bounds_host.c
+
+diff --git a/src/smp.c b/src/smp.c
+index ed63e68fa..0250b9aed 100644
+--- a/src/smp.c
++++ b/src/smp.c
+@@ -50,6 +50,8 @@ u8 secondary_stacks_el3[MAX_EL3_CPUS][SECONDARY_STACK_SIZE] ALIGNED(0x4000);
+ static bool wfe_mode SMP_SHARED = false;
+ 
+ static int target_cpu SMP_SHARED;
++_Static_assert(MAX_CPUS > 0 && MAX_CPUS <= 64, "MAX_CPUS must fit the u64 CPU masks");
++
+ static int cpu_nodes[MAX_CPUS];
+ static struct spin_table spin_table[MAX_CPUS] SMP_SHARED;
+ 
+@@ -463,6 +465,11 @@ static int smp_init_t8152(void)
+ {
+     if (smp_initialized)
+         return 0;
++    /* cpu_nodes/cpu_info/spin_table/secondary_stacks are indexed by cpu-id up to 11. */
++    if (MAX_CPUS < 12) {
++        printf("SMP: T8152 needs MAX_CPUS >= 12 (built with %d)\n", MAX_CPUS);
++        return -1;
++    }
+ 
+     int path[8];
+     int pmgr = adt_path_offset_trace(adt, "/arm-io/pmgr-child", path);
+diff --git a/tests/run-t8152-smp-bounds.sh b/tests/run-t8152-smp-bounds.sh
+new file mode 100644
+index 000000000..fdeaa8f38
+--- /dev/null
++++ b/tests/run-t8152-smp-bounds.sh
+@@ -0,0 +1,25 @@
++#!/bin/sh
++# Host test of smp_init_t8152() (src/smp.c) against MAX_CPUS overrides, with ASan/UBSan: below 12
++# it must refuse without an out-of-bounds write; at 12 and the default 32 it accepts 12 CPUs.
++#
++#   sh tests/run-t8152-smp-bounds.sh
++set -eu
++cd "$(dirname "$0")/.."
++tmp=$(mktemp -d)
++trap 'rm -rf "$tmp"' EXIT HUP INT TERM
++
++awk '/^static int t8152_cpu_index\(/ { f = 1 } f { print } f && /^}$/ { exit }' src/smp.c \
++    > "$tmp/t8152_smp.inc"
++awk '/^static int smp_init_t8152\(/ { f = 1 } f { print } f && /^}$/ { exit }' src/smp.c \
++    >> "$tmp/t8152_smp.inc"
++grep -q 'smp_init_t8152(void)' "$tmp/t8152_smp.inc"
++
++fail=0
++for n in 8 11 12 24 32; do
++    ${CC:-cc} -std=gnu11 -O1 -g -Wall -Wno-unused-function -Wno-unused-parameter \
++        -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all \
++        -DMAX_CPUS=$n -I"$tmp" tests/t8152_smp_bounds_host.c -o "$tmp/t8152-$n"
++    "$tmp/t8152-$n" || fail=1
++done
++[ $fail = 0 ] && echo "T8152 SMP bounds: every MAX_CPUS passes"
++exit $fail
+diff --git a/tests/t8152_smp_bounds_host.c b/tests/t8152_smp_bounds_host.c
+new file mode 100644
+index 000000000..3a0dea827
+--- /dev/null
++++ b/tests/t8152_smp_bounds_host.c
+@@ -0,0 +1,123 @@
++/* SPDX-License-Identifier: MIT */
++/*
++ * Host test: smp_init_t8152() (the real function, extracted from src/smp.c by
++ * tests/run-t8152-smp-bounds.sh) on a fake J873g ADT with 12 CPUs, built with the MAX_CPUS given
++ * by -DMAX_CPUS. Below 12 it must refuse without touching the per-CPU arrays (ASan checks the
++ * bounds); at 12 or more it must accept all 12 CPUs.
++ */
++#include <stdbool.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++
++typedef uint64_t u64;
++typedef uint32_t u32;
++typedef uint16_t u16;
++typedef uint8_t u8;
++
++#define BIT(n)  (1ULL << (n))
++#define T8152   0x8152
++#define MPIDR_EL1 0
++
++struct spin_table {
++    u64 mpidr;
++    u64 flag;
++};
++struct cpu_info {
++    bool valid;
++    u8 die;
++    u8 cluster;
++    u8 core;
++    u64 impl_reg;
++};
++
++static const void *adt = (void *)1;
++static u32 board_id = 0x24;
++static int cpu_nodes[MAX_CPUS];
++static struct spin_table spin_table[MAX_CPUS];
++static struct cpu_info cpu_info[MAX_CPUS];
++static bool smp_initialized, wfe_mode;
++static u64 cpu_start_base, boot_cpu_mpidr;
++static int boot_cpu_idx = -1;
++
++static bool in_el2(void)
++{
++    return true;
++}
++#define mrs(r)    ((u64)0) /* boot CPU 0 */
++#define msr(r, v) ((void)(v))
++
++enum { PMGR = 5, CPUS = 10, CPU0 = 100 };
++static int adt_path_offset_trace(const void *a, const char *path, int *offsets)
++{
++    offsets[0] = PMGR;
++    return strcmp(path, "/arm-io/pmgr-child") ? -1 : PMGR;
++}
++static int adt_path_offset(const void *a, const char *path)
++{
++    return strcmp(path, "/cpus") ? -1 : CPUS;
++}
++static bool adt_is_compatible(const void *a, int node, const char *c)
++{
++    return (node == 0 && !strcmp(c, "J873gAP")) || (node == PMGR && !strcmp(c, "pmgr2,t8152"));
++}
++static const void *adt_getprop(const void *a, int node, const char *name, u32 *len)
++{
++    static const u16 maps[] = {0, 0x128};
++    if (node != PMGR || strcmp(name, "reg-maps"))
++        return NULL;
++    *len = sizeof(maps);
++    return maps;
++}
++static int adt_get_reg(const void *a, int *path, const char *prop, int idx, u64 *base, u64 *size)
++{
++    *base = 0x300730000ULL;
++    *size = 0x8000;
++    return 0;
++}
++static int adt_get_child_count(const void *a, int node)
++{
++    return node == CPUS ? 12 : 0;
++}
++static int adt_first_child_offset(const void *a, int node)
++{
++    return CPU0;
++}
++static int adt_next_sibling_offset(const void *a, int node)
++{
++    return node + 1;
++}
++static int adt_getprop_copy(const void *a, int node, const char *name, void *val, size_t len)
++{
++    u32 id = node - CPU0;
++    if (!strcmp(name, "cpu-id") && len == 4) {
++        memcpy(val, &id, 4);
++    } else if (!strcmp(name, "reg") && len == 4) {
++        u32 reg = ((id / 6) << 8) | (id % 6);
++        memcpy(val, &reg, 4);
++    } else if (!strcmp(name, "cpu-impl-reg") && len == 16) {
++        u64 impl[2] = {0x210000000ULL + id * 0x100000ULL, 0x10000};
++        memcpy(val, impl, 16);
++    } else {
++        return -1;
++    }
++    return len;
++}
++#define ADT_GETPROP(a, n, name, val)       adt_getprop_copy(a, n, name, (val), sizeof(*(val)))
++#define ADT_GETPROP_ARRAY(a, n, name, arr) adt_getprop_copy(a, n, name, (arr), sizeof(arr))
++#define ADT_FOREACH_CHILD(a, node)                                                                 \
++    for (int _child_count = adt_get_child_count(a, node); _child_count; _child_count = 0)          \
++        for (node = adt_first_child_offset(a, node); _child_count--;                               \
++             node = adt_next_sibling_offset(a, node))
++
++#include "t8152_smp.inc"
++
++int main(void)
++{
++    int ret = smp_init_t8152();
++    bool ok = MAX_CPUS < 12 ? ret == -1 && !smp_initialized && boot_cpu_idx == -1
++                            : ret == 0 && smp_initialized && boot_cpu_idx == 0;
++    printf("MAX_CPUS=%d: smp_init_t8152() = %d (%s)\n", MAX_CPUS, ret,
++           ok ? "ok" : "FAIL");
++    return !ok;
++}

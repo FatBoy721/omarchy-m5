@@ -1,0 +1,38 @@
+From c1f86329e205c4be7ecc3754932eeead7827e844 Mon Sep 17 00:00:00 2001
+From: TripleU613 <TripleU613@users.noreply.github.com>
+Date: Sat, 7 Nov 2026 22:16:19 -0500
+Subject: [PATCH] gpu/e2: check each m1n1 image against its own packer's size
+
+build-m1n1.sh required every image to be 0x400000, but only n1-warm
+(the daily's m1n1, packed by mk-daily.py) has that size. The -gpu and
+-gpu-dcp images are 0x410000: mk-e2.py sets M1N1_SIZE = 0x410000 and
+refuses any other size, and RESULTS.md records the 0x410000 image
+booting (E2b). So the script exited 1 on the images it pins.
+
+Check each image by name against its exact size. Nothing is relaxed:
+n1-warm must still be 0x400000, the GPU images exactly 0x410000.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ contrib/pending/gpu/e2/build-m1n1.sh | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/contrib/pending/gpu/e2/build-m1n1.sh b/contrib/pending/gpu/e2/build-m1n1.sh
+index 1766878..947fd8f 100755
+--- a/contrib/pending/gpu/e2/build-m1n1.sh
++++ b/contrib/pending/gpu/e2/build-m1n1.sh
+@@ -39,6 +39,11 @@ cat /out/toolchain.txt
+ cd "$OUT" && shasum -a 256 *.bin | tee SHA256SUMS && cat *.commit
+ [ "$(shasum -a 256 m1n1-plain-n1-warm.bin | cut -c1-64)" = 4c202e9dbf0738cb256fb3903f02c6abd2d653b8cfecea74d764f19d9ce6e1d5 ] \
+     && echo "RECIPE CHECK: n1-warm rebuilds byte-identical (4c202e9d)" || { echo "RECIPE CHECK FAILED"; exit 1; }
+-# A plain m1n1 must stay 0x400000: mk-daily.py and the payload layout put the variables at 0x400000.
+-for f in *.bin; do [ "$(stat -f %z "$f")" = 4194304 ] || { echo "SIZE: $f is $(stat -f %z "$f") bytes, not 0x400000"; exit 1; }; done
+-echo "all images 0x400000"
++# Each image has one exact size, set by the packer that reads its variables right after it:
++#   n1-warm (the daily's m1n1)  0x400000: mk-daily.py, M1N1_SIZE = 0x400000
++#   n1-warm-gpu, -gpu-dcp       0x410000: mk-e2.py, M1N1_SIZE = 0x410000 (the GPU hand-off pushes .text past 0x70000)
++size() { [ "$(stat -f %z "$1")" = "$2" ] || { echo "SIZE: $1 is $(stat -f %z "$1") bytes, not $3"; exit 1; }; }
++size m1n1-plain-n1-warm.bin         4194304 0x400000
++size m1n1-plain-n1-warm-gpu.bin     4259840 0x410000
++size m1n1-plain-n1-warm-gpu-dcp.bin 4259840 0x410000
++echo "sizes: n1-warm 0x400000, n1-warm-gpu and n1-warm-gpu-dcp 0x410000"

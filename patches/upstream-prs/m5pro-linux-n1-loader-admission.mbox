@@ -1,0 +1,229 @@
+From ef69f9e2b7f7b308f5b16b1fdf01b4e62162be12 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Mon, 9 Nov 2026 00:28:56 -0500
+Subject: [PATCH] wireless: require complete bounded J714s N1 host tunables
+
+Add a follow-up to the existing public 0028 metadata patch. Keep other boards optional and refuse incomplete or out-of-window J714s host lists before Linux starts. Include the actual-helper host regression fixture and native integration boundary.
+
+AI-assisted contribution; no human DCO sign-off asserted.
+---
+ ...-n1-require-bounded-J714s-host-lists.patch | 68 ++++++++++++++
+ .../j714s-host-list-admission/README.md       | 33 +++++++
+ .../test-host-lists.c                         | 93 +++++++++++++++++++
+ 3 files changed, 194 insertions(+)
+ create mode 100644 contrib/pending/wireless/j714s-host-list-admission/0029-kboot-n1-require-bounded-J714s-host-lists.patch
+ create mode 100644 contrib/pending/wireless/j714s-host-list-admission/README.md
+ create mode 100644 contrib/pending/wireless/j714s-host-list-admission/test-host-lists.c
+
+diff --git a/contrib/pending/wireless/j714s-host-list-admission/0029-kboot-n1-require-bounded-J714s-host-lists.patch b/contrib/pending/wireless/j714s-host-list-admission/0029-kboot-n1-require-bounded-J714s-host-lists.patch
+new file mode 100644
+index 0000000..c046718
+--- /dev/null
++++ b/contrib/pending/wireless/j714s-host-list-admission/0029-kboot-n1-require-bounded-J714s-host-lists.patch
+@@ -0,0 +1,68 @@
++--- a/src/kboot_n1.c
+++++ b/src/kboot_n1.c
++@@ -127,14 +127,14 @@
++ 
++ /* ADT 24-byte tunable records `aprop` of ADT node `anode` -> (offset + add, 4, mask, value) cells */
++ static int n1_copy_list(void *dt, int node, int anode, const char *aprop, const char *dprop,
++-                        u32 add)
+++                        u32 add, bool required, u32 window_size)
++ {
++     u32 len;
++     const struct adt_tunable_local *t = adt_getprop(adt, anode, aprop, &len);
++     /* rodata and relocations share one 128 KiB window: one short message for every refusal */
++     if (!t || !len || len % sizeof(*t) || len / sizeof(*t) > 512) {
++         printf("n1: %s not copied\n", aprop);
++-        return 0;
+++        return required ? -1 : 0;
++     }
++     u32 n = len / sizeof(*t);
++     fdt32_t *cells = malloc(n * 4 * sizeof(fdt32_t));
++@@ -142,7 +142,9 @@
++         return -1;
++     bool ok = true;
++     for (u32 k = 0; k < n; k++) {
++-        if (t[k].size != 4 || (t[k].offset & 3) || (t[k].mask >> 32) || (t[k].value >> 32))
+++        if (t[k].size != 4 || (t[k].offset & 3) || t[k].offset > UINT32_MAX - add ||
+++            (t[k].mask >> 32) || (t[k].value >> 32) ||
+++            (required && (window_size < 4 || (u64)t[k].offset + add > window_size - 4)))
++             ok = false;
++         cells[4 * k + 0] = cpu_to_fdt32(t[k].offset + add);
++         cells[4 * k + 1] = cpu_to_fdt32(4);
++@@ -153,7 +155,7 @@
++     if (!ok)
++         printf("n1: %s not copied\n", aprop);
++     free(cells);
++-    return ret ? -1 : 0;
+++    return ret || (required && !ok) ? -1 : 0;
++ }
++ 
++ /* ADT pci-bridge<port> tunables -> apple,<name> on the DT root port */
++@@ -174,7 +176,7 @@
++     }
++     for (size_t i = 0; i < ARRAY_SIZE(props); i++) {
++         snprintf(dtname, sizeof(dtname), "apple,%s", props[i]);
++-        if (n1_copy_list(dt, port_node, anode, props[i], dtname, 0))
+++        if (n1_copy_list(dt, port_node, anode, props[i], dtname, 0, false, 0))
++             return -1;
++     }
++     return 0;
++@@ -185,13 +187,18 @@
++ {
++     static const char lists[][14] = {"axi2af", "cio3pllcore", "pcieclkgen",
++                                      "phy",    "phy-ip-pll",  "phy-ip-auspma"};
+++    /* Match the own J714s DT reg windows; reject before any Linux train. */
+++    static const u32 bounds[] = {0x24000, 0x4000, 0x4000, 0x24000, 0x1b4000, 0x1b4000};
++     char aname[40], dname[40];
++     int anode = adt_path_offset(adt, apcie_path);
+++    /* The own J714s kernel-train profile must never start with a partial list set. */
+++    bool required = !fdt_node_check_compatible(dt, 0, "apple,j714s");
++ 
++     for (size_t i = 0; i < ARRAY_SIZE(lists); i++) {
++         snprintf(aname, sizeof(aname), "apcie-%s-tunables", lists[i]);
++         snprintf(dname, sizeof(dname), "apple,tunable-%s", lists[i]);
++-        if (n1_copy_list(dt, host, anode, aname, dname, i == 1 ? 0x2200 : 0))
+++        if (n1_copy_list(dt, host, anode, aname, dname, i == 1 ? 0x2200 : 0, required,
+++                         bounds[i]))
++             return -1;
++     }
++     return 0;
+diff --git a/contrib/pending/wireless/j714s-host-list-admission/README.md b/contrib/pending/wireless/j714s-host-list-admission/README.md
+new file mode 100644
+index 0000000..8556247
+--- /dev/null
++++ b/contrib/pending/wireless/j714s-host-list-admission/README.md
+@@ -0,0 +1,33 @@
++# J714s N1 host-list admission after public patch 0028
++
++This follow-up changes the existing loader metadata contract; it does not replace the public N1 driver, PHY training, manual-DART or radio implementation. Apply `0029-kboot-n1-require-bounded-J714s-host-lists.patch` to `src/kboot_n1.c` after the existing [0028 patch](../patches/m1n1/0028-kboot-n1-leave-a-port-the-kernel-trains-enabled-and-.patch).
++
++The public helper skips absent or malformed lists. The Linux host likewise skips absent properties, so a partial handoff can otherwise reach a train. For root compatible `apple,j714s`, require all six current-boot ADT lists and reject missing/empty/malformed data, unsupported widths, misalignment, wide mask/value fields, offset-add overflow and an access beyond its corresponding DT window. Refusal propagates through the existing `kboot_setup_n1()` error return before Linux starts. No cached or other-board tunable values are copied.
++
++| Host list | Added offset | Window bytes |
++|---|---:|---:|
++| axi2af | 0 | 0x24000 |
++| cio3pllcore | 0x2200 | 0x4000 |
++| pcieclkgen | 0 | 0x4000 |
++| phy | 0 | 0x24000 |
++| phy-ip-pll | 0 | 0x1b4000 |
++| phy-ip-auspma | 0 | 0x1b4000 |
++
++These bounds match the J714s integration's named windows, also used by the public J716s description. Other root compatibles and port lists retain optional-list behavior; overflow is rejected for every copied list. This does not validate arbitrary future DT window changes or qualify another board.
++
++## Validation and native boundary
++
++`test-host-lists.c` contains the actual helper bodies used in the tested integration, with ADT/FDT transport mocked. It checks six-list success; each missing list; bad width/alignment/mask/value; each last-valid/first-invalid window offset; CIO addition overflow; a missing sixth list; another board's optional behavior; and FDT write failure. Run:
++
++```sh
++clang -Wall -Wextra -Werror -fsanitize=address,undefined test-host-lists.c -o /tmp/test-n1-host-lists
++/tmp/test-n1-host-lists
++```
++
++ASan/UBSan and patch-application checks passed. The integration built a new S2 (SHA-256 `20bcd954e4865f6c5d19c47a926f37374db48cb3066cc234a438ac6f9edd437d`, raw span `0x390000`) and booted natively on J714s with the public kernel-owned PCIe train. The `apple_centauri` netdev appeared alongside all 15 CPUs and the graphical desktop. **This loader check alone does not establish Wi-Fi association or traffic, Bluetooth, suspend, physical power-off or thermal protection.** Native rejection paths were not deliberately injected.
++
++## Provenance and review scope
++
++The existing 9-driver/2-DT kernel series and loader0028 are reused from rolotrealanis98/m5pro-linux `f60c7be55712f9f0e9abd95d72786fa4179cb292`; they are not resubmitted here. The follow-up applies to the loader helper introduced by0028 and preserves its MIT source licence. The actual local S2 also retains its pre-existing boot/storage, USB and SMP protections; those unrelated changes are not proposed by this patch.
++
++The complete J714s trial additionally needs its own board description, runtime firmware-name/platform-ID fill, separate bounded SMC permission and exact module/session integration. Those are not silently enabled here. Grant zero does not promise zero PMGR writes: always-on domains may initialize before the radio probe. No firmware, per-unit tables, credentials, SSID, raw device logs or binary assets are included. No human DCO sign-off is asserted.
+diff --git a/contrib/pending/wireless/j714s-host-list-admission/test-host-lists.c b/contrib/pending/wireless/j714s-host-list-admission/test-host-lists.c
+new file mode 100644
+index 0000000..91b8ffb
+--- /dev/null
++++ b/contrib/pending/wireless/j714s-host-list-admission/test-host-lists.c
+@@ -0,0 +1,93 @@
++// SPDX-License-Identifier: MIT
++/* Actual frozen helper bodies, with mocked ADT/FDT transport; no hardware access. */
++#include <stdint.h>
++#include <stdbool.h>
++#include <stdlib.h>
++#include <stdio.h>
++#include <string.h>
++#include <assert.h>
++typedef uint32_t u32;typedef uint64_t u64;typedef uint32_t fdt32_t;
++#define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
++struct adt_tunable_local {u32 offset,size;u64 mask,value;} __attribute__((packed));
++static const void *adt;static const char apcie_path[]="/arm-io/apcie0";
++static const char *names[]={"apcie-axi2af-tunables","apcie-cio3pllcore-tunables","apcie-pcieclkgen-tunables","apcie-phy-tunables","apcie-phy-ip-pll-tunables","apcie-phy-ip-auspma-tunables"};
++static struct adt_tunable_local rows[6];static u32 lens[6];static bool present[6];static bool own=true;static int copies,fdt_error;
++static const void *adt_getprop(const void*a,int node,const char*name,u32*len){(void)a;(void)node;for(int i=0;i<6;i++)if(!strcmp(name,names[i])){*len=lens[i];return present[i]?&rows[i]:NULL;}*len=0;return NULL;}
++static int adt_path_offset(const void*a,const char*p){(void)a;(void)p;return 0;}
++static int fdt_node_check_compatible(void*d,int node,const char*s){(void)d;(void)node;(void)s;return own?0:1;}
++static u32 cpu_to_fdt32(u32 x){return __builtin_bswap32(x);}
++static int fdt_setprop(void*d,int n,const char*p,const void*v,int z){(void)d;(void)n;(void)p;(void)v;assert(z==16);copies++;return fdt_error;}
++static void reset(void){copies=0;fdt_error=0;own=true;for(int i=0;i<6;i++){rows[i]=(struct adt_tunable_local){0,4,0xffffffff,0};lens[i]=sizeof(rows[i]);present[i]=true;}}
++static int n1_copy_list(void *dt, int node, int anode, const char *aprop, const char *dprop,
++                        u32 add, bool required, u32 window_size)
++{
++    u32 len;
++    const struct adt_tunable_local *t = adt_getprop(adt, anode, aprop, &len);
++    /* rodata and relocations share one 128 KiB window: one short message for every refusal */
++    if (!t || !len || len % sizeof(*t) || len / sizeof(*t) > 512) {
++        printf("n1: %s not copied\n", aprop);
++        return required ? -1 : 0;
++    }
++    u32 n = len / sizeof(*t);
++    fdt32_t *cells = malloc(n * 4 * sizeof(fdt32_t));
++    if (!cells)
++        return -1;
++    bool ok = true;
++    for (u32 k = 0; k < n; k++) {
++        if (t[k].size != 4 || (t[k].offset & 3) || t[k].offset > UINT32_MAX - add ||
++            (t[k].mask >> 32) || (t[k].value >> 32) ||
++            (required && (window_size < 4 || (u64)t[k].offset + add > window_size - 4)))
++            ok = false;
++        cells[4 * k + 0] = cpu_to_fdt32(t[k].offset + add);
++        cells[4 * k + 1] = cpu_to_fdt32(4);
++        cells[4 * k + 2] = cpu_to_fdt32((u32)t[k].mask);
++        cells[4 * k + 3] = cpu_to_fdt32((u32)t[k].value);
++    }
++    int ret = ok ? fdt_setprop(dt, node, dprop, cells, n * 4 * sizeof(fdt32_t)) : 0;
++    if (!ok)
++        printf("n1: %s not copied\n", aprop);
++    free(cells);
++    return ret || (required && !ok) ? -1 : 0;
++}
++static int n1_copy_host_tunables(void *dt, int host)
++{
++    static const char lists[][14] = {"axi2af", "cio3pllcore", "pcieclkgen",
++                                     "phy",    "phy-ip-pll",  "phy-ip-auspma"};
++    /* Match the own J714s DT reg windows; reject before any Linux train. */
++    static const u32 bounds[] = {0x24000, 0x4000, 0x4000, 0x24000, 0x1b4000, 0x1b4000};
++    char aname[40], dname[40];
++    int anode = adt_path_offset(adt, apcie_path);
++    /* The own J714s kernel-train profile must never start with a partial list set. */
++    bool required = !fdt_node_check_compatible(dt, 0, "apple,j714s");
++
++    for (size_t i = 0; i < ARRAY_SIZE(lists); i++) {
++        snprintf(aname, sizeof(aname), "apcie-%s-tunables", lists[i]);
++        snprintf(dname, sizeof(dname), "apple,tunable-%s", lists[i]);
++        if (n1_copy_list(dt, host, anode, aname, dname, i == 1 ? 0x2200 : 0, required,
++                         bounds[i]))
++            return -1;
++    }
++    return 0;
++}
++
++int main(void){
++ reset();assert(n1_copy_host_tunables(0,0)==0&&copies==6);
++ for(int i=0;i<6;i++){
++  reset();present[i]=false;assert(n1_copy_host_tunables(0,0)==-1);
++  reset();rows[i].size=8;assert(n1_copy_host_tunables(0,0)==-1);
++  reset();rows[i].offset=1;assert(n1_copy_host_tunables(0,0)==-1);
++  reset();rows[i].mask=1ULL<<32;assert(n1_copy_host_tunables(0,0)==-1);
++  reset();rows[i].value=1ULL<<32;assert(n1_copy_host_tunables(0,0)==-1);
++ }
++ const u32 bounds[]={0x24000,0x4000,0x4000,0x24000,0x1b4000,0x1b4000};
++ for(int i=0;i<6;i++){
++  u32 add=i==1?0x2200:0;
++  reset();rows[i].offset=bounds[i]-add-4;assert(n1_copy_host_tunables(0,0)==0&&copies==6);
++  reset();rows[i].offset=bounds[i]-add;assert(n1_copy_host_tunables(0,0)==-1);
++ }
++ reset();rows[1].offset=0xffffe000;assert(n1_copy_host_tunables(0,0)==-1);
++ reset();present[5]=false;assert(n1_copy_host_tunables(0,0)==-1&&copies==5);
++ reset();present[0]=false;own=false;assert(n1_copy_host_tunables(0,0)==0&&copies==5);
++ reset();fdt_error=-1;assert(n1_copy_host_tunables(0,0)==-1);
++ return 0;
++}
