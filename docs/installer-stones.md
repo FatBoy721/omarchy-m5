@@ -112,14 +112,16 @@ Untested on hardware. Expected boots:
 | this repo's m1n1 | `t6050-j714s-gpu*.dtb` | as before; N1 inert |
 | `make m1n1-installer` | `t6050-j714s-gpu-tripleu-simpledrm.dtb` | N1 may train; DCP display absent (simpledrm) |
 
-**Result 2026-11-09 (TripleU613's unit, installer-family stage-2 m1n1):** hangs
-deterministically at ~0.34 s, right after `Key type dns_resolver registered`
-(two boots). DCP and GPU nodes are disabled in that DTB, so the lead suspect is
-the `-tripleu` DTB enabling `pcie@1cb0000000` while its port/DART stay disabled:
-the host probes late (deferred on its DART) into an apcie block the loader did
-not power. Next: keep the host disabled in the DTB and have the loader enable
-host, port and DART together after a successful train. Do not boot `aurora-n1`
-DTBs until then.
+**Result 2026-11-09 (TripleU613's unit, installer-family stage-2 m1n1):** bare
+metal hangs deterministically in `deferred_probe_initcall`. Found under the m1n1
+hypervisor (guest data abort at `0x505040000`): the boot args carried over from
+the installer (`m5_pmgr_ro m5_pmgr_allow=...`) make every PMGR domain outside the
+allowlist read-only, and power-on of such a domain silently returns 0. This
+repo's DT enables the keyboard-backlight PWM (`pwm@505040000`, domain `fpwm0`),
+so its deferred probe touches an unpowered block. With `fpwm0` added to
+`m5_pmgr_allow` the kernel completes all initcalls and runs `/init` under the
+HV. `apple,manual-availability` on `dart_apcie0` was a separate real omission
+(the loader enables port/DART off it). Not yet booted on bare metal.
 
 ## Credits
 
