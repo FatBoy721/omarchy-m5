@@ -17,7 +17,7 @@ The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 l
 
 | Area | Current evidence and limit |
 |---|---|
-| CPU / desktop | **15 online CPUs (`0-14`)**; all 15 passed pinned SHA-256/gzip checks on the preceding GPU profile. Manual and capped schedutil pilots passed in all three policies. **16 short single-core stock-OPP tests passed**, ending at nominal **4308 / 4308 / 4608 MHz**; original userspace rates/bounds and boost off were restored. Five-core stock testing remains incomplete. STATUS rates are not measured MHz or sustained thermal qualification. Hardware-rendered Hyprland, active **3024×1890** output and a nonblank desktop verified; the preceding GPU desktop passed 900 seconds with the old guard masked |
+| CPU / desktop | **15 online CPUs (`0-14`)**; all 15 passed pinned SHA-256/gzip checks on the preceding GPU profile. Manual and capped schedutil pilots passed in all three policies. **16 short single-core stock-OPP tests passed**, ending at nominal **4308 / 4308 / 4608 MHz**; original userspace rates/bounds and boost off were restored. Three-second five-core M0/M1 bursts passed; the P-cluster burst stopped on an unrecorded nominal-rate mismatch and remains unqualified. STATUS rates are not measured MHz or sustained thermal qualification. Hardware-rendered Hyprland, active **3024×1890** output and a nonblank desktop verified; the preceding GPU desktop passed 900 seconds with the old guard masked |
 | USB access | Standard EEM-only `1d6b:0102`, class `02/0c/07`; native host binding and the scoped direct SSH route verified |
 | RAM | **24 GiB physical**; Linux `MemTotal` is **23,896,896 KiB (22.79 GiB)** after reservations. **4 GiB allocated and locked concurrently** across four 1 GiB memtester workers; each completed all 18 checks, exit 0. This qualifies that sample, not all RAM. The earlier 2 GiB/180-second timeout remains partial |
 | Storage | **1 TB Apple NVMe**, **120 GB ext4 root**. A new **4 GiB file write/fsync and separate direct CRC32C verification passed**, with stable SHA-256. Short uncapped file burst: fio **1.46 GB/s write / 5.79 GB/s read**, potentially controller-cache influenced; not sustained NAND or whole-device qualification |
@@ -31,6 +31,8 @@ Mesa **`043a4c5`** remains isolated from system Mesa. A private `/opt` package a
 ### Historical one-core baseline
 
 The earlier m5boot/kexec path ran kernel #32 on one CPU with a software-rendered desktop and USB access. Its scoped RAM/I/O tests and older input reports belong to that build; they are not measurements of this new 15-CPU profile. The earlier aura prototype also failed to reach Linux. Both records remain in [the status history](STATUS-2026-11-08.md) and [JOURNEY.md](JOURNEY.md).
+
+The [canonical full-laptop checklist](STATUS-2026-11-08.md#full-laptop-integration-checklist) separates these scoped native results from remaining Wi-Fi/BT, battery, audio, display-control, sleep and recovery/update integration. CPUFreq STATUS reads can reconcile framework state; they are not guaranteed passive measurements.
 
 ## Read more
 
