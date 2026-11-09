@@ -8,13 +8,20 @@ Our deliverable is a normal Omarchy installation on explicitly qualified Apple S
 
 The existing installer already has a macOS UI, pinned installation engine, signed catalogs, verified downloads, disk-layout-bound plans, Recovery enrollment and removal/recovery flows. Its image builder also carries the standard Limine/EFI UKI packaging and validation path. Retain those facilities and trust checks; the missing work is model-specific integration and qualification, not inventing signing or kernel packaging. Contribute the required integration rather than creating a competing partitioner or asking users to assemble research scripts.
 
-The audited installer snapshot is [0fe0d903](https://github.com/omacom/omarchy-mac-installer/tree/0fe0d90378158b954526231423ff2c35ebbcd080). Its catalog policy requires all 35 legacy boards in a nonempty catalog and blocks M4+. Model-specific releases therefore need an explicitly reviewed catalog/engine contract before adding a qualified new board. Removing a host restriction or adding a model name is not hardware support.
+The audited upstream installer snapshot is [c07e54c](https://github.com/omacom/omarchy-mac-installer/tree/c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9). Its public catalog policy requires all 35 legacy boards in a nonempty catalog and blocks M4+. We reuse its existing sealed developer catalog mechanism for a separate J714s candidate payload, while keeping that public policy unchanged. Removing a host restriction or adding a model name is not hardware support.
+
+## Published integration source
+
+- [Installer branch](https://github.com/TripleU613/omarchy-mac-installer/tree/codex/m5-installer-integration), frozen at [`61bd334`](https://github.com/TripleU613/omarchy-mac-installer/commit/61bd3349b74eac454b55b0194a00b02da194e9e8): exact J714sap / T6050 / AP-board08 recognition and Apple 27.3 build26C5035r restore selection; private Centauri preparation through the normal vendor archive; board/firmware-bound common Stage1 metadata; matched first-UKI parameters; developer-only admission with generic-loader fallback refused. Default legacy image behavior and public support admission remain unchanged.
+- [Package recipes at `bf09884`](https://github.com/TripleU613/omarchy-pkgs/commit/bf098840308602cd2d5a99fa8445353a3386290d): the matching J714s loader, kernel and Mesa source inputs. The runtime kernel archive has been built and its matching-module/crypto closure checked. [Mesa's ARM CI build passed](https://github.com/TripleU613/omarchy-pkgs/actions/runs/42649339647); archive readback and installation qualification remain separate. Native headers/DKMS remain unqualified. These recipes are not a published installable image.
+
+The installer portable suite reported 836 tests, 31 skipped and zero failures. Focused image/profile checks and independent review also passed. Actual patched engine inspection/planning ran against read-only host fixtures; actual loader and runtime-kernel archive bytes passed their component checks. Fixture filesystems, source checks and package artifacts do not prove a physical install. The rebuilt engine archive is retained locally and its exact identity is in the source lock; no hosted installer release is claimed.
 
 ## Model admission
 
 | State | Meaning |
 |---|---|
-| Candidate | Public implementation or native research result exists; installation is not offered. |
+| Candidate | Public implementation or native research result exists; no public installation is offered. |
 | Qualification | A pinned stack is undergoing complete install, boot, update and recovery checks on the exact board/firmware combination. |
 | Supported release | A published release passed its declared installation and hardware requirements on that combination; limitations are shown before installation. |
 
@@ -24,7 +31,7 @@ Each admitted profile records exact board identifiers, firmware/build range, sou
 
 ## One coherent release
 
-Ship or reference a matched set: installer/engine, enrolled loader contract and stage2, kernel, DTBs, initramfs, exact-release modules, root filesystem and compatible Mesa/session integration. Build these from pinned sources with attribution and per-file licenses. Resolve license mismatches before redistribution: a top-level MIT claim does not override a derivative file’s GPL header, and a source repository with no general license is not blanket permission to redistribute its contents. The current published N1 delta has an explicit missing-baseline limit; its hashes alone are not a reproducible release.
+Ship or reference a matched set: installer/engine, enrolled loader contract and stage2, kernel, DTBs, initramfs, exact-release modules, root filesystem and compatible Mesa/session integration. Build these from pinned sources with attribution and per-file licenses. Resolve license mismatches before redistribution: a top-level MIT claim does not override a derivative file’s GPL header, and a source repository with no general license is not blanket permission to redistribute its contents. The earlier research N1 delta has an explicit missing-baseline limit; its hashes alone are not a reproducible release.
 
 Obtain Apple firmware through the installer's legitimate preparation/download path. Keep proprietary inputs, tickets and user credentials private; publish preparation code and provenance, not private firmware blobs or secret-bearing logs. Validate target identities and artifact integrity before use.
 
@@ -32,7 +39,8 @@ The default user flow must finish installation, Recovery authorization and a nor
 
 ## First-release gates
 
-- [ ] Agree on the target installer fork/upstream contribution path and qualify model-specific catalogs without weakening signature, disk-plan or host-identity checks.
+- [x] Reuse the existing installer and its developer model/payload route, with reviewed source in an owned fork and public admission unchanged.
+- [ ] Qualify the exact model-specific release before public catalog admission, preserving signature, disk-plan and host-identity checks.
 - [ ] Publish complete build inputs and a matched artifact manifest; build in CI and verify a clean rebuild rather than relying on private accumulated worktrees.
 - [ ] Install to a clean supported layout through the app and Recovery flow, then reach the normal user desktop with matching modules and automatic GPU/session selection.
 - [ ] Verify repeated normal startup and shutdown, restart, macOS selection and Recovery access. The J714s cold-picker boot works, but a warm next-only attempt returned to macOS and restricted-profile physical poweroff is unresolved.

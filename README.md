@@ -1,6 +1,6 @@
 # Omarchy-M5-Pro
 
-Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro with M5 Pro** (board **J714s**, Mac17,9, SoC **T6050**), bare-metal next to macOS. No VM, no emulator. We are turning the verified integrations collected here into a normal installation path through the existing [Omarchy Mac Installer](https://github.com/omacom/omarchy-mac-installer). We reuse demonstrated public work, qualify each model and firmware combination, and publish matching release components. **No installable M5 release is published by this repository yet.** The bring-up record remains available, with results and corrections labelled.
+We are bringing proven Apple Silicon work together into a normal [Omarchy](https://omarchy.org) installer, starting with the **14-inch M5 Pro MacBook Pro** (J714s / Mac17,9 / T6050). We reuse the existing Mac installer and demonstrated public fixes, package a coherent stack, then qualify installation, updates and recovery on each exact model and firmware combination. **This is developer integration; no installable M5 release is published here yet.** Earlier native bring-up results remain available below, with their tested profiles and limits.
 
 **Labels:**
 - **NATIVE** = seen on this J714s.
@@ -9,7 +9,9 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 
 ## Installer integration
 
-The [integration and release contract](INTEGRATION.md) defines the first release, support admission and remaining blockers. The existing installer already provides the macOS app, signed catalogs, disk planning and Recovery enrollment; the work here is to integrate a tested hardware stack into that path. A working research boot does not admit a machine to a supported release.
+The [integration and release contract](INTEGRATION.md) defines the release gates and remaining blockers. Reviewed source is now available in the [installer integration branch](https://github.com/TripleU613/omarchy-mac-installer/tree/codex/m5-installer-integration) ([`61bd334`](https://github.com/TripleU613/omarchy-mac-installer/commit/61bd3349b74eac454b55b0194a00b02da194e9e8)) and [matching package recipes](https://github.com/TripleU613/omarchy-pkgs/commit/bf098840308602cd2d5a99fa8445353a3386290d). The installer reuses the normal app, signed artifacts, disk planning, Recovery and Limine/UKI path; J714s is admitted only through its explicit developer route. Public support remains blocked.
+
+Source checks, exact device/firmware planning, normal firmware preparation and first-boot profile checks pass. A runtime kernel package exists and the [Mesa build passed on an ARM CI runner](https://github.com/TripleU613/omarchy-pkgs/actions/runs/42649339647); native headers/DKMS and the new packages' installation qualification remain open. **A complete installer image, macOS app qualification and physical clean-install/update/recovery testing are still required.** The working research desktop is not that release.
 
 ## Current status (2026-11-09)
 
