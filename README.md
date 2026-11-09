@@ -9,9 +9,11 @@ Native Linux, then [Omarchy](https://omarchy.org), on a **14-inch MacBook Pro wi
 - **REPORTED** = someone else's claim.
 - **offline** = built and reviewed, not run.
 
-## Current status (2026-11-08)
+## Current status (2026-11-09)
 
 **All 15 CPUs and native GPU acceleration now work in Omarchy, including a fresh login with persistent isolated Mesa integration.** Linux `7.3.0-j714s-dvfs-thermal-future-g34f2f5bb4d03-dirty` now boots through the refreshed-stub/public m1n1 route. Each CPU passed a pinned, affinity-checked known-answer test on the preceding GPU profile; Aurora reports **16 enabled GPU cores**. Four public rendering/pixel/compute tests passed, and Hyprland itself reports **Apple M5 Pro (G17S B1)** with the isolated Mesa libraries loaded.
+
+**New N1 milestone:** the public kernel-owned PCIe train now boots on J714s with `apple_centauri` and a Wi-Fi netdevice, all 15 CPUs online and the graphical session active. Firmware channel/capability replies and network discovery are present. **Association and real network connectivity are not yet passed**; a netdevice or scan result is not an Internet test. The current trial uses `7.3.0-j714s-n1-kerneltrain-review-g34f2f5bb4d03-dirty`. [N1 integration, source/build identity and current limit](STATUS-2026-11-08.md#native-n1-integration-2026-11-09). The CPU/GPU correctness results below remain attributed to their tested profiles.
 
 The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 loads a small ESP stage2, which loads the kernel, DTB and initrd as separate files. Macintosh HD was verified as the persistent default before this one-shot Linux boot. Earlier statements below about an unrefreshed stub or an unbootable one-core baseline are historical.
 
@@ -22,7 +24,8 @@ The stub now uses **26C5035r / firmware 20457.60.65.0.1**. Its enrolled stage1 l
 | RAM | **24 GiB physical**; the latest test boot reports Linux `MemTotal` **23,884,400 KiB (22.78 GiB)** after reservations. **4 GiB allocated and locked concurrently** across four 1 GiB memtester workers; each completed all 18 checks, exit 0. The standard early test also passed **17 patterns over 22.945 GiB of eligible memory**, zero bad bytes; reserved memory remains excluded. The earlier 2 GiB/180-second timeout remains partial |
 | Storage | **1 TB Apple NVMe**, **120 GB ext4 root**. A new **4 GiB file write/fsync and separate direct CRC32C verification passed**, with stable SHA-256. Short uncapped file burst: fio **1.46 GB/s write / 5.79 GB/s read**, potentially controller-cache influenced; not sustained NAND or whole-device qualification. A separate **16 GiB direct CRC/SHA integrity pass** included **64 seconds of paced writes** |
 | GPU | **NATIVE:** G17S firmware **27.3 / 26C5035r** initialized; actual fuse masks identify **16 enabled cores**. Four public tests passed, including 12-scene rendering/compute coverage. A normal UWSM-managed client also passed all 12 scenes on Apple G17S. Vulkan headless rendering, compute/render submissions and **15,597,568 CPU-model correctness checks** passed on Borealis |
-| Input / other hardware | Earlier keyboard/trackpad results are historical; current completeness/latency is under owner trial. Read-only SMC monitoring now exposes named **TCMb**, a computed SoC hotspot; fan manual control stays disabled. Wi-Fi/BT, battery, suspend and other peripherals are not newly qualified |
+| Wi-Fi / Bluetooth | **NATIVE N1 PCIe training, firmware replies and `apple_centauri` netdevice. Association/connectivity not passed.** Bluetooth remains unqualified |
+| Input / other hardware | Earlier keyboard/trackpad results are historical; current completeness/latency is under owner trial. Read-only SMC monitoring exposes named **TCMb**, a computed SoC hotspot; fan manual control stays disabled. Battery, suspend and other peripherals remain unqualified |
 
 The first split-payload boot did reach all 15 CPUs, but an old rootfs guard remained eligible and initiated the return around 900 seconds. The fix uses **per-boot `/run/systemd/system.control` masks**, which override the actual regular `/etc` unit files. The current profile keeps ordinary journals persistent and leaves the old guard/logger inactive. [Exact evidence, artifact hashes and handoff](STATUS-2026-11-08.md).
 
@@ -51,7 +54,7 @@ The [canonical full-laptop checklist](STATUS-2026-11-08.md#full-laptop-integrati
 4. **Existing Omarchy rootfs.** Normal systemd/SDDM/Hyprland runs on the ext4 root. The older `m5boot/` and kexec implementation remains published here as history.
 
 **Cautions:**
-- Boot-policy, partition and physical Recovery operations remain owner decisions.
+- Boot-policy, partition and physical Recovery operations remain owner decisions. The tested N1 start used an orderly filesystem shutdown followed by owner cold power/BootPicker selection. A verified warm next-only attempt returned to macOS; its cause is unresolved. `systemctl poweroff` alone is not proof of physical power removal on the restricted D415 profile.
 - Kernel/DTB/initrd changes can use the enrolled ESP path without a new enrollment while stage1 remains unchanged; changing the enrolled stage1 itself is a separate operation.
 - The current masks are per boot. No pre-Linux automatic recovery or universal watchdog fallback is promised; keep the owner power-button/macOS fallback available for experimental boots.
 - This repo ships **no binaries**: no boot objects, kernels, DTBs, initramfs, rootfs images or Apple firmware. The current local integration is not yet a complete public reproduction bundle.
