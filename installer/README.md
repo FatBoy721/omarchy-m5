@@ -5,7 +5,7 @@ normal-system image work. It now lives here; the fork is deleted.
 
 ## `patches/`: the installer work
 
-Six commits on top of
+Eight commits on top of
 [omacom/omarchy-mac-installer `c07e54c2134a`](https://github.com/omacom/omarchy-mac-installer/commit/c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9).
 Applying them reproduces the fork's final `main` tree exactly (`b3da2a18094e`).
 
@@ -23,6 +23,8 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0004 | select the image profile after the builder installs Python |
 | 0005 | native J714s kernel headers build check (not run yet) |
 | 0006 | resolve Omarchy desktop packages against matching pinned versions |
+| 0007 | J714s kernel `CONFIG_DM_INTEGRITY=m` and optional Neo `mt7932-fullmac` in `aurora-vendor-order`: `mkinitcpio -P` finishes |
+| 0008 | keep pacman's reason in `precheck.log` when the package precheck fails |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and

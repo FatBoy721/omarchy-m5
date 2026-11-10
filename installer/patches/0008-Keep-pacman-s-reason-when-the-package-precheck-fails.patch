@@ -1,0 +1,34 @@
+From 65cd0c74a7b3eaf8aa43f915f1ec19f2603fad11 Mon Sep 17 00:00:00 2001
+From: Robert Ramsey <fatboytrucking721@gmail.com>
+Date: Mon, 9 Nov 2026 13:36:14 -0500
+Subject: [PATCH] Keep pacman's reason when the package precheck fails
+
+pacman prints unmet dependencies and conflicts on stdout, which the
+precheck captures and then discards on failure, leaving only the generic
+'could not satisfy dependencies' line in precheck.log.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ image-builder/bin/build-mac-image | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/image-builder/bin/build-mac-image b/image-builder/bin/build-mac-image
+index f2dcbd6..5c4bc31 100755
+--- a/image-builder/bin/build-mac-image
++++ b/image-builder/bin/build-mac-image
+@@ -871,8 +871,11 @@ precheck_transaction() {
+   available_base
+   resolved=$(target_pacman -Sp --print-format '%r %n %v' "${BOOTSTRAP[@]}" "${PLATFORM_PACKAGES[@]}" \
+     "$(qualified omarchy)" "$(qualified omarchy-settings)" "${base_names[@]}" $(qualified "${APPLE_AUDIO[@]}") \
+-    $(qualified "${apple_names[@]}" $(candidate_names boot) $(candidate_names support)) 2>>"$logs/precheck.log") ||
++    $(qualified "${apple_names[@]}" $(candidate_names boot) $(candidate_names support)) 2>>"$logs/precheck.log") || {
++    # pacman reports the unmet dependency or conflict on stdout, so keep it.
++    [[ -z $resolved ]] || printf '%s\n' "$resolved" | tee -a "$logs/precheck.log" >&2
+     fail "the package set does not resolve against the pinned databases (logs/precheck.log)"
++  }
+   printf '%s\n' "$resolved" >"$logs/precheck.log"
+   while read -r name; do
+     grep -Eq "^omarchy-candidates $name " <<<"$resolved" || fail "$name does not resolve from the candidate set"
+-- 
+2.54.0 (Apple Git-157)
+

@@ -1,0 +1,97 @@
+From b14c912c3db6f2bf6859cad53e7f1fd3fde7d5fc Mon Sep 17 00:00:00 2001
+From: Robert Ramsey <fatboytrucking721@gmail.com>
+Date: Mon, 9 Nov 2026 13:48:19 -0500
+Subject: [PATCH] Fix J714s initramfs modules that stop mkinitcpio
+
+sd-encrypt requires dm-integrity, which the frozen J714s config left unset.
+Build it as a module and require it, alongside dm-crypt.
+
+aurora-vendor-order requires mt7932-fullmac, the Neo Wi-Fi driver, which
+the J714s kernel does not build. Make it optional on this candidate; the
+Neo image keeps its own recipe.
+
+Both packages need rebuilding and the candidate set re-signing.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Integration/M5/J714s-Normal-System/kernel/config       |  2 +-
+ .../J714s-Normal-System/kernel/j714s-required.config   |  1 +
+ Integration/M5/J714s-Normal-System/prepare             |  2 +-
+ Integration/M5/J714s-Normal-System/recipes.patch       | 10 ++++++----
+ 4 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/kernel/config b/Integration/M5/J714s-Normal-System/kernel/config
+index 2a289c1..973f21b 100644
+--- a/Integration/M5/J714s-Normal-System/kernel/config
++++ b/Integration/M5/J714s-Normal-System/kernel/config
+@@ -2807,7 +2807,7 @@ CONFIG_DM_ZERO=m
+ # CONFIG_DM_VERITY is not set
+ # CONFIG_DM_SWITCH is not set
+ # CONFIG_DM_LOG_WRITES is not set
+-# CONFIG_DM_INTEGRITY is not set
++CONFIG_DM_INTEGRITY=m
+ # CONFIG_DM_AUDIT is not set
+ # CONFIG_DM_VDO is not set
+ # CONFIG_TARGET_CORE is not set
+diff --git a/Integration/M5/J714s-Normal-System/kernel/j714s-required.config b/Integration/M5/J714s-Normal-System/kernel/j714s-required.config
+index c470df5..41105bc 100644
+--- a/Integration/M5/J714s-Normal-System/kernel/j714s-required.config
++++ b/Integration/M5/J714s-Normal-System/kernel/j714s-required.config
+@@ -11,6 +11,7 @@ CONFIG_BTRFS_FS=m
+ CONFIG_EXT4_FS=y
+ CONFIG_BLK_DEV_DM=m
+ CONFIG_DM_CRYPT=m
++CONFIG_DM_INTEGRITY=m
+ CONFIG_CRYPTO_AES=y
+ CONFIG_CRYPTO_XTS=m
+ CONFIG_VFAT_FS=y
+diff --git a/Integration/M5/J714s-Normal-System/prepare b/Integration/M5/J714s-Normal-System/prepare
+index 5e47719..6b50105 100755
+--- a/Integration/M5/J714s-Normal-System/prepare
++++ b/Integration/M5/J714s-Normal-System/prepare
+@@ -6,7 +6,7 @@ candidate_root=$(realpath "${BASH_SOURCE[0]%/*}")
+ repository_root=$(realpath "$candidate_root/../../..")
+ recipe_base=30a33ee435db8f4a158ca41f82e91cc34bcd2e3b
+ recipe_remote=https://github.com/omacom/omarchy-pkgs.git
+-patch_sha256=fedc6ac8675456429922126640064632203a7edcbba54688afd2083f86391e1c
++patch_sha256=956439fd4e95e7c0b22356f1a1ff40a1bd7c5a29d81f290ad3fe71edc695ede8
+ 
+ runtime_patch_sha256=0ea9081a72f4dbcdeb30a68fb534547776d401c7d888259fb3dca757fcf9ccad
+ 
+diff --git a/Integration/M5/J714s-Normal-System/recipes.patch b/Integration/M5/J714s-Normal-System/recipes.patch
+index 20848bd..b7ee662 100644
+--- a/Integration/M5/J714s-Normal-System/recipes.patch
++++ b/Integration/M5/J714s-Normal-System/recipes.patch
+@@ -45,9 +45,9 @@ index 6515514..cbcdc5e 100644
+ +            'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
+              '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
+ -            '98f76a885d81711013aad47e2ee13f000923191e43321738ec8f381690bf5160')
+-+            'e59b330b4e72fa5279b4b98d89e93b6c6df0f88a2db3213f4514aabd0943e36e'
+++            '440f7eb51a094ec9a734b988373e9e50546b6adc523f539a2f89603e311d89ef'
+ +            '616d8e7f21f68c63eb17f266665e517d43079eb378eac9f8a152eb9d8c653aed'
+-+            'e51d86a5bab2d50f31fa3a56b75b3ef6ea614f80f4d4f4394ef538c5d0382c2e')
+++            '744299ef58dc2547bd2dd1343871655bf127950241fbf8502fa2373d21fd67f7')
+  
+  # Kbuild takes ARCH literally and knows arm64, not aarch64.
+  export ARCH=arm64
+@@ -287,7 +287,7 @@ index 75894b3..80e6aab 100644
+ +            'abd1fd7f2c40561311356c5748f964687e45771ad461ef7786fbdbda2aff530d'
+ @@ -18 +18 @@
+ -            'eae8ea44ed6bec92cc0fa111e872bdb4717d365482337de7b9def8532b10123b'
+-+            'dd35eb53b873612a78db23aafae107f690aefc0d97daaf3b5ceab5a218018c27'
+++            '12dd7ef1308e62da501189a5905d6b8cbab8bffa6aab91bc652a45e87d8f79bd'
+ --- a/pkgbuilds/omarchy-aurora-firmware/aurora-firmware-order.conf
+ +++ b/pkgbuilds/omarchy-aurora-firmware/aurora-firmware-order.conf
+ @@ -6,0 +7,2 @@
+@@ -325,5 +325,7 @@ index 75894b3..80e6aab 100644
+ +++ b/pkgbuilds/omarchy-aurora-firmware/aurora-vendor-order.install
+ @@ -14,0 +15 @@
+ +  add_binary tr
+-@@ -17,0 +19 @@
++@@ -17 +18,2 @@
++-  add_module mt7932-fullmac
+++  add_module mt7932-fullmac?
+ +  add_module apple_centauri
+-- 
+2.54.0 (Apple Git-157)
+
