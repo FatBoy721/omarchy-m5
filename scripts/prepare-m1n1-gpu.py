@@ -97,6 +97,8 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--simpledrm", action="store_true",
                         help="include the DCP opt-out in build/m1n1-gpu-simpledrm")
+    parser.add_argument("--n1", action="store_true",
+                        help="add the DT-only N1 kernel-train hand-off in build/m1n1-gpu-n1")
     parser.add_argument("--standalone", action="store_true",
                         help="prepare the calibrated self-contained GPU simpledrm loader")
     parser.add_argument("--adt", type=Path, help="private saved runtime ADT for --standalone")
@@ -105,7 +107,10 @@ def main():
         parser.error("--standalone requires --simpledrm and --adt")
     if args.adt is not None and not args.standalone:
         parser.error("--adt is only used with --standalone")
+    if args.n1 and (not args.simpledrm or args.standalone):
+        parser.error("--n1 requires --simpledrm and is not combined with --standalone")
     default = ("m1n1-gpu-standalone" if args.standalone else
+               "m1n1-gpu-n1" if args.n1 else
                "m1n1-gpu-simpledrm" if args.simpledrm else "m1n1-gpu")
     dest = (args.output or root / "build" / default).resolve()
     vendor = root / "vendor/m1n1"
@@ -124,6 +129,11 @@ def main():
         git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0001-t6050-g17s-adt-handoff.patch"))
         if args.simpledrm:
             git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0002-kboot-t6050-simpledrm-only.patch"))
+        if args.n1:
+            git(prepared, "apply", "--binary",
+                str(root / "patches/m1n1-gpu/0004-kboot-t6050-n1-kernel-train-handoff.patch"))
+            # Track the two added sources so an existing tree is compared in full.
+            git(prepared, "add", "src/kboot_n1.c", "src/kboot_n1.h")
         profile_path = Path("src/t6050_gpu_profile.h")
         if args.standalone:
             git(prepared, "apply", "--binary",

@@ -1,0 +1,49 @@
+From 1792788fb029e38e1ba572cba8c5da27fbbe91b8 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Mon, 9 Nov 2026 18:41:24 -0600
+Subject: [PATCH] PCI: apple: accept the single-die AIC specifier for the T6050
+ MSI window
+
+The T6050 MSI window check required the four-cell AIC specifier of the
+multi-die layout, (type, die, irq, flags). The J714s tree here keeps a
+three-cell AIC, so its window, (type, irq, flags), failed the check and
+the host never probed: 'invalid or missing MSI slice'.
+
+Both forms name die 0's IRQ 1888 and the vector allocation already
+offsets the IRQ cell from the end of the specifier. Accept either and
+keep every other constraint.
+---
+ drivers/pci/controller/pcie-apple.c | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/pci/controller/pcie-apple.c b/drivers/pci/controller/pcie-apple.c
+index 66fb5971f..35cb20593 100644
+--- a/drivers/pci/controller/pcie-apple.c
++++ b/drivers/pci/controller/pcie-apple.c
+@@ -2910,12 +2910,21 @@ static int apple_msi_init(struct apple_pcie *pcie)
+ 	}
+ 
+ 	if (pcie->hw->adopt_link) {
++		/*
++		 * The window's first vector is die 0's AIC IRQ 1888. A tree whose
++		 * AIC takes three cells names it (type, irq, flags), one with the
++		 * per-die cell (type, die, irq, flags). The allocation below
++		 * offsets the IRQ cell from the end, so both forms route alike.
++		 */
++		unsigned int die = args.args_count == 4;
++
+ 		ret = of_property_read_u32(to_of_node(fwnode), "apple,msi-vector-base",
+ 					   &pcie->msi_vector_base);
+ 		if (ret || pcie->msi_vector_base != 64 ||
+ 		    (pcie->nvecs != 32 && pcie->nvecs != 64) ||
+-		    args.args_count != 4 || args.args[0] != 0 || args.args[1] != 0 ||
+-		    args.args[2] != 1888 || args.args[3] != IRQ_TYPE_EDGE_RISING ||
++		    (args.args_count != 3 && !die) || args.args[0] != 0 ||
++		    (die && args.args[1] != 0) || args.args[die + 1] != 1888 ||
++		    args.args[die + 2] != IRQ_TYPE_EDGE_RISING ||
+ 		    DOORBELL_ADDR != 0xfffff000)
+ 			goto invalid_slice;
+ 	}
+-- 
+2.56.0
+

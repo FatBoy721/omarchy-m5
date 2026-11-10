@@ -1,0 +1,130 @@
+From 2328b313754ea78f897a17a8013cacb75629b250 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Mon, 9 Nov 2026 18:24:49 -0600
+Subject: [PATCH] j714s: keep the verified SMC, cpufreq and NVMe behaviour by
+ default
+
+The N1 merge took three installer-side changes that silently alter a
+J714s booted with this tree's device trees, although those trees are
+meant to behave as before with the N1 inert:
+
+- macsmc applied the FT21 bring-up write gate to every apple,j714s
+  machine: all SMC writes but two budgeted ones denied, and only the
+  GPIO and hwmon children registered. That removes the battery supply,
+  lid and power-button input (the s2idle wake source), the RTC and fan
+  control verified on this board. Make the gate an explicit opt-in,
+  macsmc.m5_smc_gate=1, like m5_pmgr_ro. Without it the N1 power line
+  (gP13) is driven on the PCIe host's request with no per-boot budget,
+  so the endpoint can be power-cycled again after a driver reload.
+
+- apple-soc-cpufreq gained an apple,t6050-cluster-cpufreq entry that
+  fails closed without apple,firmware-managed-thermal. This tree's
+  cluster nodes named that compatible first and so lost cpufreq. Name
+  only the T8112 profile the OPP tables were measured through.
+
+- nvme-apple gained an apple,t6050-nvme-ans2 entry with the T6041
+  layout (linear SQ doorbells in the NVMMU block). This tree's node
+  named it ahead of the T8140 profile it was verified with, which puts
+  the doorbells in the nvme block. Name only the verified profile.
+
+No driver table is removed: a tree that describes the T6050 layouts and
+declares firmware thermal ownership still selects the new entries.
+---
+ arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi     | 16 ++++++++++------
+ arch/arm64/boot/dts/apple/t6050-storage-net.dtsi |  7 ++++++-
+ drivers/mfd/macsmc.c                             | 14 ++++++++++++--
+ 3 files changed, 28 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi b/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi
+index 7ae74049f..4bafacef0 100644
+--- a/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi
+@@ -305,24 +305,28 @@ opp20 {
+ 
+ };
+ 
++/*
++ * These tables were measured through the T8112 profile (p-state N is ADT
++ * entry N-2). The driver's "apple,t6050-cluster-cpufreq" entry verifies
++ * requests differently and refuses to start without
++ * apple,firmware-managed-thermal, which this board has not qualified, so it
++ * is not named here.
++ */
+ &soc {
+ 	cpufreq_m0: performance-controller@210e20000 {
+-		compatible = "apple,t6050-cluster-cpufreq", "apple,t8112-cluster-cpufreq",
+-			     "apple,cluster-cpufreq";
++		compatible = "apple,t8112-cluster-cpufreq", "apple,cluster-cpufreq";
+ 		reg = <0x2 0x10e20000 0x0 0x1000>;
+ 		#performance-domain-cells = <0>;
+ 	};
+ 
+ 	cpufreq_m1: performance-controller@211e20000 {
+-		compatible = "apple,t6050-cluster-cpufreq", "apple,t8112-cluster-cpufreq",
+-			     "apple,cluster-cpufreq";
++		compatible = "apple,t8112-cluster-cpufreq", "apple,cluster-cpufreq";
+ 		reg = <0x2 0x11e20000 0x0 0x1000>;
+ 		#performance-domain-cells = <0>;
+ 	};
+ 
+ 	cpufreq_p: performance-controller@212e20000 {
+-		compatible = "apple,t6050-cluster-cpufreq", "apple,t8112-cluster-cpufreq",
+-			     "apple,cluster-cpufreq";
++		compatible = "apple,t8112-cluster-cpufreq", "apple,cluster-cpufreq";
+ 		reg = <0x2 0x12e20000 0x0 0x1000>;
+ 		#performance-domain-cells = <0>;
+ 	};
+diff --git a/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
+index 6eb4c63c3..dbd8d7857 100644
+--- a/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
+@@ -37,8 +37,13 @@ nvme: nvme@45dcc0000 {
+ 		 * doorbells in the "nvme" block (+0x2490c), I/O queue registers,
+ 		 * and no PMGR reset when ANS is found stopped. Not T6041 (its LSQ
+ 		 * doorbells sit in the NVMMU block) and not T8132 (cold_reset).
++		 *
++		 * The driver's own "apple,t6050-nvme-ans2" entry is that T6041
++		 * layout (64 KiB "nvme" block, doorbells in the NVMMU block, as
++		 * the installer tree describes it). It has not been run with
++		 * these reg windows or this loader, so it is not named here.
+ 		 */
+-		compatible = "apple,t6050-nvme-ans2", "apple,t8140-nvme-ans2";
++		compatible = "apple,t8140-nvme-ans2";
+ 		/* nvme = ADT reg[9] (real NVMe regs; ADT size 0x10000 is too small, the
+ 		 * doorbells/LINEAR_SQ regs sit at +0x24908; use 0x60000 like t6030),
+ 		 * ans = reg[0] (ASC CPU control, +0x44),
+diff --git a/drivers/mfd/macsmc.c b/drivers/mfd/macsmc.c
+index 4799d9c18..10047659b 100644
+--- a/drivers/mfd/macsmc.c
++++ b/drivers/mfd/macsmc.c
+@@ -68,7 +68,17 @@ static const struct mfd_cell apple_smc_telemetry_devs[] = {
+ 	MFD_CELL_OF("macsmc-hwmon", NULL, NULL, 0, 0, "apple,smc-hwmon"),
+ };
+ 
+-/* J714s bring-up policy, carried from the published FT21 SMC write gate. */
++/*
++ * J714s bring-up policy, carried from the published FT21 SMC write gate:
++ * restricted children, byte SRAM reads and budgeted writes only. It is an
++ * explicit opt-in, like m5_pmgr_ro: without macsmc.m5_smc_gate=1 a J714s gets
++ * the normal SMC (battery, lid and power-button input, RTC, hwmon, GPIO), as
++ * verified on this board before the gate was merged, and the N1 power line
++ * (gP13) follows the PCIe host's requests without a budget.
++ */
++static bool m5_smc_gate;
++module_param(m5_smc_gate, bool, 0400);
++MODULE_PARM_DESC(m5_smc_gate, "J714s: restrict the SMC to the FT21 bring-up write gate");
+ static bool m5_j714s;
+ static int m5_pcio_budget;
+ module_param(m5_pcio_budget, int, 0400);
+@@ -558,7 +568,7 @@ static int apple_smc_probe(struct platform_device *pdev)
+ 	__be32 count = 0;
+ 	int ret;
+ 
+-	m5_j714s = of_machine_is_compatible("apple,j714s");
++	m5_j714s = m5_smc_gate && of_machine_is_compatible("apple,j714s");
+ 	if (m5_j714s && m5_n1_budget != 0 && m5_n1_budget != 3) {
+ 		dev_warn(dev, "m5: invalid N1 cycle budget, denying radio writes\n");
+ 		m5_n1_budget = 0;
+-- 
+2.56.0
+

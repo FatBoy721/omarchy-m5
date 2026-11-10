@@ -1,0 +1,52 @@
+From 26d365e3528fab6bcc35598b811bac7742ee9b43 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Mon, 9 Nov 2026 18:34:59 -0600
+Subject: [PATCH] arm64: dts: apple: j714s: expose only PERST# on the AP pin
+ controller
+
+The N1 root port's PERST# is pin 80 of the AP pin controller. This tree
+described the three pin banks but no kernel ever bound them, because
+the driver was only built as a module the boot path does not load: with
+the N1 port enabled the PCIe host then deferred forever on reset-gpios.
+
+With the driver built in, restrict what it may touch. Pin 112's
+register takes an SError when read on this SoC (J716c finding), so
+reserve every AP pin but 80, as t6050-j716c.dts does, and leave the NUB
+and AOP banks disabled: nothing uses them and their registers have not
+been checked on this board.
+---
+ arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi
+index 9d285c29a..c9d54d141 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi
+@@ -133,3 +133,24 @@ dart_apcie0: iommu@410000000 {
+ 		status = "disabled";
+ 	};
+ };
++
++/*
++ * PERST# needs the AP pin controller, which this tree described but never
++ * bound (no driver was built in). On this SoC pin 112's register
++ * (0x29c0001c0) takes an SError when read (J716c finding), so only the pin a
++ * node names is exposed: 80, PCIe port 0's PERST# ([ADT] pci-bridge0
++ * function-perst). A reserved line cannot be requested: a node that names
++ * another pin has to open it here.
++ */
++&pinctrl_ap {
++	gpio-reserved-ranges = <0 80>, <81 140>;
++};
++
++/* Nothing here uses the NUB or AOP pin banks, and their registers are unchecked. */
++&pinctrl_nub {
++	status = "disabled";
++};
++
++&pinctrl_aop {
++	status = "disabled";
++};
+-- 
+2.56.0
+

@@ -43,19 +43,23 @@ case "$KERNEL_FLAVOR" in
             DTB=apple/t6050-j714s-gpu-simpledrm.dtb
         fi
         ;;
-    aurora-n1|aurora-n1-simpledrm)
+    aurora-n1|aurora-n1-simpledrm|aurora-gpu-n1|aurora-gpu-n1-simpledrm)
         # betizzel's aurora-gpu J714s plus the installer's N1 Wi-Fi/BT, PHY and
-        # cpufreq pieces (docs/installer-stones.md). Its DTBs carry TripleU613's
-        # GPU voltage bins and enable apcie: boot them only on that unit, with
-        # the installer m1n1 (make m1n1-installer). N1 drivers are modules.
+        # cpufreq pieces (docs/installer-stones.md). One kernel, per-unit DTBs,
+        # because GPU voltage bins are per chip:
+        #   aurora-n1*      TripleU613's unit, with the installer m1n1
+        #   aurora-gpu-n1*  betizzel's unit, with m1n1-gpu-n1
+        # N1 drivers are modules.
         BASE_SHA=34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a
         SOURCE_FLAVOR=aurora-n1
         PATCH_DIRS+=(patches/linux-aurora-gpu patches/linux-aurora-n1)
         FRAGMENTS+=(configs/aurora-j714s-gpu.config configs/aurora-j714s-n1.config)
-        DTB=apple/t6050-j714s-gpu-tripleu.dtb
-        if [ "$KERNEL_FLAVOR" = aurora-n1-simpledrm ]; then
-            DTB=apple/t6050-j714s-gpu-tripleu-simpledrm.dtb
-        fi
+        case "$KERNEL_FLAVOR" in
+            aurora-n1) DTB=apple/t6050-j714s-gpu-tripleu.dtb ;;
+            aurora-n1-simpledrm) DTB=apple/t6050-j714s-gpu-tripleu-simpledrm.dtb ;;
+            aurora-gpu-n1) DTB=apple/t6050-j714s-gpu-n1.dtb ;;
+            aurora-gpu-n1-simpledrm) DTB=apple/t6050-j714s-gpu-n1-simpledrm.dtb ;;
+        esac
         ;;
     aurora-installer)
         # The exact kernel the omarchy-mac-installer J714s image ships (N1
@@ -67,13 +71,15 @@ case "$KERNEL_FLAVOR" in
         DTB=apple/t6050-j714s.dtb
         ;;
     *)
-        echo "ERROR: unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use aurora, aurora-gpu, aurora-gpu-simpledrm, aurora-n1, aurora-n1-simpledrm or aurora-installer)" >&2
+        echo "ERROR: unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use aurora, aurora-gpu, aurora-gpu-simpledrm, aurora-n1, aurora-n1-simpledrm, aurora-gpu-n1, aurora-gpu-n1-simpledrm or aurora-installer)" >&2
         exit 1
         ;;
 esac
 LINUX="${LINUX:-build/linux-$SOURCE_FLAVOR}"
 OUT="${OUT:-build/linux-$SOURCE_FLAVOR-out}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu)}"
+N1_MODULES=(drivers/net/wireless/apple/centauri/apple_centauri.ko
+            drivers/bluetooth/btcentauri.ko)
 
 GMAKE="$(command -v gmake || command -v make)"
 mkdir -p "$OUT"
@@ -174,7 +180,11 @@ if [ "$SOURCE_FLAVOR" = aurora-gpu ] || [ "$SOURCE_FLAVOR" = aurora-n1 ]; then
                     CONFIG_DRM_ASAHI_M5 CONFIG_DRM_APPLE_DCP_T8132
                     CONFIG_APPLE_T8132_PLATFORM_HANDOFF"
 fi
-[ "$SOURCE_FLAVOR" != aurora-n1 ] || REQUIRED_Y+=" CONFIG_PCIE_APPLE CONFIG_CFG80211"
+if [ "$SOURCE_FLAVOR" = aurora-n1 ]; then
+    REQUIRED_Y+=" CONFIG_PCIE_APPLE CONFIG_CFG80211 CONFIG_PINCTRL_APPLE_GPIO
+                 CONFIG_BT_LE CONFIG_BT_HIDP CONFIG_UHID
+                 CONFIG_CRYPTO_USER_API_HASH CONFIG_CRYPTO_USER_API_SKCIPHER"
+fi
 if [ "$KERNEL_FLAVOR" = aurora-installer ]; then
     # Mirrors the installer's kernel/j714s-required.config (modular root
     # stack via initramfs; DCP and SMC power stay off in this freeze).
@@ -238,8 +248,13 @@ case "${1:-all}" in
         ensure_config
         echo "==> Building Image.gz + $DTB"
         "${KMAKE[@]}" Image.gz "$DTB"
-        # aurora-n1's Centauri drivers load firmware from the rootfs: modules.
-        [ "$SOURCE_FLAVOR" != aurora-n1 ] || "${KMAKE[@]}" modules
+        # aurora-n1's Centauri drivers load firmware from the rootfs, so they
+        # are modules. Only these two are needed on the target; run this
+        # script with "modules" for the configuration's whole module set.
+        if [ "$SOURCE_FLAVOR" = aurora-n1 ]; then
+            "${KMAKE[@]}" "${N1_MODULES[@]}"
+            ls -lh "${N1_MODULES[@]/#/$OUT/}"
+        fi
         echo
         echo "==> Artifacts:"
         ls -lh "$OUT/arch/arm64/boot/Image.gz" "$OUT/arch/arm64/boot/dts/$DTB"

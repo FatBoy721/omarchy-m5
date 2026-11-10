@@ -11,7 +11,8 @@
 #   KERNEL_FLAVOR=aurora scripts/mktether.sh -> build/tether-aurora-bundle.tar.gz
 #   KERNEL_FLAVOR=aurora-gpu scripts/mktether.sh -> build/tether-aurora-gpu-bundle.tar.gz
 #   KERNEL_FLAVOR=aurora-gpu-simpledrm scripts/mktether.sh -> separate DCP-off GPU bundle
-# The GPU trial uses its isolated loader; M1N1_CHAIN overrides the binary.
+#   KERNEL_FLAVOR=aurora-gpu-n1-simpledrm scripts/mktether.sh -> GPU + N1 Wi-Fi/Bluetooth trial
+# The GPU trials use their isolated loaders; M1N1_CHAIN overrides the binary.
 #   scp build/tether-bundle.tar.gz thinkpad:
 #
 # Everything in the bundle is self-contained: m1n1's proxyclient package,
@@ -59,7 +60,25 @@ case "$KERNEL_FLAVOR" in
         CHAIN="${M1N1_CHAIN:-build/m1n1-chain-gpu$GPU_SUFFIX.bin}"
         M1N1="${M1N1:-build/m1n1-gpu$GPU_SUFFIX}"
         ;;
-    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi, aurora, aurora-gpu or aurora-gpu-simpledrm)" ;;
+    aurora-gpu-n1|aurora-gpu-n1-simpledrm)
+        # This unit's GPU bins plus the N1 host; one loader serves both DTBs.
+        GPU_TRIAL=1
+        OUT="build/tether-$KERNEL_FLAVOR-bundle.tar.gz"
+        STAGE="build/tether-$KERNEL_FLAVOR"
+        BOOT="build/linux-aurora-n1-out/arch/arm64/boot"
+        BUILD_COMMAND="make kernel-$KERNEL_FLAVOR"
+        GPU_SUFFIX=""
+        DISPLAY_SCOPE="Linux DCP handoff enabled; GPU+DCP coexistence is not yet qualified."
+        if [ "$KERNEL_FLAVOR" = aurora-gpu-n1-simpledrm ]; then
+            GPU_SUFFIX="-simpledrm"
+            DISPLAY_SCOPE="Linux DCP handoff disabled; inherited simpledrm scanout is retained."
+        fi
+        DISPLAY_SCOPE="$DISPLAY_SCOPE N1 PCIe host enabled: Linux powers and trains the N1 link."
+        DT_NAME="t6050-$BOARD-gpu-n1$GPU_SUFFIX.dtb"
+        CHAIN="${M1N1_CHAIN:-build/m1n1-chain-gpu-n1.bin}"
+        M1N1="${M1N1:-build/m1n1-gpu-n1}"
+        ;;
+    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi, aurora, aurora-gpu, aurora-gpu-simpledrm, aurora-gpu-n1 or aurora-gpu-n1-simpledrm)" ;;
 esac
 M1N1="${M1N1:-vendor/m1n1}"
 DTB="$BOOT/dts/apple/$DT_NAME"

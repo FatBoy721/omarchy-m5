@@ -1024,6 +1024,176 @@ hardware-validated here. This desktop check does not qualify GPU+DCP, suspend,
 general application compatibility, sustained thermal behavior or Omarchy's
 full system installation.
 
+### N1 Wi-Fi and Bluetooth (isolated J714s)
+
+The N1 (Wi-Fi and Bluetooth, on internal PCIe port 0) runs on this J714s in a
+separate profile on top of the GPU/simpledrm one. On a tethered boot of
+`7.3.0-gc1fabe3c06f9` (2026-11-09) Linux powered and trained the N1's link
+itself, loaded its firmware and registered `wlan0` and `hci0`. Wi-Fi joined a
+WPA2/WPA3 network and carried real traffic; the Bluetooth controller came up
+and answered a classic inquiry. This is short functional coverage; the
+[limits](#n1-limits) are listed below. The default, DCP and GPU bundles, their
+loaders and the installed boot object are unchanged.
+
+Sources:
+
+- The GPU trial's kernel base and series, then `patches/linux-aurora-n1/`.
+  0001 is TripleU613's merge of the installer kernel's N1 work onto this
+  tree's layout (Centauri drivers and the kernel-owned PCIe train by
+  rolotrealanis98; see [`installer-stones.md`](installer-stones.md)).
+  0002–0006 are what that merge needed to run here (table below).
+- This repo's GPU loader plus `patches/m1n1-gpu/0004`, built in
+  `build/m1n1-gpu-n1`. Its N1 hand-off only edits the device tree: it copies
+  the control function's identity and the six host and five port tunable lists
+  from that boot's ADT, then enables the root port and its DART together. It
+  does no PCIe MMIO and never trains a link. Anything missing or malformed
+  leaves port and DART disabled, and Linux boots without the N1. The
+  watchdog-retention fix, GPU hand-off and DCP opt-out are the GPU loader's.
+- The firmware is Apple's, taken from the public restore image of the same
+  macOS build as the stub (27.3, `26C5035r`) with the board's static manifest.
+  `scripts/mk-n1-ftab.py` assembles it (method published by rolotrealanis98)
+  and checks every image against `BuildManifest.plist`. Nothing is requested
+  from Apple and no per-unit ticket is involved. The file stays private and
+  is never committed.
+
+What the merged tree needed before the N1 came up here. Each row cost one
+boot; all three failures were clean (no hang, the N1 simply stayed absent):
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `pcie-apple` defers forever: `Port … probe fail` | PERST# is pin 80 of the AP pin controller, whose driver was only modular and never loaded | `CONFIG_PINCTRL_APPLE_GPIO=y`; 0004 reserves every AP pin but 80 (pin 112's register takes an SError when read) and leaves the unused NUB/AOP banks disabled |
+| `invalid or missing MSI slice` | The T6050 MSI window check demanded the four-cell AIC specifier of the multi-die layout; this tree's AIC has three cells | 0005 accepts both forms of die 0's IRQ 1888 |
+| `shared PHY: 0xf3c030d1, waiting for 0x4/0x4`, port setup `-110` | iBoot leaves the GP power closure targeted on but auto-gated, so the shared PHY never acknowledges its clock request | 0006: `APCIE_SYS_GP`, `APCIE_PHY_SW` and `APHY_GP_AUS5` always on with auto-PM off, `APCIE_GP` and `APHY_GP_AUS5_A` kept on, in the N1-enabled trees only (m1n1's `pcie_t6050` stage A; the installer kernel's board file) |
+| (found by review) SMC battery, lid and RTC gone, cpufreq and NVMe on unverified bindings | The merge made the installer's FT21 SMC write gate and its NVMe/cpufreq compatibles the default | 0003 makes the gate opt-in (`macsmc.m5_smc_gate=1`) and restores this unit's verified compatibles |
+| (found by review) loader would never enable the port | `apple,manual-availability` missing on the port's DART | 0002 |
+
+**Build:**
+
+```sh
+RUSTC="$(rustup which --toolchain stable rustc)" make kernel-aurora-gpu-n1-simpledrm
+make m1n1-gpu-n1
+KERNEL_FLAVOR=aurora-gpu-n1-simpledrm scripts/mktether.sh
+tar -xzf build/tether-aurora-gpu-n1-simpledrm-bundle.tar.gz -C build
+```
+
+The kernel tree is `build/linux-aurora-n1` (prepare its bindgen as for the GPU
+trial). Only the two N1 modules are built, `apple_centauri.ko` and
+`btcentauri.ko`; everything else Wi-Fi and Bluetooth userspace needs is built
+in (`configs/aurora-j714s-n1.config`). `kernel-aurora-gpu-n1` is the same
+kernel with the DCP tree; it has not been booted.
+
+Host checks, without the Mac: the loader's actual C hand-off against the
+compiled trees and a saved runtime ADT (27 cases: identity and all lists
+copied, a disabled host left byte-identical, every missing precondition or
+bad ADT record fail-closed, the power closure and pin guard present), and the
+GPU/DCP/watchdog cases again with the N1 trees (26).
+
+```sh
+D=build/linux-aurora-n1-out/arch/arm64/boot/dts/apple
+A=build/adt-runtime-j714s-unattended-20261108T213635Z.bin
+python3 patches/m1n1-gpu/smoke-n1.py --adt $A \
+  --n1-dtb $D/t6050-j714s-gpu-n1-simpledrm.dtb --inert-dtb $D/t6050-j714s-gpu-simpledrm.dtb
+python3 patches/m1n1-gpu/smoke-handoff.py --source build/m1n1-gpu-n1 --adt $A \
+  --dtb $D/t6050-j714s-gpu-n1.dtb --simpledrm-dtb $D/t6050-j714s-gpu-n1-simpledrm.dtb \
+  --default-dtb build/linux-aurora-out/arch/arm64/boot/dts/apple/t6050-j714s.dtb
+```
+
+**Firmware** (once per macOS build; the three inputs are members of the
+restore image):
+
+```sh
+scripts/mk-n1-ftab.py --build-manifest BuildManifest.plist --device-class j714sap \
+  --ftab ftab.bin --im4m centauri.j714sap.im4m --out build/n1-fw/j714s-ftab.bin
+```
+
+**On the Mac** (booted with any working bundle):
+
+```sh
+sudo install -Dm600 j714s-ftab.bin /usr/lib/firmware/apple/centauri/j714s-ftab.bin
+sudo install -Dm644 -t /var/lib/omarchy-m5/n1/<kernel release>/ apple_centauri.ko btcentauri.ko
+sudo pacman -S --needed networkmanager wpa_supplicant bluez bluez-utils wireless-regdb iw
+```
+
+The modules must be the ones built with the booted `Image`: the release
+string does not change with the config, and there are no symbol versions.
+NetworkManager has to stay off the tether, which systemd-networkd owns. It
+is also told to scan with the factory address: a precaution on this new
+driver, randomised scanning was not tried.
+
+```ini
+# /etc/NetworkManager/conf.d/10-omarchy-m5-wifi-only.conf
+[keyfile]
+unmanaged-devices=*,except:type:wifi
+[device]
+wifi.scan-rand-mac-address=no
+```
+
+The tether's default route must rank below Wi-Fi, or everything off-link
+leaves through the cable and is dropped by a host that forwards nothing
+(local addresses still work, which makes it look like a router problem).
+`scripts/mkrootfs-image.py` now writes the gadget links with a `[Route]`
+section at `Metric=2048`; an existing root needs the same edit in
+`/etc/systemd/network/10-usb-gadget-*.network`.
+
+**Boot** exactly as the GPU trial, from `build/tether-aurora-gpu-n1-simpledrm`:
+watchdog armed, `chainload.py -r boot/m1n1-chain.bin m1n1.wdt=keep`, the NVMe
+probe, watchdog again, `./boot-linux.sh`. The bundle also carries the tree
+with the N1 off as `boot/control-t6050-j714s-gpu-simpledrm.dtb`: the same
+loader and kernel then leave the N1 alone, which is the first thing to boot
+after any change here. Expect from the loader and then the kernel:
+
+```
+n1: control function: apple/centauri/j714s-ftab.bin, platform-id 0x00086050
+n1: port 0: root port and DART okay (Linux powers and trains the link)
+pcie-apple 1cb0000000.pcie: port 0: trained by Linux, the boot loader left it down
+pcie-apple 1cb0000000.pcie: adopted port 0, endpoint 01:00
+pci 0000:01:00.0: [106b:1900] type 00 class 0xff0000 PCIe Endpoint
+```
+
+Then load the two modules, control function first:
+
+```sh
+sudo insmod /var/lib/omarchy-m5/n1/$(uname -r)/apple_centauri.ko   # firmware, wlan0
+sudo insmod /var/lib/omarchy-m5/n1/$(uname -r)/btcentauri.ko       # hci0
+sudo systemctl start NetworkManager && sudo nmtui
+```
+
+The first load boots the N1 from its ROM, resets the root port
+(`link retrained after a root-port reset`) and the Wi-Fi and Bluetooth
+functions `106b:1902` and `106b:1903` appear. Load them once per boot: others
+report that a second load in the same boot does not recover the chip.
+
+**Result on this J714s:**
+
+| Check | Result |
+| --- | --- |
+| Control boot, N1 off | N1 untouched, 0 PCI devices; CPUs, SSD, GPU, battery, SMC, input as before |
+| PCIe | trained by Linux 0.9 s into boot; root port `106b:100c`, endpoint `106b:1900` |
+| Firmware | accepted; channel list 13 on 2.4 GHz, 25 on 5 GHz, none on 6 GHz |
+| Scan | 13 networks on both bands, strongest −37 dBm |
+| Association | WPA2/WPA3 network on 2.4 GHz from `nmtui` with the ordinary passphrase; supplicant state SAE, PMF on, CCMP |
+| Traffic | DHCP lease, `ping 1.1.1.1` 4/4 at about 11 ms, DNS, HTTPS, 25 MB download at roughly 42 MB/s |
+| Bluetooth | `hci0` up (Apple, HCI version 0x11); classic inquiry answered by three devices |
+| Module temperature | 31.4 °C with the N1 off (control boot), 32.9 °C associated and idle |
+| Kernel log | no Oops, WARN or SError; GPU firmware admitted as in the GPU trial |
+
+The known `CONNECT = -95` rejection of a passphrase did not occur with
+NetworkManager 1.58.1 and wpa_supplicant 2.12: SAE was offloaded to the
+firmware at the first attempt. The driver still refuses (`-95`) anything it
+cannot offload: open networks, TKIP, or a supplicant that hands over no
+credential. If a passphrase is rejected, store the 64-hex PSK instead
+(`wpa_passphrase <SSID>`, passphrase on stdin).
+
+<a id="n1-limits"></a>**Not qualified:** reconnecting after a reboot, 5 GHz
+association, roaming, long transfers, suspend with the N1 up, and the N1
+under GPU or CPU load (a peer saw it warm up with busy P-cores). Bluetooth
+pairing, LE, HID and audio are untested; the working boot's kernel had LE
+off, the config now builds LE, HIDP and uhid in, and the driver implements
+neither SCO nor ISO. Nothing loads the modules or starts NetworkManager at
+boot. The DCP variant and an untethered boot with this profile have not been
+tried. The other J714s's `-tripleu` trees received the same fixes but were
+not booted here.
+
 ### Standalone (no second machine - one 1TR ceremony per image)
 
 The current candidate is a **device-specific GPU/simpledrm image**, not an

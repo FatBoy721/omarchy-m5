@@ -20,7 +20,9 @@ not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
 > **N1 Wi-Fi/Bluetooth, T6050 PHYs and the installer image's kernel/loader**
 > are an isolated extra flavor: [`docs/installer-stones.md`](docs/installer-stones.md)
 > (`make kernel-aurora-installer`, `make m1n1-installer`). Merged with this repo's GPU
-> kernel as `make kernel-aurora-n1` (untested on hardware; per-unit GPU bins).
+> kernel as `make kernel-aurora-n1` (per-unit GPU bins). This Mac's variant,
+> `make kernel-aurora-gpu-n1-simpledrm`, now
+> [runs Wi-Fi and Bluetooth](#n1-wi-fi-and-bluetooth-isolated-j714s).
 > Full J714s status/evidence history: [`docs/omarchy-m5-pro/`](docs/omarchy-m5-pro/README.md).
 
 > **Reviewing this?** Start with **[`FOR-AURORA.md`](FOR-AURORA.md)** - the three
@@ -47,7 +49,7 @@ The experimental Aurora/DCP path and its limits are described below.
 | **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
 | Sleep (s2idle) | ✅ On the default kernel, `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping stop during sleep. The default simpledrm path leaves the panel lit |
 | Battery / charger | Verified on Aurora: battery telemetry, charging/discharging and charger notifications. Still disabled on the default fallback kernel |
-| Wi-Fi / Bluetooth (N1) | Not yet qualified on J714s; a separate driver/firmware trial is pending |
+| Wi-Fi / Bluetooth (N1) | Works in the isolated `aurora-gpu-n1` profile on a tethered boot (2026-11-09): WPA3 association, DHCP, DNS and HTTPS over Wi-Fi; Bluetooth controller up, classic inquiry answered. Pairing, LE, reconnect after reboot and loading at boot are not qualified. Not in the default kernel |
 | GPU | Native GL/compute and Vulkan-backed Zink checks pass on this J714s. Isolated Zink/Borealis Hyprland renders on simpledrm at 3024x1890 / 60 Hz in short automatic checks. Native Gallium desktop rendering is defective; GPU+DCP and sustained-load qualification remain open |
 
 Today the machine boots Arch from the internal SSD on **all 15 cores**; the
@@ -153,6 +155,33 @@ Omarchy itself is **not installed yet**. The
 [package preflight](docs/bringup.md#omarchy-installation-preflight-not-installed)
 found stock Btrfs/boot assumptions and network/firewall changes that would put
 this ext4/custom-boot setup's SSH recovery path at risk if applied unattended.
+
+## N1 Wi-Fi and Bluetooth (isolated J714s)
+
+The N1 now runs on this J714s. On a tethered boot of `7.3.0-gc1fabe3c06f9`
+Linux powered and trained the N1's PCIe link itself, loaded Apple's firmware
+and registered `wlan0` and `hci0`. Wi-Fi joined a WPA2/WPA3 network from
+`nmtui` with an ordinary passphrase (SAE, management-frame protection), took a
+DHCP lease and carried ping, DNS, HTTPS and a 25 MB download. The Bluetooth
+controller came up and three nearby devices answered a classic inquiry. CPUs,
+SSD, the GPU hand-off, battery and SMC behaved as in the GPU trial, and the
+kernel logged no Oops, WARN or SError.
+
+The profile adds two things to the GPU/simpledrm one. `patches/linux-aurora-n1/`
+carries TripleU613's merge of the installer kernel's N1 work (Centauri drivers
+and kernel-owned PCIe train by rolotrealanis98) plus the five patches that
+merge needed on this tree. `patches/m1n1-gpu/0004` gives this repo's GPU
+loader a device-tree-only N1 hand-off: it copies the PCIe tunables and the
+control function's identity from the boot ADT and enables the port, does no
+PCIe MMIO, and leaves the N1 off if anything is missing. The firmware is
+assembled locally from Apple's public restore image by `scripts/mk-n1-ftab.py`
+and is not redistributed.
+
+This is short functional coverage. Bluetooth pairing, LE and HID, 5 GHz
+association, reconnecting after a reboot, suspend and sustained load are
+open, and nothing loads the two modules at boot yet. The
+[N1 runbook](docs/bringup.md#n1-wi-fi-and-bluetooth-isolated-j714s) has the
+build, the three failures on the way and what fixed them, and the limits.
 
 ## Aura Mach-O Stage 1 (optional, untested on hardware)
 

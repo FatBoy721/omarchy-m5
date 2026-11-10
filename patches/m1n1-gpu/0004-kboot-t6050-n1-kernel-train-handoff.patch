@@ -1,0 +1,367 @@
+From: omarchy-m5 local integration
+Subject: [PATCH] kboot: T6050 N1 device-tree hand-off for the kernel-owned train
+
+Fill the hand-off DT for Linux's apple,t6050-pcie host and the protocol-27
+Centauri drivers on J714s: the N1 control identity (firmware-name,
+platform-id, protocol), the six host tunable lists and the pci-bridge0 port
+lists from this boot's ADT, and the root port plus its DART enabled together
+only when the DT lets Linux power and train the link (pwren-gpios and
+apple,manual-availability).
+
+Adapted from omacom/m1n1 src/kboot_n1.c at 02785a35e046 (MIT) with the J714s
+host-list admission from TripleU613's installer loader, after
+rolotrealanis98/m5pro-linux m1n1 patch 0028. Unlike those, this version
+performs no MMIO and never trains a link in the loader: any missing or
+unusable input leaves the port and DART disabled and Linux boots without
+the N1. A DT whose PCIe host is disabled is not modified.
+
+Apply after patches/m1n1-gpu 0001 and 0002. Offline harness:
+patches/m1n1-gpu/smoke-n1.py.
+---
+diff --git a/Makefile b/Makefile
+index 1ee603e..edfd95b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -149,7 +149,7 @@ OBJECTS := \
+ 	iodev.o \
+ 	iova.o \
+ 	isp.o \
+-	kboot.o kboot_atc.o \
++	kboot.o kboot_atc.o kboot_n1.o \
+ 	kboot_t6020_compat.o \
+ 	main.o \
+ 	mitigations.o \
+diff --git a/src/kboot.c b/src/kboot.c
+index ed166a5..634683b 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -14,6 +14,7 @@
+ #include "iodev.h"
+ #include "isp.h"
+ #include "kboot_atc.h"
++#include "kboot_n1.h"
+ #include "malloc.h"
+ #include "mcc.h"
+ #include "memory.h"
+@@ -3327,6 +3328,8 @@ int kboot_prepare_dt(void *fdt)
+         return -1;
+     if (dt_set_bluetooth())
+         return -1;
++    if (kboot_setup_n1(dt))
++        return -1;
+     if (dt_set_uboot())
+         return -1;
+     if (kboot_setup_atc(dt))
+diff --git a/src/kboot_n1.c b/src/kboot_n1.c
+new file mode 100644
+index 0000000..6998c9e
+--- /dev/null
++++ b/src/kboot_n1.c
+@@ -0,0 +1,292 @@
++/* SPDX-License-Identifier: MIT */
++/*
++ * T6050 N1 (Wi-Fi/Bluetooth, PCI 106b:1900-1903) on apcie0 port 0: the
++ * device-tree part of the hand-off to Linux's apple,t6050-pcie host, for the
++ * kernel-owned train only.
++ *
++ * Adapted from omacom/m1n1 src/kboot_n1.c (02785a35e046) with the J714s
++ * host-list admission from TripleU613's installer loader (after
++ * rolotrealanis98/m5pro-linux m1n1 patch 0028). Unlike that file, this one
++ * performs no MMIO and never trains a link: every value comes from the boot
++ * ADT and is written to the DT, or the N1 nodes are left disabled.
++ *
++ *  - the N1 control function (pci106b,1900) gets firmware-name,
++ *    apple,centauri-platform-id and apple,centauri-protocol unless set;
++ *  - the host gets the six apple,tunable-<name> lists Linux replays before its
++ *    own train. All six must be present, well formed and inside the DT window
++ *    they are applied to, or the hand-off stops with the port disabled;
++ *  - each root port marked apple,link-trained-by-bootloader gets the ADT
++ *    pci-bridge<n> tunables, and is enabled together with its DART only if the
++ *    DT lets Linux power and train it (pwren-gpios on the port,
++ *    apple,manual-availability on the DART).
++ *
++ * A failure never aborts the Linux boot: the port and DART stay disabled and
++ * the adopting host finds no port to touch.
++ */
++
++#include "kboot_n1.h"
++#include "adt.h"
++#include "malloc.h"
++#include "utils.h"
++
++#include "libfdt/libfdt.h"
++
++#define T6050_GP_PORTS  4
++#define N1_MAX_TUNABLES 512
++
++static const char apcie_path[] = "/arm-io/apcie0";
++
++struct n1_adt_tunable {
++    u32 offset;
++    u32 size;
++    u64 mask;
++    u64 value;
++} PACKED;
++
++static int n1_host(void *dt)
++{
++    return fdt_node_offset_by_compatible(dt, -1, "apple,t6050-pcie");
++}
++
++static int n1_set_control(void *dt)
++{
++    int adt_chosen = adt_path_offset(adt, "/chosen");
++    const char *target = adt_getprop(adt, 0, "target-type", NULL);
++    u32 board_id, chip_id;
++    char name[64], lower[16];
++
++    if (adt_chosen < 0 || !target || ADT_GETPROP(adt, adt_chosen, "board-id", &board_id) < 0 ||
++        ADT_GETPROP(adt, adt_chosen, "chip-id", &chip_id) < 0) {
++        printf("n1: no target-type, board-id or chip-id in the ADT\n");
++        return -1;
++    }
++    size_t i;
++    for (i = 0; target[i] && i < sizeof(lower) - 1; i++)
++        lower[i] = (target[i] >= 'A' && target[i] <= 'Z') ? target[i] + 32 : target[i];
++    lower[i] = 0;
++    snprintf(name, sizeof(name), "apple/centauri/%s-ftab.bin", lower);
++    u32 platform_id = (board_id << 16) | (chip_id & 0xffff);
++
++    /* Offsets move with every write: find the control function again each time. */
++    for (int pass = 0; pass < 3; pass++) {
++        int host = n1_host(dt);
++        int node = host < 0 ? host : fdt_node_offset_by_compatible(dt, host, "pci106b,1900");
++        if (node < 0) {
++            printf("n1: no N1 control function\n");
++            return -1;
++        }
++        int ret = 0;
++        if (pass == 0 && !fdt_getprop(dt, node, "firmware-name", NULL))
++            ret = fdt_setprop_string(dt, node, "firmware-name", name);
++        if (pass == 1 && !fdt_getprop(dt, node, "apple,centauri-platform-id", NULL))
++            ret = fdt_setprop_u32(dt, node, "apple,centauri-platform-id", platform_id);
++        if (pass == 2 && !fdt_getprop(dt, node, "apple,centauri-protocol", NULL))
++            ret = fdt_setprop_u32(dt, node, "apple,centauri-protocol", 27);
++        if (ret)
++            return -1;
++    }
++    printf("n1: control function: %s, platform-id 0x%08x\n", name, platform_id);
++    return 0;
++}
++
++/*
++ * ADT 24-byte tunable records -> (offset + add, 4, mask, value) cells in
++ * `dprop` of the DT node at `path`. With a window, a missing, empty or
++ * out-of-window list is an error; without one it is skipped.
++ */
++static int n1_copy_list(void *dt, const char *path, int anode, const char *aprop,
++                        const char *dprop, u32 add, u32 window)
++{
++    u32 len;
++    const struct n1_adt_tunable *t = adt_getprop(adt, anode, aprop, &len);
++
++    if (!t || !len || len % sizeof(*t) || len / sizeof(*t) > N1_MAX_TUNABLES) {
++        printf("n1: %s missing or malformed\n", aprop);
++        return window ? -1 : 0;
++    }
++    u32 n = len / sizeof(*t);
++    fdt32_t *cells = malloc(n * 4 * sizeof(fdt32_t));
++    if (!cells)
++        return -1;
++    int ret = 0;
++    for (u32 k = 0; k < n; k++) {
++        struct n1_adt_tunable r;
++        memcpy(&r, &t[k], sizeof(r));
++        if (r.size != 4 || (r.offset & 3) || r.offset > UINT32_MAX - add || (r.mask >> 32) ||
++            (r.value >> 32) || (window && (u64)r.offset + add > (u64)window - 4)) {
++            printf("n1: %s record %u not usable\n", aprop, k);
++            ret = -1;
++            break;
++        }
++        cells[4 * k + 0] = cpu_to_fdt32(r.offset + add);
++        cells[4 * k + 1] = cpu_to_fdt32(4);
++        cells[4 * k + 2] = cpu_to_fdt32((u32)r.mask);
++        cells[4 * k + 3] = cpu_to_fdt32((u32)r.value);
++    }
++    if (!ret) {
++        int node = fdt_path_offset(dt, path);
++        if (node < 0 || fdt_setprop(dt, node, dprop, cells, n * 4 * sizeof(fdt32_t)))
++            ret = -1;
++    }
++    free(cells);
++    /* A port list the kernel cannot take is only skipped. */
++    return window ? ret : 0;
++}
++
++/* The size of the host "reg" entry named `name`, or 0 */
++static u32 n1_window(void *dt, int host, const char *name)
++{
++    int len;
++    int idx = fdt_stringlist_search(dt, host, "reg-names", name);
++    const fdt32_t *reg = fdt_getprop(dt, host, "reg", &len);
++
++    /* The host sits below the root: two address and two size cells per entry. */
++    if (idx < 0 || !reg || len % 16 || (idx + 1) * 16 > len || fdt32_ld(&reg[idx * 4 + 2]))
++        return 0;
++    return fdt32_ld(&reg[idx * 4 + 3]);
++}
++
++static int n1_copy_host_tunables(void *dt, const char *host_path)
++{
++    /* ADT list, DT window Linux applies it to (pcie-apple.c), offset added */
++    static const struct {
++        const char *list;
++        const char *window;
++        u32 add;
++    } lists[] = {
++        {"axi2af", "axi2af", 0},           {"cio3pllcore", "pcieclkgen", 0x2200},
++        {"pcieclkgen", "pcieclkgen", 0},   {"phy", "phy-window", 0},
++        {"phy-ip-pll", "phy-ip", 0},       {"phy-ip-auspma", "phy-ip", 0},
++    };
++    char aname[40], dname[40];
++    int anode = adt_path_offset(adt, apcie_path);
++
++    for (size_t i = 0; i < ARRAY_SIZE(lists); i++) {
++        int host = fdt_path_offset(dt, host_path);
++        u32 window = host < 0 ? 0 : n1_window(dt, host, lists[i].window);
++        if (window < 4) {
++            printf("n1: host has no usable %s window\n", lists[i].window);
++            return -1;
++        }
++        snprintf(aname, sizeof(aname), "apcie-%s-tunables", lists[i].list);
++        snprintf(dname, sizeof(dname), "apple,tunable-%s", lists[i].list);
++        if (n1_copy_list(dt, host_path, anode, aname, dname, lists[i].add, window))
++            return -1;
++    }
++    return 0;
++}
++
++static void n1_copy_port_tunables(void *dt, const char *port_path, int port)
++{
++    static const char *const props[] = {
++        "apcie-config-tunables",        "pcie-rc-tunables",
++        "pcie-rc-gen3-shadow-tunables", "pcie-rc-gen4-shadow-tunables",
++        "pcie-rc-gen5-shadow-tunables",
++    };
++    char bridge[48], dtname[48];
++
++    snprintf(bridge, sizeof(bridge), "%s/pci-bridge%d", apcie_path, port);
++    int anode = adt_path_offset(adt, bridge);
++    if (anode < 0) {
++        printf("n1: no %s\n", bridge);
++        return;
++    }
++    for (size_t i = 0; i < ARRAY_SIZE(props); i++) {
++        snprintf(dtname, sizeof(dtname), "apple,%s", props[i]);
++        n1_copy_list(dt, port_path, anode, props[i], dtname, 0, 0);
++    }
++}
++
++/* The DART node the host's iommu-map names for RID `rid`, or a negative libfdt error */
++static int n1_iommu_for_rid(void *dt, int host, u32 rid)
++{
++    int len;
++    const fdt32_t *map = fdt_getprop(dt, host, "iommu-map", &len);
++
++    if (!map || len % (4 * sizeof(*map)))
++        return -FDT_ERR_BADVALUE;
++    for (int pos = 0; pos + 4 <= len / (int)sizeof(*map); pos += 4) {
++        u32 base = fdt32_ld(&map[pos]), count = fdt32_ld(&map[pos + 3]);
++        if (rid >= base && rid - base < count)
++            return fdt_node_offset_by_phandle(dt, fdt32_ld(&map[pos + 1]));
++    }
++    return -FDT_ERR_NOTFOUND;
++}
++
++static int n1_set_status(void *dt, const char *path, const char *status)
++{
++    int node = fdt_path_offset(dt, path);
++
++    return node < 0 ? -1 : fdt_setprop_string(dt, node, "status", status);
++}
++
++int kboot_setup_n1(void *dt)
++{
++    char host_path[64];
++    struct {
++        char path[96];
++        char dart[64];
++        int port;
++        bool kernel_train;
++    } ports[T6050_GP_PORTS];
++    int nports = 0, port_node;
++    int host = n1_host(dt);
++
++    if (host < 0)
++        return 0;
++    const char *status = fdt_getprop(dt, host, "status", NULL);
++    if (status && strcmp(status, "okay") && strcmp(status, "ok")) {
++        printf("n1: PCIe host disabled in the DT, leaving the N1 alone\n");
++        return 0;
++    }
++    if (fdt_get_path(dt, host, host_path, sizeof(host_path)))
++        return 0;
++
++    /* Collect first: every later write moves node offsets. */
++    fdt_for_each_subnode(port_node, dt, host)
++    {
++        int len;
++        const fdt32_t *reg = fdt_getprop(dt, port_node, "reg", &len);
++        const fdt32_t *busr = fdt_getprop(dt, port_node, "bus-range", NULL);
++
++        if (!reg || len < 4 || !busr || nports == T6050_GP_PORTS ||
++            !fdt_getprop(dt, port_node, "apple,link-trained-by-bootloader", NULL))
++            continue;
++        int port = (fdt32_ld(&reg[0]) >> 11) & 0x1f;
++        int dart = n1_iommu_for_rid(dt, host, fdt32_ld(&busr[0]) << 8);
++        if (port >= T6050_GP_PORTS || dart < 0 ||
++            fdt_get_path(dt, port_node, ports[nports].path, sizeof(ports[nports].path)) ||
++            fdt_get_path(dt, dart, ports[nports].dart, sizeof(ports[nports].dart))) {
++            printf("n1: root port %d or its DART unusable, skipped\n", port);
++            continue;
++        }
++        ports[nports].port = port;
++        ports[nports].kernel_train = fdt_getprop(dt, port_node, "pwren-gpios", NULL) &&
++                                     fdt_getprop(dt, dart, "apple,manual-availability", NULL);
++        nports++;
++    }
++
++    bool ok = adt_path_offset(adt, apcie_path) >= 0;
++    if (!ok)
++        printf("n1: no %s in the ADT\n", apcie_path);
++    ok = ok && !n1_set_control(dt) && !n1_copy_host_tunables(dt, host_path);
++
++    for (int i = 0; i < nports; i++) {
++        bool enable = ok && ports[i].kernel_train;
++
++        if (enable)
++            n1_copy_port_tunables(dt, ports[i].path, ports[i].port);
++        const char *st = enable ? "okay" : "disabled";
++        if (n1_set_status(dt, ports[i].path, st) || n1_set_status(dt, ports[i].dart, st)) {
++            /* Never leave one of the pair enabled alone. */
++            n1_set_status(dt, ports[i].path, "disabled");
++            n1_set_status(dt, ports[i].dart, "disabled");
++            st = "disabled";
++        }
++        printf("n1: port %d: root port and DART %s%s\n", ports[i].port, st,
++               enable ? " (Linux powers and trains the link)" : "");
++    }
++    if (!nports)
++        printf("n1: no adoptable root port in the DT\n");
++    return 0;
++}
+diff --git a/src/kboot_n1.h b/src/kboot_n1.h
+new file mode 100644
+index 0000000..a4a80fb
+--- /dev/null
++++ b/src/kboot_n1.h
+@@ -0,0 +1,9 @@
++/* SPDX-License-Identifier: MIT */
++
++#ifndef KBOOT_N1_H
++#define KBOOT_N1_H
++
++/* T6050 N1 (Wi-Fi/Bluetooth on apcie0 port 0): fill the hand-off DT, see kboot_n1.c */
++int kboot_setup_n1(void *dt);
++
++#endif

@@ -123,6 +123,39 @@ so its deferred probe touches an unpowered block. With `fpwm0` added to
 HV. `apple,manual-availability` on `dart_apcie0` was a separate real omission
 (the loader enables port/DART off it). Not yet booted on bare metal.
 
+**Result 2026-11-09 (betizzel's unit, this repo's loader): the merged tree runs
+the N1.** Flavor `aurora-gpu-n1-simpledrm` (this unit's GPU bins) with
+`make m1n1-gpu-n1`: this repo's GPU loader with a DT-only port of the
+kernel-train hand-off, so its watchdog, GPU and DCP handling stay as verified.
+Linux trained the link, loaded the firmware and brought up `wlan0` and `hci0`;
+WPA3 association, DHCP, DNS and HTTPS passed. The runbook and results are in
+[`bringup.md`](bringup.md#n1-wi-fi-and-bluetooth-isolated-j714s).
+
+The merge needed five more patches (`patches/linux-aurora-n1/0002`–`0006`) and
+one config change before that. All of them are pieces the installer tree has
+in its own layout and the merge onto this layout lost:
+
+- `CONFIG_PINCTRL_APPLE_GPIO=y`, with `gpio-reserved-ranges` on the AP bank:
+  PERST# (pin 80) needs the bank's driver, and pin 112 must stay unread.
+- The T6050 MSI window check accepted only the four-cell AIC specifier of the
+  `die0` layout; this layout's AIC has three cells.
+- The **GP power closure**: `apple,always-on` on `apcie_gp`, `apcie_sys_gp`,
+  `apcie_phy_sw`, `aphy_gp_aus5_a` and `aphy_gp_aus5`, with `apple,no-auto-pm`
+  on the three that iBoot leaves auto-gated. Without it the kernel train stops
+  at `shared PHY: … waiting for 0x4/0x4`. It lives in
+  `t6050-j714s-n1-host.dtsi`, which both units' N1 trees include.
+- `apple,manual-availability` on `dart_apcie0` (as found above).
+- The FT21 SMC write gate and the installer's NVMe/cpufreq compatibles had
+  become the default. On this tree that removes battery, lid and RTC and puts
+  NVMe and cpufreq on bindings this unit never ran, so 0003 makes the gate
+  opt-in (`macsmc.m5_smc_gate=1`) and restores the verified compatibles.
+
+The `-tripleu` trees carry the same fixes and were **not** booted here; with
+`m5_smc_gate` now opt-in, a boot of that unit that relied on the gate has to
+ask for it. The `CONNECT = -95` passphrase rejection did not occur with
+NetworkManager 1.58.1 and wpa_supplicant 2.12: SAE was offloaded at the first
+attempt.
+
 ## Credits
 
 | Who | Work this flavor builds on |

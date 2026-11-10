@@ -1,5 +1,5 @@
 # omarchy-m5 dev harness
-.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-standalone payload-gpu-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
+.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone payload-gpu-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
 AURA_ROLLBACK ?= build/m1n1-enrolled-stage1.bin
 GPU_ADT ?= build/adt-runtime-j714s.bin
 
@@ -21,6 +21,11 @@ m1n1-gpu-simpledrm: ## build the separate GPU loader supporting explicit Linux D
 	python3 scripts/prepare-m1n1-gpu.py --simpledrm
 	M1N1=build/m1n1-gpu-simpledrm CHAINLOADING=1 scripts/build-m1n1.sh
 	cp build/m1n1-gpu-simpledrm/build/m1n1.bin build/m1n1-chain-gpu-simpledrm.bin
+
+m1n1-gpu-n1:    ## GPU loader plus the DT-only N1 hand-off (Linux trains the link); do not enroll it
+	python3 scripts/prepare-m1n1-gpu.py --simpledrm --n1
+	M1N1=build/m1n1-gpu-n1 CHAINLOADING=1 scripts/build-m1n1.sh
+	cp build/m1n1-gpu-n1/build/m1n1.bin build/m1n1-chain-gpu-n1.bin
 
 m1n1-gpu-standalone: ## build a separate calibrated native loader; no enrollment
 	python3 scripts/prepare-m1n1-gpu.py --simpledrm --standalone --adt "$(GPU_ADT)"
@@ -54,10 +59,16 @@ kernel-aurora-gpu: ## build the isolated J714s GPU trial; keep verified artifact
 kernel-aurora-gpu-simpledrm: ## build the shared GPU kernel with the isolated DCP-off DT
 	KERNEL_FLAVOR=aurora-gpu-simpledrm scripts/build-kernel-aurora.sh
 
-kernel-aurora-n1: ## betizzel's GPU J714s kernel + installer N1 Wi-Fi/BT (TripleU613's unit DTB)
+kernel-aurora-gpu-n1: ## this unit's GPU bins + N1 Wi-Fi/Bluetooth host, Linux DCP (use with m1n1-gpu-n1)
+	KERNEL_FLAVOR=aurora-gpu-n1 scripts/build-kernel-aurora.sh
+
+kernel-aurora-gpu-n1-simpledrm: ## same, DCP-off DTB (use with m1n1-gpu-n1)
+	KERNEL_FLAVOR=aurora-gpu-n1-simpledrm scripts/build-kernel-aurora.sh
+
+kernel-aurora-n1: ## the same kernel with TripleU613's unit DTB (GPU bins are per chip)
 	KERNEL_FLAVOR=aurora-n1 scripts/build-kernel-aurora.sh
 
-kernel-aurora-n1-simpledrm: ## same kernel, DCP-off DTB (for the installer m1n1)
+kernel-aurora-n1-simpledrm: ## TripleU613's unit, DCP-off DTB (for the installer m1n1)
 	KERNEL_FLAVOR=aurora-n1-simpledrm scripts/build-kernel-aurora.sh
 
 kernel-aurora-installer: ## build the installer's J714s kernel (N1 Wi-Fi/BT, PHYs, GPU)

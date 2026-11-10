@@ -1,0 +1,114 @@
+From c1fabe3c06f9f920a3f98404155392f80b689886 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Mon, 9 Nov 2026 18:50:47 -0600
+Subject: [PATCH] arm64: dts: apple: j714s: raise the GP power closure for the
+ N1 kernel train
+
+The kernel train asks the shared PCIe PHY for its clocks first. On the
+J714s iBoot leaves APCIE_SYS_GP, APCIE_PHY_SW and APHY_GP_AUS5 targeted
+on but auto-gated, and the PHY then never acknowledges the request:
+
+  pcie-apple 1cb0000000.pcie: shared PHY: 0xf3c030d1, waiting for 0x4/0x4
+  pcie-apple 1cb0000000.pcie: Port /pcie@1cb0000000/pci@0,0 setup fail: -110
+
+m1n1's pcie_t6050 stage A raises exactly these three with auto-PM off
+before its own train, and the installer kernel's board file does the
+same through apple,always-on and apple,no-auto-pm. The merge onto this
+tree's PMGR layout lost those overrides.
+
+Restore them in a host include that also enables the host, and use it
+from both unit trees, so a tree with the N1 off keeps the closure as
+the boot loader leaves it. The TripleU613 unit tree is changed the same
+way but was not booted here.
+---
+ .../boot/dts/apple/t6050-j714s-gpu-n1.dts     |  5 +--
+ .../dts/apple/t6050-j714s-gpu-tripleu.dts     | 10 +++--
+ .../boot/dts/apple/t6050-j714s-n1-host.dtsi   | 45 +++++++++++++++++++
+ 3 files changed, 52 insertions(+), 8 deletions(-)
+ create mode 100644 arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts
+index fe118e79b..618164839 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts
+@@ -8,7 +8,4 @@
+  * N1 stays inert.
+  */
+ #include "t6050-j714s-gpu.dts"
+-
+-&pcie0 {
+-	status = "okay";
+-};
++#include "t6050-j714s-n1-host.dtsi"
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
+index 5f3c19f2d..78ee93407 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
+@@ -9,7 +9,9 @@ &gpu {
+ 	compatible = "apple,j714s-gpu-tripleu", "apple,agx-g17s";
+ };
+ 
+-/* Booted with the installer m1n1, which powers apcie and enables port00/DART after training. */
+-&pcie0 {
+-	status = "okay";
+-};
++/*
++ * Booted with the installer m1n1, which enables port00 and the DART after its
++ * own train or for the kernel train. The kernel train needs the GP power
++ * closure of the host include; a loader train leaves that closure as it is.
++ */
++#include "t6050-j714s-n1-host.dtsi"
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi
+new file mode 100644
+index 000000000..60815f8b6
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi
+@@ -0,0 +1,45 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * J714s with the N1 PCIe host enabled, for a loader that hands the untrained
++ * root port to the kernel train (pwren-gpios on the port and
++ * apple,manual-availability on its DART; see t6050-j714s-n1.dtsi).
++ *
++ * The kernel train asks the shared PCIe PHY for its clocks, and the PHY only
++ * answers with the GP power closure up: APCIE_SYS_GP, APCIE_PHY_SW and
++ * APHY_GP_AUS5 on with auto-PM off (m1n1's pcie_t6050 stage A, and the
++ * installer kernel's board file). iBoot leaves all three targeted on but
++ * auto-gated, and the request then times out ("shared PHY: ... waiting for
++ * 0x4/0x4"). APCIE_GP and APHY_GP_AUS5_A are on at boot and only have to
++ * stay on. The host cannot name these as power-domains: the driver refuses
++ * an adopted host that has any.
++ *
++ * Only the trees that enable the host include this, so a tree with the N1
++ * off leaves the closure as the boot loader does.
++ */
++
++&pcie0 {
++	status = "okay";
++};
++
++&ps_apcie_gp {
++	apple,always-on;
++};
++
++&ps_apcie_sys_gp {
++	apple,always-on;
++	apple,no-auto-pm;
++};
++
++&ps_apcie_phy_sw {
++	apple,always-on;
++	apple,no-auto-pm;
++};
++
++&ps_aphy_gp_aus5_a {
++	apple,always-on;
++};
++
++&ps_aphy_gp_aus5 {
++	apple,always-on;
++	apple,no-auto-pm;
++};
+-- 
+2.56.0
+
