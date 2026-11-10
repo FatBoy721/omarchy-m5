@@ -1027,13 +1027,16 @@ full system installation.
 ### N1 Wi-Fi and Bluetooth (isolated J714s)
 
 The N1 (Wi-Fi and Bluetooth, on internal PCIe port 0) runs on this J714s in a
-separate profile on top of the GPU/simpledrm one. On a tethered boot of
+separate profile on top of the GPU/simpledrm one. On tethered boots of
 `7.3.0-gc1fabe3c06f9` (2026-11-09) Linux powered and trained the N1's link
 itself, loaded its firmware and registered `wlan0` and `hci0`. Wi-Fi joined a
-WPA2/WPA3 network and carried real traffic; the Bluetooth controller came up
-and answered a classic inquiry. This is short functional coverage; the
-[limits](#n1-limits) are listed below. The default, DCP and GPU bundles, their
-loaders and the installed boot object are unchanged.
+WPA2/WPA3 network on both bands and carried real traffic, and came back by
+itself after a reboot; Bluetooth answered classic and LE discovery. The same
+kernel, tree and loader were then proven as a
+[native image from RAM](#native-n1-image-proven-from-ram-not-enrolled). This
+is short functional coverage; the [limits](#n1-limits) are listed below. The
+default, DCP and GPU bundles, their loaders and the installed boot object are
+unchanged.
 
 Sources:
 
@@ -1106,16 +1109,26 @@ scripts/mk-n1-ftab.py --build-manifest BuildManifest.plist --device-class j714sa
   --ftab ftab.bin --im4m centauri.j714sap.im4m --out build/n1-fw/j714s-ftab.bin
 ```
 
-**On the Mac** (booted with any working bundle):
+**On the Mac** (booted with any working bundle), with `REL` the release of the
+kernel being installed for and the files from its build tree:
 
 ```sh
 sudo install -Dm600 j714s-ftab.bin /usr/lib/firmware/apple/centauri/j714s-ftab.bin
-sudo install -Dm644 -t /var/lib/omarchy-m5/n1/<kernel release>/ apple_centauri.ko btcentauri.ko
+M=/usr/lib/modules/$REL
+sudo install -Dm644 apple_centauri.ko $M/kernel/drivers/net/wireless/apple/centauri/apple_centauri.ko
+sudo install -Dm644 btcentauri.ko $M/kernel/drivers/bluetooth/btcentauri.ko
+sudo install -m644 modules.builtin modules.builtin.modinfo $M/
+printf 'kernel/%s\n' drivers/net/wireless/apple/centauri/apple_centauri.ko \
+  drivers/bluetooth/btcentauri.ko | sudo tee $M/modules.order >/dev/null
+sudo depmod $REL
 sudo pacman -S --needed networkmanager wpa_supplicant bluez bluez-utils wireless-regdb iw
+sudo systemctl enable NetworkManager bluetooth
 ```
 
-The modules must be the ones built with the booted `Image`: the release
-string does not change with the config, and there are no symbol versions.
+With the modules under `/usr/lib/modules` udev loads them when the N1's PCI
+functions appear; nothing has to run `insmod`. They must be the ones built
+with the booted `Image`: the release string does not change with the config,
+and there are no symbol versions, so reinstall them with every kernel.
 NetworkManager has to stay off the tether, which systemd-networkd owns. It
 is also told to scan with the factory address: a precaution on this new
 driver, randomised scanning was not tried.
@@ -1150,18 +1163,13 @@ pcie-apple 1cb0000000.pcie: adopted port 0, endpoint 01:00
 pci 0000:01:00.0: [106b:1900] type 00 class 0xff0000 PCIe Endpoint
 ```
 
-Then load the two modules, control function first:
-
-```sh
-sudo insmod /var/lib/omarchy-m5/n1/$(uname -r)/apple_centauri.ko   # firmware, wlan0
-sudo insmod /var/lib/omarchy-m5/n1/$(uname -r)/btcentauri.ko       # hci0
-sudo systemctl start NetworkManager && sudo nmtui
-```
-
-The first load boots the N1 from its ROM, resets the root port
-(`link retrained after a root-port reset`) and the Wi-Fi and Bluetooth
-functions `106b:1902` and `106b:1903` appear. Load them once per boot: others
-report that a second load in the same boot does not recover the chip.
+udev then loads `apple_centauri` about 2.5 s into the boot. That boots the N1
+from its ROM, resets the root port (`link retrained after a root-port reset`),
+and the Wi-Fi and Bluetooth functions `106b:1902` and `106b:1903` appear;
+`btcentauri` follows for `hci0`. The first network is joined once with
+`sudo nmtui`; NetworkManager reconnects it on later boots. The modules load
+once per boot: others report that a second load in the same boot does not
+recover the chip.
 
 **Result on this J714s:**
 
@@ -1171,10 +1179,12 @@ report that a second load in the same boot does not recover the chip.
 | PCIe | trained by Linux 0.9 s into boot; root port `106b:100c`, endpoint `106b:1900` |
 | Firmware | accepted; channel list 13 on 2.4 GHz, 25 on 5 GHz, none on 6 GHz |
 | Scan | 13 networks on both bands, strongest −37 dBm |
-| Association | WPA2/WPA3 network on 2.4 GHz from `nmtui` with the ordinary passphrase; supplicant state SAE, PMF on, CCMP |
+| Association | WPA2/WPA3 network from `nmtui` with the ordinary passphrase, on 2.4 GHz and on 5 GHz; supplicant state SAE, PMF on, CCMP |
 | Traffic | DHCP lease, `ping 1.1.1.1` 4/4 at about 11 ms, DNS, HTTPS, 25 MB download at roughly 42 MB/s |
-| Bluetooth | `hci0` up (Apple, HCI version 0x11); classic inquiry answered by three devices |
-| Module temperature | 31.4 °C with the N1 off (control boot), 32.9 °C associated and idle |
+| After a reboot | modules loaded by udev, the saved network rejoined and the Internet reachable with nothing typed |
+| Bluetooth | `hci0` up (Apple, HCI version 0x11); classic inquiry answered by three devices; with LE built in, 48 distinct LE devices in a 10 s discovery and `bluetoothd` running |
+| Userspace interfaces | `/dev/uhid` present; as root all 17 AF_ALG algorithms BlueZ and iwd use bind (Linux 7.3 refuses most of them to unprivileged callers by default, `crypto.af_alg_restrict=1`) |
+| Module temperature | 31.4 °C with the N1 off (control boot), about 33 °C associated and idle |
 | Kernel log | no Oops, WARN or SError; GPU firmware admitted as in the GPU trial |
 
 The known `CONNECT = -95` rejection of a passphrase did not occur with
@@ -1184,15 +1194,15 @@ cannot offload: open networks, TKIP, or a supplicant that hands over no
 credential. If a passphrase is rejected, store the 64-hex PSK instead
 (`wpa_passphrase <SSID>`, passphrase on stdin).
 
-<a id="n1-limits"></a>**Not qualified:** reconnecting after a reboot, 5 GHz
-association, roaming, long transfers, suspend with the N1 up, and the N1
-under GPU or CPU load (a peer saw it warm up with busy P-cores). Bluetooth
-pairing, LE, HID and audio are untested; the working boot's kernel had LE
-off, the config now builds LE, HIDP and uhid in, and the driver implements
-neither SCO nor ISO. Nothing loads the modules or starts NetworkManager at
-boot. The DCP variant and an untethered boot with this profile have not been
-tried. The other J714s's `-tripleu` trees received the same fixes but were
-not booted here.
+<a id="n1-limits"></a>**Not qualified:** Bluetooth pairing, HID and audio
+with a real device (discovery is all that was exercised, and the driver
+implements neither SCO nor ISO); iwd, which was not started because
+NetworkManager's wpa_supplicant owns `wlan0`; roaming, long transfers, suspend
+with the N1 up, and the N1 under GPU or CPU load (a peer saw it warm up with
+busy P-cores). The first working boot's kernel had LE off; LE, HIDP, uhid and
+the AF_ALG interfaces are built in since the second. The DCP variant has not
+been booted. The other J714s's `-tripleu` trees received the same fixes but
+were not booted here.
 
 ### Standalone (no second machine - one 1TR ceremony per image)
 
@@ -1258,6 +1268,61 @@ The existing Stage-1 CTRR reservation cannot contain this whole image.
 **Do not disable that guard:** the RAM test does not prove iBoot enrollment,
 the monolithic placement, cold USB initialization or an unplugged cold boot.
 Those still require the owner's attended native trial.
+
+#### Native N1 image: proven from RAM, not enrolled
+
+The N1 profile has the same kind of image:
+
+```sh
+make payload-gpu-n1-simpledrm \
+  GPU_ADT=build/adt-runtime-j714s-unattended-20261108T213635Z.bin
+```
+
+This builds the native loader with both the calibration guard (0003) and the
+N1 hand-off (0004) in `build/m1n1-gpu-n1-standalone`, and writes
+`build/m1n1-gpu-n1-simpledrm-payload.bin`: that loader, the SSD-root command
+line, the N1 kernel, `t6050-j714s-gpu-n1-simpledrm.dtb` and the initramfs. The
+three payload members are byte-identical to the tether bundle that booted with
+the modules loading by themselves. With `--source build/m1n1-gpu-n1-standalone`
+the 48 hand-off and guard cases and the 27 N1 cases pass on the host.
+
+The RAM qualification is now a tool, `scripts/probes/native-payload-ram.py`
+(`hv/` in the tether bundle); the GPU image above was qualified the same way.
+With the Mac in the m1n1 proxy and **no** host NVMe probe:
+
+```sh
+cd build/tether-aurora-gpu-n1-simpledrm
+python3 hv/wdt-arm.py 120
+./proxyclient/tools/chainload.py -r ../m1n1-stage1-gpu-n1.bin m1n1.wdt=keep
+python3 hv/native-payload-ram.py --candidate ../m1n1-gpu-n1-simpledrm-payload.bin \
+  --stage1 ../m1n1-stage1-gpu-n1.bin --elf ../m1n1-gpu-n1-standalone/build/m1n1-raw.elf
+```
+
+It refuses inputs that do not belong together before it touches the Mac. Then
+it checks that what runs is the candidate's stage 1 (code and constants, with
+the loader's own relocations applied), copies the payload tail to ordinary RAM
+and reads it back, has the loader's compiled `load_one_payload()` parse that
+copy and its `payload_run()` take over, and finally leaves the proxy, where
+the loader's `main()` continues as it does after a native `payload_run()`. The
+watchdog is re-armed before each step and left armed for Linux.
+
+**Result (2026-11-09):** calibration guard PASS, the loader's own NVMe
+init/shutdown, 14 secondaries started, `n1: port 0: root port and DART okay`,
+then Linux on the SSD root with CPUs `0-14`, `running`, no failed units. With
+nothing typed on the Mac: the N1 link trained 0.85 s into the boot, both
+modules loaded, Wi-Fi rejoined the saved network on 5 GHz, ping and HTTPS
+worked, `bluetoothd` ran with LE, the GPU firmware was admitted, and the
+kernel logged no Oops, WARN or SError.
+
+The candidate is 24,643,107 bytes, SHA256
+`47f7a522326c077f01a84660a0a8bdbe8ce0fd768a529879bd4fbf6c436af4d8`.
+**It is not enrolled and nothing was written to the Mac's disk:** no recovery
+bundle for it is staged on the EFI partition. The limits of a RAM run stated
+above apply to it unchanged (iBoot's placement and the CTRR reservation, USB
+brought up cold, a cold boot with the cable unplugged), and so does the
+procedure below once a bundle with this candidate and a verified rollback
+image has been staged. An enrolled image carries its kernel: the two N1
+modules under `/usr/lib/modules` have to be the ones built with it.
 
 #### Enroll only after current-volume and rollback checks
 

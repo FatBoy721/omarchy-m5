@@ -1,5 +1,5 @@
 # omarchy-m5 dev harness
-.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone payload-gpu-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
+.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone m1n1-gpu-n1-standalone payload-gpu-simpledrm payload-gpu-n1-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
 AURA_ROLLBACK ?= build/m1n1-enrolled-stage1.bin
 GPU_ADT ?= build/adt-runtime-j714s.bin
 
@@ -37,6 +37,17 @@ payload-gpu-simpledrm: m1n1-gpu-standalone ## package the verified GPU kernel/DT
 		--kernel build/linux-aurora-gpu-out/arch/arm64/boot/Image.gz \
 		--dtb build/linux-aurora-gpu-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dtb \
 		--out build/m1n1-gpu-simpledrm-payload.bin
+
+m1n1-gpu-n1-standalone: ## the calibrated native loader with the N1 hand-off; no enrollment
+	python3 scripts/prepare-m1n1-gpu.py --simpledrm --n1 --standalone --adt "$(GPU_ADT)"
+	M1N1=build/m1n1-gpu-n1-standalone CHAINLOADING=0 scripts/build-m1n1.sh
+	cp build/m1n1-gpu-n1-standalone/build/m1n1.bin build/m1n1-stage1-gpu-n1.bin
+
+payload-gpu-n1-simpledrm: m1n1-gpu-n1-standalone ## package the verified N1 kernel/DT for native boot
+	scripts/mkpayload.sh --m1n1 build/m1n1-stage1-gpu-n1.bin \
+		--kernel build/linux-aurora-n1-out/arch/arm64/boot/Image.gz \
+		--dtb build/linux-aurora-n1-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dtb \
+		--out build/m1n1-gpu-n1-simpledrm-payload.bin
 
 aura:           ## build pinned proxy-only Mach-O Aura Stage 1 (no installation)
 	scripts/build-aura.sh

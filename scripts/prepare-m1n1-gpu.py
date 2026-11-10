@@ -98,7 +98,8 @@ def main():
     parser.add_argument("--simpledrm", action="store_true",
                         help="include the DCP opt-out in build/m1n1-gpu-simpledrm")
     parser.add_argument("--n1", action="store_true",
-                        help="add the DT-only N1 kernel-train hand-off in build/m1n1-gpu-n1")
+                        help="add the DT-only N1 kernel-train hand-off in build/m1n1-gpu-n1 "
+                             "(build/m1n1-gpu-n1-standalone with --standalone)")
     parser.add_argument("--standalone", action="store_true",
                         help="prepare the calibrated self-contained GPU simpledrm loader")
     parser.add_argument("--adt", type=Path, help="private saved runtime ADT for --standalone")
@@ -107,9 +108,10 @@ def main():
         parser.error("--standalone requires --simpledrm and --adt")
     if args.adt is not None and not args.standalone:
         parser.error("--adt is only used with --standalone")
-    if args.n1 and (not args.simpledrm or args.standalone):
-        parser.error("--n1 requires --simpledrm and is not combined with --standalone")
-    default = ("m1n1-gpu-standalone" if args.standalone else
+    if args.n1 and not args.simpledrm:
+        parser.error("--n1 requires --simpledrm")
+    default = ("m1n1-gpu-n1-standalone" if args.standalone and args.n1 else
+               "m1n1-gpu-standalone" if args.standalone else
                "m1n1-gpu-n1" if args.n1 else
                "m1n1-gpu-simpledrm" if args.simpledrm else "m1n1-gpu")
     dest = (args.output or root / "build" / default).resolve()
