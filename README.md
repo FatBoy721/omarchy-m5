@@ -135,7 +135,10 @@ worked near the panel's 60 Hz rate, with no new kernel messages. This is real
 M5 GPU rendering, not a software fallback. Native Gallium could start the
 desktop but produced black Kitty content and poor responsiveness, so it is
 not the desktop default. The user's config and system graphics packages are
-unchanged; use `start-hyprland-gpu` on the GPU kernel.
+unchanged. On a GPU kernel the distro's Mesa has no driver for the GPU node and
+plain `start-hyprland` aborts at startup, so `scripts/start-hyprland.sh` is
+installed as the default `start-hyprland` and `hyprland`: it runs
+`start-hyprland-gpu` when that node exists.
 
 Both original recovery bundles and the installed boot object are unchanged.
 The corrected trial loader also passed a live watchdog-preservation check.

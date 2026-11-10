@@ -1016,6 +1016,26 @@ supervisor with an explicit path to the patched compositor and forwards
 Hyprland arguments after `--`. No login manager, autologin, global driver
 selection or boot policy is changed by this launcher.
 
+The everyday commands need the same care. Plain `start-hyprland` or `hyprland`
+on a GPU kernel uses the distro's Mesa, which has no driver for the `aurora`
+render node: Aquamarine picks that node, EGL reports `DRI2: failed to create
+screen` and `failed to load driver`, and Hyprland aborts in
+`CHyprOpenGLImpl::initEGL` a few seconds after it starts. Six core dumps on
+2026-11-09 had exactly that backtrace, all from the plain commands.
+`scripts/start-hyprland.sh` is the default launcher for both names: with an
+`aurora` DRM device it runs `start-hyprland-gpu`, otherwise the distro's
+`/usr/bin/start-hyprland`.
+
+```sh
+sudo install -Dm755 scripts/start-hyprland.sh /usr/local/bin/start-hyprland
+sudo ln -sfn start-hyprland /usr/local/bin/hyprland
+```
+
+On the N1 kernel (`7.3.0-gc1fabe3c06f9`) the private stack's Zink and native
+smoke runs both pass with no kernel messages, and the distro stack fails on the
+same node as described. The default launcher is installed on the Mac; a
+session started through it has not been watched yet.
+
 Native Gallium remains an experimental headless-test option, not the desktop
 default. Its passing GLES scenes did not cover the failing client workload.
 Published [native-client shader findings](https://github.com/rolotrealanis98/m5pro-linux/blob/c9dbba61122f2472f9c38d9d9f31144e5e77a2be/contrib/pending/gpu/gl-native/APP-REGRESSIONS.md)

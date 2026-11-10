@@ -37,8 +37,9 @@
 # For the desktop, install the private Aquamarine fix and use
 # scripts/start-hyprland-gpu.sh after ending the previous session normally.
 # It selects Zink/Borealis; native Gallium is not desktop-qualified.
-# Exit that process; outside the launcher restore explicit software rendering:
-#   env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe start-hyprland
+# Exit that process; outside the launcher restore explicit software rendering
+# (the full path: scripts/start-hyprland.sh owns the bare name on the Mac):
+#   env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe /usr/bin/start-hyprland
 # This uses the untouched distro libraries and existing session/configuration.
 set -euo pipefail
 
