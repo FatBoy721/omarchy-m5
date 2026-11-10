@@ -191,7 +191,8 @@ with a `chainload=` line appended: a few restarts, then recoveryOS, and nothing
 of either ever appeared on the cable. Size alone does not explain both
 failures. Both had data appended and neither size was a multiple of 16 KiB;
 [the raw objects compared in the runbook](docs/bringup.md#raw-image-alignment-evidence-and-current-workaround)
-that booted were aligned. Alignment is a hypothesis, not yet a proven fix.
+that booted were aligned. The plain, aligned replacement now boots natively
+on this Mac; alignment versus the appended tail has not been isolated.
 The saved boot object was put back with `enroll.sh rollback` both
 times.
 
@@ -201,10 +202,14 @@ image: a 1.2 MB m1n1 with its target compiled in reads the GPU/N1 loader from
 the EFI partition, and that loader reads the kernel, device tree and initramfs
 from a file there. Chainloaded from the cable with nothing else sent, the whole
 chain booted this system, and with either file missing the stage concerned
-fell back to its USB proxy, from which the tether flow still works. The plain
-stage 1 is staged for enrollment and **not enrolled yet**: iBoot starting it
-and a boot with the cable unplugged are still to be shown. A small unit in the
-root image clears
+fell back to its USB proxy, from which the tether flow still works. **The owner
+enrolled the plain stage 1 on 2026-11-09 and it booted successfully.** Live SSH
+confirmed both loader versions, Linux `7.3.0-gc1fabe3c06f9`, all 15 CPUs and the
+existing SSD root, with no host-supplied boot images. An unplugged cold boot
+remains to be confirmed. On this first native boot the N1 link trained, but
+firmware IPC bootstrap failed with `-16`; Wi-Fi and Bluetooth were unavailable.
+The earlier tethered radio results therefore do not yet qualify native startup.
+A small unit in the root image clears
 [iBoot's boot counter](docs/bringup.md#iboots-boot-counter), which otherwise
 adds up with every restart made without the cable.
 

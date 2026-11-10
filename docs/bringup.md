@@ -1233,8 +1233,8 @@ were not booted here.
 > line appended. Both had data appended and neither size was a multiple of
 > 16 KiB; see the
 > [alignment evidence](#raw-image-alignment-evidence-and-current-workaround).
-> Size alone does not explain both failures; alignment remains a hypothesis.
-> The next native candidate is the
+> Size alone does not explain both failures. The plain, aligned replacement
+> has now booted natively on this Mac through the
 > [two-stage chain](#native-boot-in-two-stages) below. The rest of this section
 > is the record of how the self-contained images were built and qualified.
 > `mkpayload.sh` now pads them, but no padded one has been enrolled.
@@ -1356,6 +1356,7 @@ The booting raw objects compared below have sizes that are exact multiples of
 | TripleU613's `gz16` image with a kernel inside | 7,061,504 | 0 | boots (his J714s, [journey](omarchy-m5-pro/JOURNEY.md)) |
 | Self-contained N1 image: loader, command line, kernel, DT, initramfs | 24,643,107 | 1571 | loops (this Mac) |
 | Stage 1 with `chainload=…` appended, the upstream way to configure one | 1,179,709 | 61 | loops (this Mac) |
+| Plain stage 1 with its chainload target compiled in | 1,179,648 | 0 | boots natively (this Mac, owner enrollment followed by live SSH verification) |
 
 Neither loop put anything of ours on the cable. In the second, recoveryOS was
 back 37 s after the `reboot`, with neither loader nor Linux having enumerated
@@ -1373,9 +1374,10 @@ tail".
 The first diagnosis here was size, because a sibling J716s loops just above
 4.8 MiB ([issue #1](https://github.com/betizzel/omarchy-m5/issues/1)). A
 1.2 MB object looping and a reported 7 MB one booting mean size alone does not
-explain the J714s failures. Neither an alignment requirement nor a particular
-tail restriction has been isolated. A plain image avoids both suspect forms,
-but its native boot still needs to be tested.
+explain the J714s failures. The plain, aligned replacement now boots natively
+on this Mac, establishing a working fix for this chain. The exact constraint
+has not been isolated: the successful image both restores alignment and removes
+the appended configuration tail.
 
 Consequences in this repo:
 
@@ -1386,8 +1388,11 @@ Consequences in this repo:
 - `mkpayload.sh` zero-pads self-contained objects; m1n1's payload scan stops
   at the zeros. No padded object has been enrolled.
 
-**Not shown yet:** the plain stage 1 starting under iBoot. It is staged, not
-enrolled.
+**Native success, 2026-11-09:** the owner enrolled the plain stage 1 and reported
+a successful boot. A read-only check over USB SSH found stage 1
+`cd30868-dirty`, stage 2 `7646495-dirty`, Linux `7.3.0-gc1fabe3c06f9`, all 15 CPUs
+and the ext4 SSD root. The staged candidate still matched the hash below.
+This is a native boot, not another host-chainloaded trial.
 
 #### Native boot in two stages
 
@@ -1441,7 +1446,7 @@ the Mac reset into its enrolled proxy loader, the watchdog armed and kept:
 
 The first four runs used stage 1 with its variable appended (1,179,709 bytes).
 That object was then enrolled and boot-looped. The last two are the plain image
-in the table above, which is what is staged now.
+in the table above, which the owner subsequently enrolled and booted successfully.
 
 The whole chain is simply the object to enroll, chainloaded:
 
@@ -1460,8 +1465,21 @@ comparing what runs with the given loader: `--payload SPEC` for stage 2 (run
 above), `--chainload SPEC` for stage 1 (not run on the Mac yet), `--identify`
 to tell which loader answers after a fallback.
 
-What this leaves open is what only an enrolled object shows: iBoot starting
-stage 1, and a boot with the cable unplugged.
+**First enrolled boot:** iBoot started the plain stage 1, which read stage 2
+and the kernel payload from storage without host assistance. USB SSH verified
+the two loader versions, 15 CPUs and the SSD root. The boot-acknowledgement
+service succeeded; the selected BUG/WARNING/SError/Call-trace patterns had no
+matches in the kernel log. No Hyprland process was running during this check.
+
+**Native radio limitation:** Linux trained the N1 link at 0.842 s, but
+`apple_centauri` reported `IPC bootstrap failed: -16 (Control stage=0x1)`
+and `N1 automatic startup failed in phase2: -16`. Both radio modules had
+autoloaded; NetworkManager was active, but no Wi-Fi interface appeared and
+Bluetooth was inactive. The earlier tethered Wi-Fi/Bluetooth success is not
+yet reproduced through this native startup. No driver reload, reset or reboot
+was attempted during this inspection.
+
+An unplugged cold boot remains owner-attended and unconfirmed.
 
 Living with it:
 
@@ -1533,9 +1551,9 @@ object, and only after a typed confirmation runs the `kmutil` command below.
 sh with the tools the installation's step 2 used. Its control flow is dry-run
 on the host against stand-in tools (wrong confirmation, unpaired, another
 volume group, an oversized image, an image with a line appended). Both paths
-have run in recoveryOS (2026-11-09): the enroll path twice, installing the
-object it was given, and the rollback path twice, putting the saved object
-back.
+have run in recoveryOS (2026-11-09): three enrollments, with the third (the
+plain, aligned loader) booting successfully, and two rollbacks that put the
+saved proxy object back after the earlier failures.
 
 After the boot object had failed to start, holding power and choosing Options
 opened a recoveryOS that `bputil` did not report as paired with the stub. The
