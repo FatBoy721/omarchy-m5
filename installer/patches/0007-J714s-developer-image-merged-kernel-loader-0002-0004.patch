@@ -1,0 +1,291 @@
+From be38be765827fabbaa815fd32f4b5a50903a53a6 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 14:16:13 -0500
+Subject: [PATCH] J714s developer image: merged kernel, loader 0002-0004, new
+ developer signer
+
+The fork that held the old development key and boot recipes is gone.
+Packages linux-aurora 7.3.0.aurora16.j714s3-1 (merged linux-aurora +
+linux-aurora-n1 series, DM_INTEGRITY), m1n1-aurora 1.6.1.aurora22.j714s3-1
+and omarchy-aurora-firmware 20261014.j714s2-1 come from
+betizzel/omarchy-m5 installer/recipes (da026119060a); the other boot
+packages keep their bytes and now name that repo as their source.
+Developer signer 0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1 replaces
+5C2445B5C37B584B5FC75D8711DFC2D674A06D68. The kernel command line also
+seeds the arguments the merged kernel was verified with (PMGR read-only
+allow list, pd/clk_ignore_unused, idle=nop, arm64.nowfxt, NVMe flush).
+finish-inputs takes this clean checkout's HEAD as the builder commit.
+---
+ .../candidate-package-manifest.json           | 52 +++++++++----------
+ .../tools/finish-inputs.py                    | 12 +++--
+ .../candidate-trust/policy.json               | 11 ++--
+ .../candidate-trust/public.asc                | 14 ++---
+ image-builder/builder/stage1_qualification.py | 13 +++--
+ image-builder/test/test_candidate_set.py      |  4 +-
+ .../test/test_stage1_qualification.py         |  6 +--
+ 7 files changed, 60 insertions(+), 52 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index d3b4a2e..aad1d58 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-11c310b1d7dc",
++  "set": "j714s-dev-runtime-31a95f3e16cb",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -66,27 +66,27 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora15.j714s2-1",
++      "version": "7.3.0.aurora16.j714s3-1",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora15.j714s2-1-aarch64.pkg.tar.zst",
+-      "sha256": "efe8d9c95c02d1ac93e4f043527523c05ba3d9dcd94b70abec4a5004784ca2c0",
++      "filename": "linux-aurora-7.3.0.aurora16.j714s3-1-aarch64.pkg.tar.zst",
++      "sha256": "6e7728e127710f4c4bce4de18958655acc32c364e2a10e801db86cb2744c0ee2",
+       "source": {
+-        "repository": "TripleU613/omarchy-pkgs",
+-        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++        "repository": "betizzel/omarchy-m5",
++        "commit": "da026119060a49ec0722d3a1577e737b863e6d28"
+       },
+-      "size_bytes": 42674507
++      "size_bytes": 43081380
+     },
+     {
+       "name": "m1n1-aurora",
+-      "version": "1.6.1.aurora22.j714s2-1",
++      "version": "1.6.1.aurora22.j714s3-1",
+       "arch": "aarch64",
+-      "filename": "m1n1-aurora-1.6.1.aurora22.j714s2-1-aarch64.pkg.tar.zst",
+-      "sha256": "ab67bc77b8894cfd15d168ade5cb52edefff9ed4cdd230c7caf27ebaf25c5a00",
++      "filename": "m1n1-aurora-1.6.1.aurora22.j714s3-1-aarch64.pkg.tar.zst",
++      "sha256": "62c2806c55c4d237c8c2467f2e74d2156425e89c1a2ff362580fa1b1c1bcb5b0",
+       "source": {
+-        "repository": "TripleU613/omarchy-pkgs",
+-        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++        "repository": "betizzel/omarchy-m5",
++        "commit": "da026119060a49ec0722d3a1577e737b863e6d28"
+       },
+-      "size_bytes": 2000194
++      "size_bytes": 2005851
+     },
+     {
+       "name": "mesa-aurora",
+@@ -95,8 +95,8 @@
+       "filename": "mesa-aurora-1:26.3.0_devel.20261109.j714s2.043a4c5-1-aarch64.pkg.tar.zst",
+       "sha256": "699631582c7206c94292a0486a6829e476f35489874ef58eeb72bf2f402bbc87",
+       "source": {
+-        "repository": "TripleU613/omarchy-pkgs",
+-        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++        "repository": "betizzel/omarchy-m5",
++        "commit": "da026119060a49ec0722d3a1577e737b863e6d28"
+       },
+       "size_bytes": 7307523
+     },
+@@ -114,15 +114,15 @@
+     },
+     {
+       "name": "omarchy-aurora-firmware",
+-      "version": "20261014.j714s1-1",
++      "version": "20261014.j714s2-1",
+       "arch": "aarch64",
+-      "filename": "omarchy-aurora-firmware-20261014.j714s1-1-aarch64.pkg.tar.zst",
+-      "sha256": "403f9fccf5dd353f893aafae05dd2153f7198ef5254d5143326478fe61867bc7",
++      "filename": "omarchy-aurora-firmware-20261014.j714s2-1-aarch64.pkg.tar.zst",
++      "sha256": "91b846f1bdae3550754ce7444b8e624d74459908af99342cd7f6e611d6cd48cd",
+       "source": {
+-        "repository": "TripleU613/omarchy-pkgs",
+-        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++        "repository": "betizzel/omarchy-m5",
++        "commit": "da026119060a49ec0722d3a1577e737b863e6d28"
+       },
+-      "size_bytes": 19032
++      "size_bytes": 15825
+     },
+     {
+       "name": "omarchy-mac",
+@@ -180,8 +180,8 @@
+       "filename": "uboot-aurora-2026.07.aurora6.j714s2-1-aarch64.pkg.tar.zst",
+       "sha256": "9618a5169fdbb62640a7850f7af00b0687faffca1e24c0d036b2396551ddd842",
+       "source": {
+-        "repository": "TripleU613/omarchy-pkgs",
+-        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++        "repository": "betizzel/omarchy-m5",
++        "commit": "da026119060a49ec0722d3a1577e737b863e6d28"
+       },
+       "size_bytes": 401248
+     },
+@@ -192,8 +192,8 @@
+       "filename": "vulkan-aurora-1:26.3.0_devel.20261109.j714s2.043a4c5-1-aarch64.pkg.tar.zst",
+       "sha256": "5810bcbd25cce15fcb230e58979ebea955d2fccbbf5c21a03caacca4d6844aa4",
+       "source": {
+-        "repository": "TripleU613/omarchy-pkgs",
+-        "commit": "bf098840308602cd2d5a99fa8445353a3386290d"
++        "repository": "betizzel/omarchy-m5",
++        "commit": "da026119060a49ec0722d3a1577e737b863e6d28"
+       },
+       "size_bytes": 4812285
+     }
+@@ -204,5 +204,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "11c310b1d7dc7fc1292c9174aacc7fdde380022cc38bd6cd5daaccdb79b8a26b"
++  "set_sha256": "31a95f3e16cb9bd1a52d025a0e2449a1259e5c48e8f6543f3c8f0c99f6719f46"
+ }
+diff --git a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+index 3d72581..f6df51b 100644
+--- a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
++++ b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+@@ -39,13 +39,15 @@ def run(*args: str, **kwargs):
+ 
+ 
+ def verify_main_commit(commit: str) -> None:
++    # The developer image is now built from betizzel/omarchy-m5 (installer/patches on
++    # omacom c07e54c), not a fork's main: the commit is this clean checkout's HEAD.
+     if not re.fullmatch(r'[0-9a-f]{40}', commit):
+         raise ValueError('builder commit must be a full lowercase Git SHA')
+-    remote = run('git', 'ls-remote', 'origin', 'refs/heads/main', cwd=ROOT,
+-                 stdout=subprocess.PIPE, text=True).stdout.split()[0]
+-    if remote != commit:
+-        raise ValueError(f'builder commit is not current origin/main ({remote})')
+-    run('git', 'cat-file', '-e', f'{commit}^{{commit}}', cwd=ROOT)
++    head = run('git', 'rev-parse', 'HEAD', cwd=ROOT, stdout=subprocess.PIPE, text=True).stdout.strip()
++    if head != commit:
++        raise ValueError(f'builder commit is not this checkout\'s HEAD ({head})')
++    if run('git', 'status', '--porcelain', cwd=ROOT, stdout=subprocess.PIPE, text=True).stdout.strip():
++        raise ValueError('builder checkout is not clean')
+ 
+ 
+ def verify_source_records(candidate, package_dir: Path, manifest: dict,
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+index 2825047..690223c 100644
+--- a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
++++ b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+@@ -1,18 +1,17 @@
+ {
+   "schema": 1,
+-  "primary_fingerprint": "5C2445B5C37B584B5FC75D8711DFC2D674A06D68",
+-  "signing_fingerprint": "5C2445B5C37B584B5FC75D8711DFC2D674A06D68",
+-  "public_key_sha256": "63c0264500f5d09227ff4687459c187bfbcada20b3af66f5be6a63759e3d31bf",
++  "primary_fingerprint": "0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1",
++  "signing_fingerprint": "0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1",
++  "public_key_sha256": "0c540dda6469bdf9c9cc024de5692e88ac07450f9e48d608b62dc9330374f041",
+   "source_repositories": [
+     "omacom/omarchy",
+     "omacom/omarchy-mac"
+   ],
+   "platform_repositories": [
+     "omacom/omarchy-mac-pkgs",
+-    "omacom/omarchy-mac",
+-    "TripleU613/omarchy-mac-pkgs"
++    "omacom/omarchy-mac"
+   ],
+-  "boot_repository": "TripleU613/omarchy-pkgs",
++  "boot_repository": "betizzel/omarchy-m5",
+   "runtime_packages": [
+     "omarchy",
+     "omarchy-settings",
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc b/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
+index a7f17f0..bed620c 100644
+--- a/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
++++ b/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
+@@ -1,10 +1,10 @@
+ -----BEGIN PGP PUBLIC KEY BLOCK-----
+ 
+-mDMEavHvrxYJKwYBBAHaRw8BAQdAh2Y6uu6gAtUPG5OrXxqhsPJkk8/alz834BtF
+-HtstWOK0QlRyaXBsZVU2MTMgSjcxNHMgZGV2ZWxvcGVyIGltYWdlIGlucHV0cyAo
+-bm90IGEgcHJvZHVjdGlvbiByZWxlYXNlKYiWBBMWCgA+FiEEXCRFtcN7WEtfx12H
+-Ed/C1nSgbWgFAmrx768CGwMFCQASdQAFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AA
+-CgkQEd/C1nSgbWi1lAEAm2f3GjmA1tGBckkfHbRQZkGHCMjkv0oWMhXTz0peB8YA
+-/31rmcFPO2zfKPSQ4rUhZlPir2guXZ7tXM2fsZiSAM4M
+-=J1jB
++mDMEavNpJxYJKwYBBAHaRw8BAQdAc7u27A+ecpz0LVw8JaHayY54vPGEzefmIx2C
++DVKPYIS0Qm9tYXJjaHktbTUgSjcxNHMgZGV2ZWxvcGVyIGltYWdlIGlucHV0cyAo
++bm90IGEgcHJvZHVjdGlvbiByZWxlYXNlKYiQBBMWCgA4FiEEDaBA/1LV7G+2U4dp
++2/67srbRFrEFAmrzaScCGwMFCwkIBwIGFQoJCAsCBBYCAwECHgECF4AACgkQ2/67
++srbRFrGkHAD+Pfl/97GDE6qxhbKC0ADdBAhrsnbemKSR5YcNE9A1Nk8BAMikV/bE
++WyNLoZNWGTqQveQyX1n7zhko57/+4EcbJdMF
++=K/tc
+ -----END PGP PUBLIC KEY BLOCK-----
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index ff7ae11..9a85ef4 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -18,9 +18,16 @@ from image_profile import select as select_image_profile
+ COMMON_STAGE1 = "esp/aurora/stage1.bin"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+-J714S_KERNEL_VERSION = "7.3.0.aurora15.j714s2-1"
+-J714S_KERNEL_RELEASE = "7.3.0-15.j714s2-1-j714s-candidate-ARCH"
++J714S_KERNEL_VERSION = "7.3.0.aurora16.j714s3-1"
++J714S_KERNEL_RELEASE = "7.3.0-16.j714s3-1-j714s-merged-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
++# What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
++# with on bare metal, besides the budgets: PMGR domains read-only except the ones its
++# drivers power, and no WFI/WFxT idle.
++J714S_BOOT_ARGUMENTS = ("pd_ignore_unused", "clk_ignore_unused", "m5_pmgr_ro",
++                        "m5_pmgr_allow=ans,gpx,afr,gfx,apcie_gp,fab6_soc,apcie_sys_gp,apcie_phy_sw,"
++                        "aphy_gp_aus5_a,aphy_gp_aus5,fpwm0",
++                        "nvme_apple.flush_interval=0", "idle=nop", "arm64.nowfxt")
+ 
+ 
+ def _unique_object(pairs):
+@@ -133,7 +140,7 @@ def seed_cmdline(root: Path, candidates: Path, profile: str = "production") -> N
+     if assignments != [baseline] or any(word in data.replace("-", "_") for word in
+             ("macsmc.m5_pcio_budget=", "macsmc.m5_n1_budget=")):
+         raise ValueError("candidate finalizer command line is not the normal baseline")
+-    data = data.replace(baseline, baseline[:-1] + " " + " ".join(arguments) + '"')
++    data = data.replace(baseline, baseline[:-1] + " " + " ".join(arguments + J714S_BOOT_ARGUMENTS) + '"')
+     grub.write_text(data)
+ 
+ 
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index 47370b0..148ca9f 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -113,7 +113,7 @@ class CandidateSetTest(unittest.TestCase):
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+         self.assertEqual(len(names), 15)
+-        release = "7.3.0-15.j714s2-1-j714s-candidate-ARCH"
++        release = "7.3.0-16.j714s3-1-j714s-merged-ARCH"
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+         kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
+@@ -126,7 +126,7 @@ class CandidateSetTest(unittest.TestCase):
+                     package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+-                                    versions={"linux-aurora": "7.3.0.aurora15.j714s2-1"},
++                                    versions={"linux-aurora": "7.3.0.aurora16.j714s3-1"},
+                                     contents=contents, manifest_edit=developer_sources)
+         output = self.base / "j714s-15-role-import"
+         summary = c.snapshot(input_set, output, receipt, fixtures.SOURCE, trust=signer.trust)
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+index b832881..382907f 100644
+--- a/image-builder/test/test_stage1_qualification.py
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -32,9 +32,9 @@ class Stage1QualificationTest(unittest.TestCase):
+         trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
+         policy = json.loads((trust / 'policy.json').read_text())
+         self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
+-        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora15.j714s2-1')
+-        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-15.j714s2-1-j714s-candidate-ARCH')
+-        self.assertEqual(policy['primary_fingerprint'], '5C2445B5C37B584B5FC75D8711DFC2D674A06D68')
++        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora16.j714s3-1')
++        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-16.j714s3-1-j714s-merged-ARCH')
++        self.assertEqual(policy['primary_fingerprint'], '0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1')
+         self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
+         self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
+         self.assertNotIn('linux-aurora-headers', policy['boot_packages'])
+-- 
+2.56.0
+
