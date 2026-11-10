@@ -14,14 +14,17 @@
 #   2. Standalone - sudo scripts/finish-install.sh --m1n1 build/m1n1-payload.bin
 #                   then repeat the 1TR ceremony. No second machine needed,
 #                   but every kernel change costs a ceremony, so use this for
-#                   milestone boots, not for iteration.
+#                   milestone boots, not for iteration. The object is padded
+#                   with zeros to a multiple of 16 KiB: unpadded, a 24 MiB
+#                   one boot-looped on J714s. A padded one has not been
+#                   enrolled there yet.
 #
 #   3. From storage - scripts/mkpayload.sh --payload-file --out PAYLOAD.bin
 #                   writes only what follows m1n1 (bootargs, kernel, DT,
 #                   initramfs) for a loader that reads it from the EFI
-#                   partition (payload=<partition uuid>;<path>). iBoot on
-#                   T6050 only starts a small boot object, so this is the
-#                   form a native boot uses there.
+#                   partition (payload=<partition uuid>;<path>). The kernel
+#                   can then be replaced without a ceremony; this is the form
+#                   the native boot uses (make esp-gpu-n1-simpledrm).
 #
 # Usage: scripts/mkpayload.sh [--bootargs "..."] [--board j714s] [--out PATH]
 #                             [--m1n1 PATH] [--kernel PATH] [--dtb PATH]
@@ -101,6 +104,13 @@ echo "    bootargs: $BOOTARGS"
     cat "$DTB"
     [ "$USE_INITRAMFS" = 1 ] && cat "$INITRAMFS"
 } > "$OUT"
+
+# iBoot on J714s boot-looped on both enrolled objects whose size was not a
+# multiple of 16 KiB. Zeros also end m1n1's payload scan.
+if [ "$PAYLOAD_FILE" = 0 ]; then
+    size=$(wc -c < "$OUT")
+    head -c $(( (16384 - size % 16384) % 16384 )) /dev/zero >> "$OUT"
+fi
 
 echo
 echo "==> Verifying the payload chain the way m1n1 parses it"

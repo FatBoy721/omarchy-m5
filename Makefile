@@ -51,16 +51,20 @@ payload-gpu-n1-simpledrm: m1n1-gpu-n1-standalone ## package the verified N1 kern
 		--dtb build/linux-aurora-n1-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dtb \
 		--out build/m1n1-gpu-n1-simpledrm-payload.bin
 
-# Native boot in two stages. iBoot on T6050 only starts a small boot object (a
-# 24 MiB image with the kernel behind m1n1 boot-loops), so the enrolled object
-# is a plain loader that reads the real one from the EFI partition, and that
-# one reads the kernel. Updating either is then a file copy, not a ceremony;
-# without m1n1/boot.bin the enrolled loader falls back to its USB proxy.
+# Native boot in two stages. Keep the enrolled object a plain m1n1.bin:
+# both objects with something appended (a kernel payload, a chainload=
+# variable; sizes that are not multiples of 16 KiB) boot-looped under iBoot on
+# J714s. So it carries its chainload target inside, reads the real loader from
+# the EFI partition, and that one reads the kernel. Updating either is then a
+# file copy, not a ceremony; without m1n1/boot.bin the enrolled loader falls
+# back to its USB proxy.
 m1n1-stage1:    ## the small object to enroll: chainloads m1n1/boot.bin from the EFI partition
-	python3 scripts/prepare-m1n1-gpu.py --stage1
+	python3 scripts/prepare-m1n1-gpu.py --stage1 --chainload "$(ESP_PARTUUID);m1n1/boot.bin"
 	M1N1=build/m1n1-stage1 CHAINLOADING=1 scripts/build-m1n1.sh
-	{ cat build/m1n1-stage1/build/m1n1.bin; \
-	  printf 'chainload=%s;m1n1/boot.bin\n' "$(ESP_PARTUUID)"; } > build/m1n1-stage1-esp.bin
+	cp build/m1n1-stage1/build/m1n1.bin build/m1n1-stage1-esp.bin
+	@size=$$(wc -c < build/m1n1-stage1-esp.bin); \
+	  [ $$((size % 16384)) -eq 0 ] && [ "$$(tail -c 8 build/m1n1-stage1-esp.bin)" = STACKBOT ] || \
+	  { echo "build/m1n1-stage1-esp.bin is not a plain m1n1 image of a 16 KiB-multiple size" >&2; exit 1; }
 
 esp-gpu-n1-simpledrm: ## EFI partition files for a native N1 boot: m1n1/boot.bin (loader), m1n1/payload.bin (kernel)
 	python3 scripts/prepare-m1n1-gpu.py --simpledrm --n1 --standalone --storage --adt "$(GPU_ADT)"

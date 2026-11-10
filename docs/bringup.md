@@ -1227,22 +1227,17 @@ were not booted here.
 
 ### Standalone (no second machine - one 1TR ceremony per image)
 
-> **Do not enroll the images of this section.** A self-contained image (the
-> kernel behind the loader, about 24 MiB) passes every check below and its own
-> boot path runs from RAM, but the N1 one was enrolled on 2026-11-09 and the
-> Mac boot-looped: a few restarts with a progress bar, then back to the
-> startup options, with nothing of the image ever reaching the cable. iBoot
-> most likely refuses a raw boot object of that size. A sibling T6050 machine
-> (J716s, same stub firmware) is reported to boot one at 0x4D0000 (4.8 MiB)
-> and to loop at 0x4E0000
-> ([firmware matrix](omarchy-m5-pro/m5-omarchy/reports/19-firmware-matrix.md)),
-> and the other J714s boots natively from a small enrolled stage 1 that reads
-> everything else from the EFI partition. J716s's owner states the size limit
-> outright ([issue #1](https://github.com/betizzel/omarchy-m5/issues/1)); it
-> was not measured on this unit. The way to a native boot is the
-> [two-stage chain](#native-boot-in-two-stages) below. The rest of this
-> section is the record of how the self-contained images were built and
-> qualified.
+> **Do not enroll the images of this section as they were built then.** Two
+> objects were enrolled on 2026-11-09 and both boot-looped: this section's
+> self-contained N1 image (24.6 MB) and a 1.2 MB loader with a `chainload=`
+> line appended. Both had data appended and neither size was a multiple of
+> 16 KiB; see the
+> [alignment evidence](#raw-image-alignment-evidence-and-current-workaround).
+> Size alone does not explain both failures; alignment remains a hypothesis.
+> The next native candidate is the
+> [two-stage chain](#native-boot-in-two-stages) below. The rest of this section
+> is the record of how the self-contained images were built and qualified.
+> `mkpayload.sh` now pads them, but no padded one has been enrolled.
 
 The current candidate is a **device-specific GPU/simpledrm image**, not an
 enrolled boot object. It contains the native `CHAINLOADING=0` loader, the
@@ -1350,16 +1345,61 @@ and returned to the startup options (see the note at the top of this
 section). A RAM run cannot show that: iBoot's handling of the object is
 exactly what it leaves out.
 
+#### Raw-image alignment: evidence and current workaround
+
+The booting raw objects compared below have sizes that are exact multiples of
+16 KiB. Both unaligned objects enrolled here boot-looped:
+
+| Object | Bytes | mod 16384 | Under iBoot |
+|---|---|---|---|
+| Enrolled proxy loader, a plain `m1n1.bin` | 1,114,112 | 0 | boots (this Mac) |
+| TripleU613's `gz16` image with a kernel inside | 7,061,504 | 0 | boots (his J714s, [journey](omarchy-m5-pro/JOURNEY.md)) |
+| Self-contained N1 image: loader, command line, kernel, DT, initramfs | 24,643,107 | 1571 | loops (this Mac) |
+| Stage 1 with `chainload=…` appended, the upstream way to configure one | 1,179,709 | 61 | loops (this Mac) |
+
+Neither loop put anything of ours on the cable. In the second, recoveryOS was
+back 37 s after the `reboot`, with neither loader nor Linux having enumerated
+on USB. This does not identify the failing component: neither stage brings USB
+up on the normal boot path. An iBoot rejection and a loader failure before USB
+initialisation are both possible; chainloading does not test native placement.
+TripleU613's older-firmware J714s notes report unpadded raw images of 192 KB,
+18.9 MB and 49 MB panicking iBoot after the load, while images with a branch
+at offset 0 and 16 KiB padding ran
+([raw-image contract](omarchy-m5-pro/m5-omarchy/reports/21-raw-image-contract.md)).
+Aurora's installer does not append to its stage 1 either: it fills a
+configuration block in place so that the image "keeps its length and STACKBOT
+tail".
+
+The first diagnosis here was size, because a sibling J716s loops just above
+4.8 MiB ([issue #1](https://github.com/betizzel/omarchy-m5/issues/1)). A
+1.2 MB object looping and a reported 7 MB one booting mean size alone does not
+explain the J714s failures. Neither an alignment requirement nor a particular
+tail restriction has been isolated. A plain image avoids both suspect forms,
+but its native boot still needs to be tested.
+
+Consequences in this repo:
+
+- Stage 1 is a plain `m1n1.bin` with its chainload target compiled in
+  (`patches/m1n1-stage1/0001`). `make m1n1-stage1` fails if the result is not
+  a 16 KiB multiple ending in `STACKBOT`.
+- `enroll.sh` refuses a candidate whose size is not a multiple of 16384.
+- `mkpayload.sh` zero-pads self-contained objects; m1n1's payload scan stops
+  at the zeros. No padded object has been enrolled.
+
+**Not shown yet:** the plain stage 1 starting under iBoot. It is staged, not
+enrolled.
+
 #### Native boot in two stages
 
-iBoot only starts a small boot object, so the kernel cannot ride behind the
-loader. The enrolled object is a plain m1n1 that reads a second loader from the
-EFI partition, and that loader reads the kernel from a file:
+The current candidate keeps the enrolled object plain (above), and a kernel
+inside it would cost a Recovery ceremony per kernel. Instead, enrolled m1n1
+reads a second loader from the EFI partition, and that loader reads the kernel
+from a file:
 
 | Stage | Where | What |
 |---|---|---|
-| 1 | enrolled boot object, `build/m1n1-stage1-esp.bin` | baseline m1n1 (`patches/m1n1`, `CHAINLOADING=1`) with `chainload=<EFI PARTUUID>;m1n1/boot.bin` appended |
-| 2 | EFI partition, `m1n1/boot.bin` | the GPU and N1 loader with its calibration guard, `payload=<EFI PARTUUID>;m1n1/payload.bin` appended |
+| 1 | enrolled boot object, `build/m1n1-stage1-esp.bin` | baseline m1n1 (`patches/m1n1`, `CHAINLOADING=1`) with its target `<EFI PARTUUID>;m1n1/boot.bin` compiled in (`patches/m1n1-stage1/0001`); nothing appended |
+| 2 | EFI partition, `m1n1/boot.bin` | the GPU and N1 loader with its calibration guard, `payload=<EFI PARTUUID>;m1n1/payload.bin` appended (stage 1 reads this file, not iBoot) |
 | payload | EFI partition, `m1n1/payload.bin` | command line, `Image.gz`, device tree and initramfs, as `mkpayload.sh` used to append them to the loader |
 
 `patches/m1n1-gpu/0005` adds the `payload=` variable. With no kernel behind
@@ -1381,7 +1421,7 @@ make m1n1-stage1 esp-gpu-n1-simpledrm \
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `m1n1-stage1-esp.bin` | 1,179,709 | `22deb5acad932fb3f450773caf763476085aa0a4549f2bce01c0ac76a720f092` |
+| `m1n1-stage1-esp.bin` | 1,179,648 | `ec29ead17a2e545312142b605c58ee0fd1cf593bf36e92d4cc9ff143a39debeb` |
 | `m1n1/boot.bin` | 1,212,478 | `e7567a5fa08f767abe1ff12ba9c2a9f2c5764d1e7ca3986afcd784545b7f3a9b` |
 | `m1n1/payload.bin` | 23,479,843 | `09f88f9bb541db04df8e0ea0a1c90a8bbf504ca28738afb53409e86f672af6d7` |
 
@@ -1393,9 +1433,15 @@ the Mac reset into its enrolled proxy loader, the watchdog armed and kept:
 | Run | Result |
 |---|---|
 | Stage 2 alone from its proxy, `native-chain-probe.py --payload` | It read `payload.bin` itself and prepared the hand-off; Linux on the SSD root, 15 CPUs. The probe's first version gave up after the proxy client's 3 s reply timeout and lost the loader's output; the loader had finished |
-| The whole chain: stage 1 chainloaded with its variable, no host NVMe probe, nothing else sent | Linux came up by itself: 15 CPUs, `running`, both N1 modules, Wi-Fi connected, no kernel complaints |
+| The whole chain: stage 1 chainloaded, no host NVMe probe, nothing else sent | Linux came up by itself: 15 CPUs, `running`, both N1 modules, Wi-Fi connected, no kernel complaints |
 | `m1n1/boot.bin` renamed away | Stage 1: `Chainload failed: FATError(NotFound)`, then its USB proxy. The usual tether flow booted Linux from that proxy |
 | `m1n1/payload.bin` renamed away | Stage 2, started by stage 1: `GPU profile PASS`, `FATError(NotFound)`, then its USB proxy. The tether flow booted Linux from there too |
+| The whole chain again, with the plain stage 1 | Linux by itself as before; `/chosen/asahi,m1n1-stage1-version` in its device tree names this stage 1 |
+| `m1n1/boot.bin` renamed away, plain stage 1 | `Built-in chainload target: …`, `FATError(NotFound)`, then its USB proxy; the tether flow booted Linux |
+
+The first four runs used stage 1 with its variable appended (1,179,709 bytes).
+That object was then enrolled and boot-looped. The last two are the plain image
+in the table above, which is what is staged now.
 
 The whole chain is simply the object to enroll, chainloaded:
 
@@ -1455,14 +1501,15 @@ not measured.
 
 #### Enroll only after current-volume and rollback checks
 
-Three bundles are on the existing EFI partition, visible from Linux under
-`/boot`. `omarchy-chain-20261109` holds stage 1 of the chain above, the
-rollback image and `enroll.sh`. `omarchy-n1-20261109` and
-`omarchy-native-gpu-20261108` are kept for their rollback image and tether
-fallbacks only: their self-contained candidates have been deleted. Copying a
-bundle there does **not** enroll anything or change the startup disk. The
-partition's stale dirty flag was cleared with `fsck.fat` first, and the files
-were read back after a remount.
+One bundle with an `enroll.sh` is on the existing EFI partition, visible from
+Linux under `/boot`: `omarchy-stage1`, with the plain stage 1 of the chain
+above and the rollback image. Earlier bundles with a helper were removed after
+the wrong one was run in Recovery once (it stopped, as designed).
+`omarchy-native-gpu-20261108` remains for its rollback image and tether
+fallbacks; its self-contained candidate has been deleted. Copying a bundle
+there does **not** enroll anything or change the startup disk. The partition's
+stale dirty flag was cleared with `fsck.fat` first, and the files were read
+back after a remount.
 
 The rollback image was saved before the stub refresh, so it was checked again
 against what is enrolled now (2026-11-09). With the Mac reset into its
@@ -1471,11 +1518,13 @@ enrolled loader, that loader's code, constants and relocation table in RAM
 applied, and the volume group it booted from (`/chosen` `boot-uuid`) is the one
 the bundle records. The mutable data section cannot be compared this way.
 **Repeat both checks before replacing a boot object with any later bundle.**
-After the rollback of 2026-11-09 the same comparison found no differing byte.
+After each of the two rollbacks of 2026-11-09 the same comparison found no
+differing byte.
 
 `scripts/enroll-native.sh`, staged as `enroll.sh` next to an `enroll.conf`
 naming the stub, its volume group and the two images, does the Recovery side.
-It refuses a candidate above 4 MiB, checks the image's size and SHA-256, finds
+It refuses a candidate whose size is not a multiple of 16 KiB or exceeds its
+conservative 4 MiB cap (not a measured J714s limit), checks size and SHA-256, finds
 the stub's System volume by volume group and name (it or the EFI partition may
 be the one mounted with a ` 1` suffix), requires `bputil` to report `Paired`
 and `one true recoveryOS`, keeps a best-effort copy of the current custom
@@ -1483,9 +1532,10 @@ object, and only after a typed confirmation runs the `kmutil` command below.
 `enroll.sh rollback` enrolls the saved Stage 1 the same way. It is plain POSIX
 sh with the tools the installation's step 2 used. Its control flow is dry-run
 on the host against stand-in tools (wrong confirmation, unpaired, another
-volume group, an oversized image). Both paths have run in recoveryOS
-(2026-11-09): the enroll path installed the object it was given, and the
-rollback path put the saved object back.
+volume group, an oversized image, an image with a line appended). Both paths
+have run in recoveryOS (2026-11-09): the enroll path twice, installing the
+object it was given, and the rollback path twice, putting the saved object
+back.
 
 After the boot object had failed to start, holding power and choosing Options
 opened a recoveryOS that `bputil` did not report as paired with the stub. The
@@ -1503,7 +1553,7 @@ In the stub's recoveryOS (shut down, wait 15 s, hold power until "Loading
 startup options", Options, then Utilities → Terminal):
 
 ```sh
-sh /Volumes/*/omarchy-chain-20261109/enroll.sh     # add "rollback" for the way back
+sh /Volumes/*/omarchy-stage1/enroll.sh             # add "rollback" for the way back
 diskutil mount disk0s4                             # first, if that path does not exist
 ```
 

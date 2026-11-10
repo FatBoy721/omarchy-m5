@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: MIT
 """Run one stage of the native boot chain from the m1n1 proxy, with its output visible.
 
-A native boot here has two stages, because iBoot only starts a small boot
-object: the enrolled loader reads m1n1/boot.bin from the EFI partition and
-chainloads it, and that loader reads the kernel payload from a file. Started by
-iBoot, neither stage brings USB up before it is done, so nothing they print
-reaches the host. This runs the same compiled code of one stage from its proxy
+A native boot here uses two stages to keep the enrolled object small and
+kernel updates separate: the enrolled loader reads m1n1/boot.bin from the EFI
+partition and chainloads it; that loader reads the kernel payload from a file.
+Started by iBoot, neither stage brings USB up before it is done, so nothing
+they print reaches the host. This runs the same compiled code of one stage
 instead:
 
   --chainload SPEC   stage 1: chainload_load(SPEC), then the proxy is left and
@@ -19,8 +19,9 @@ instead:
                      answering, after a fallback for instance
 
 SPEC is "<partition uuid>;<path>", as in the chainload= and payload= variables.
-The loader under test is chainloaded without its variable, so it stops in its
-proxy:
+The storage loader under test is chainloaded without its variable, so it stops
+in its proxy. A stage 1 with a compiled-in target instead auto-starts; reach
+its proxy through the missing-boot.bin fallback and use --identify there:
 
     cd build/tether-<flavor>                      # Mac in the m1n1 proxy
     python3 hv/wdt-arm.py 120
@@ -34,10 +35,10 @@ the Mac is compared with LOADER.bin: code and constants, with the loader's own
 relocations applied. Nothing is written to disk and only the loader itself
 touches NVMe. The watchdog has to be armed and is re-armed before each step.
 
-The whole chain with nothing called by hand is simply the enrolled object
-chainloaded with its variable (make m1n1-stage1); it then shows nothing on the
-host until Linux is up. What neither run can show: iBoot starting the enrolled
-object, and USB brought up cold.
+The whole chain with nothing called by hand is simply the plain enrolled
+object chainloaded (make m1n1-stage1); it then shows nothing on the host until
+Linux is up. What neither run can show: iBoot starting the enrolled object,
+and USB brought up cold.
 """
 import argparse
 import pathlib

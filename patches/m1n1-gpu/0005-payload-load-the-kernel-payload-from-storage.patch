@@ -1,10 +1,11 @@
 From: omarchy-m5
 Subject: [PATCH] payload: load the kernel payload from a file on storage
 
-iBoot on T6050 only starts a small custom boot object: a self-contained
-image with the kernel behind the loader (24 MiB) boot-loops on the J714s,
+A native boot keeps the kernel off the enrolled boot object. A kernel inside
+it costs a Recovery ceremony per kernel, a self-contained image with the
+kernel appended (24 MiB, not a multiple of 16 KiB) boot-looped on the J714s,
 and a chainloaded image has to fit below the CTRR range at
-top_of_kernel_data. So a native boot keeps the kernel off the boot object.
+top_of_kernel_data.
 
 payload=<partition uuid>;<path> names a file on a FAT partition that holds
 what would otherwise be appended to the loader: variables, kernel, device
@@ -49,8 +50,8 @@ diff --git a/src/payload.c b/src/payload.c
 +/*
 + * payload=<partition uuid>;<path>: the variables, kernel, device tree and
 + * initramfs from a file on a FAT partition, in the format of an appended
-+ * payload. iBoot only starts a small boot object here, so a native boot
-+ * keeps them on the EFI partition instead of behind the loader.
++ * payload. Keeping these on the EFI partition leaves the enrolled object
++ * small and lets kernel updates avoid another Recovery enrollment.
 + *
 + * NVMe is initialised and shut down once for the read, which is also the
 + * state the kernel expects it in.

@@ -53,12 +53,14 @@ case "${1:-enroll}" in
     enroll)
         IMAGE=$CANDIDATE BYTES=$CANDIDATE_BYTES WORD=ENROLL
         WHAT="the new boot loader"
-        AFTER="The Mac now starts Linux by itself when it powers on."
-        # iBoot on these Macs only starts a small raw object: a 24 MiB image
-        # with the kernel inside boot-looped here, and a sibling M5 Pro stops
-        # just above 4.8 MiB. The kernel belongs in a file on this partition.
+        AFTER="The new loader is enrolled. Reboot to test the direct Linux boot."
+        # Both unaligned candidates boot-looped, but alignment is not yet a
+        # proven cause. Keep this candidate page-aligned and conservatively
+        # below 4 MiB; this cap is not a measured J714s hardware limit.
+        [ $((BYTES % 16384)) -eq 0 ] ||
+            die "$IMAGE is $BYTES bytes, not a multiple of 16384: objects like that boot-looped here"
         [ "$BYTES" -le 4194304 ] ||
-            die "$IMAGE is $BYTES bytes: too large for iBoot to start (4 MiB limit here)"
+            die "$IMAGE is $BYTES bytes: exceeds this helper's conservative 4 MiB enrollment cap"
         ;;
     rollback)
         IMAGE=$ROLLBACK BYTES=$ROLLBACK_BYTES WORD=ROLLBACK

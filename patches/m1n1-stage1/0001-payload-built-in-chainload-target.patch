@@ -1,0 +1,48 @@
+From: omarchy-m5
+Subject: [PATCH] payload: carry the stage 1 chainload target inside the image
+
+The usual stage 1 is m1n1.bin with a chainload= variable appended. On the
+J714s (T6050, mBoot-20457.60.65.0.1) both objects that had something
+appended boot-looped when enrolled: a few resets within about a minute, with
+none of their code reaching USB. Their sizes were not multiples of 16 KiB.
+The plain m1n1.bin that boots is, and so are the other raw objects known to
+start on this model; Aurora's stage 1 likewise has its configuration filled
+in place so that the image keeps its length and its STACKBOT tail.
+
+So the enrolled image is a plain m1n1.bin again and knows its target itself:
+src/stage1_chainload.h, written by scripts/prepare-m1n1-gpu.py, defines
+STAGE1_CHAINLOAD as "<partition uuid>;<path>". An appended chainload=
+variable still wins, for images that are chainloaded rather than enrolled.
+When the target cannot be read, payload_run() fails as before and the
+loader falls back to its proxy.
+
+---
+diff --git a/src/payload.c b/src/payload.c
+index 5b1547f..ac95033 100644
+--- a/src/payload.c
++++ b/src/payload.c
+@@ -13,6 +13,7 @@
+ #include "kboot.h"
+ #include "mitigations.h"
+ #include "smp.h"
++#include "stage1_chainload.h"
+ #include "utils.h"
+ 
+ #include "libfdt/libfdt.h"
+@@ -309,6 +310,16 @@ int payload_run(void)
+     while (p)
+         p = load_one_payload(p, 0);
+ 
++    if (!chainload_spec) {
++        // Keep the target inside the image, preserving its aligned size and
++        // STACKBOT tail. Both unaligned enrolled candidates boot-looped
++        // before USB appeared; alignment versus other native-startup causes
++        // has not yet been isolated.
++        static char builtin[] = STAGE1_CHAINLOAD;
++        printf("Built-in chainload target: %s\n", builtin);
++        chainload_spec = builtin;
++    }
++
+     if (chainload_spec) {
+         return chainload_load(chainload_spec, chosen, chosen_cnt);
+     }

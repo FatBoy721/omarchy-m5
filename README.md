@@ -186,21 +186,25 @@ A self-contained
 [native image](docs/bringup.md#native-n1-image-proven-from-ram-boot-loops-when-enrolled)
 of the same kernel, tree and loader ran its own payload parser, calibration
 guard, NVMe preparation and hand-off from RAM and reached the same running
-system. **Enrolled on 2026-11-09, it boot-looped:** a few restarts, then back
-to the startup options, and nothing of it ever appeared on the cable. iBoot
-only starts a small raw object: this one was 24.6 MiB, and a sibling M5 Pro
-stops just above 4.8 MiB (the limit was not measured here). The saved boot
-object was put back with `enroll.sh rollback`.
+system. **Enrolled on 2026-11-09, it boot-looped**, and so did a 1.2 MB loader
+with a `chainload=` line appended: a few restarts, then recoveryOS, and nothing
+of either ever appeared on the cable. Size alone does not explain both
+failures. Both had data appended and neither size was a multiple of 16 KiB;
+[the raw objects compared in the runbook](docs/bringup.md#raw-image-alignment-evidence-and-current-workaround)
+that booted were aligned. Alignment is a hypothesis, not yet a proven fix.
+The saved boot object was put back with `enroll.sh rollback` both
+times.
 
 A native boot is therefore
-[two stages](docs/bringup.md#native-boot-in-two-stages): a 1.2 MB enrolled m1n1
-reads the GPU/N1 loader from the EFI partition, and that loader reads the
-kernel, device tree and initramfs from a file there. Chainloaded from the cable
-with nothing else sent, the whole chain booted this system, and with either
-file missing the stage concerned fell back to its USB proxy, from which the
-tether flow still works. Stage 1 is staged for enrollment and **not enrolled
-yet**: iBoot starting it and a boot with the cable unplugged are still to be
-shown. A small unit in the root image clears
+[two stages](docs/bringup.md#native-boot-in-two-stages), and stage 1 is a plain
+image: a 1.2 MB m1n1 with its target compiled in reads the GPU/N1 loader from
+the EFI partition, and that loader reads the kernel, device tree and initramfs
+from a file there. Chainloaded from the cable with nothing else sent, the whole
+chain booted this system, and with either file missing the stage concerned
+fell back to its USB proxy, from which the tether flow still works. The plain
+stage 1 is staged for enrollment and **not enrolled yet**: iBoot starting it
+and a boot with the cable unplugged are still to be shown. A small unit in the
+root image clears
 [iBoot's boot counter](docs/bringup.md#iboots-boot-counter), which otherwise
 adds up with every restart made without the cable.
 

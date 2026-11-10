@@ -15,6 +15,7 @@ import argparse
 import importlib.util
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -109,9 +110,16 @@ def main():
     parser.add_argument("--stage1", action="store_true",
                         help="only the baseline, no GPU hand-off, in build/m1n1-stage1: the small "
                              "object to enroll, which chainloads the real loader from storage")
+    parser.add_argument("--chainload", metavar="SPEC",
+                        help="with --stage1: the '<partition uuid>;<path>' it chainloads, compiled "
+                             "into the image (nothing may be appended to an enrolled object)")
     args = parser.parse_args()
     if args.stage1 and (args.simpledrm or args.n1 or args.standalone or args.storage):
         parser.error("--stage1 is the plain baseline and takes no other variant")
+    if bool(args.stage1) != bool(args.chainload):
+        parser.error("--stage1 and --chainload go together")
+    if args.chainload and not re.fullmatch(r"[0-9a-fA-F-]{36};[\w./-]+", args.chainload):
+        parser.error("--chainload is <partition uuid>;<path>")
     if args.standalone and (not args.simpledrm or args.adt is None):
         parser.error("--standalone requires --simpledrm and --adt")
     if args.adt is not None and not args.standalone:
@@ -141,7 +149,14 @@ def main():
         git(prepared, "add", "-u")
         git(prepared, "-c", "user.name=Local GPU Trial", "-c", "user.email=local@localhost",
             "commit", "-m", "Snapshot reproducible local J714s loader baseline")
-        if not args.stage1:
+        target_path = Path("src/stage1_chainload.h")
+        if args.stage1:
+            git(prepared, "apply", "--binary",
+                str(root / "patches/m1n1-stage1/0001-payload-built-in-chainload-target.patch"))
+            (prepared / target_path).write_text(
+                "/* Written by scripts/prepare-m1n1-gpu.py --stage1 --chainload. */\n"
+                f'#define STAGE1_CHAINLOAD "{args.chainload}"\n')
+        else:
             git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0001-t6050-g17s-adt-handoff.patch"))
         if args.simpledrm:
             git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0002-kboot-t6050-simpledrm-only.patch"))
@@ -174,17 +189,20 @@ def main():
                     raise SystemExit(f"Refusing missing tracked file: {existing}")
                 if signature(existing) != signature(prepared / name):
                     raise SystemExit(f"Refusing unrelated/stale source changes: {existing}; choose a fresh --output")
-            if args.standalone:
-                existing = dest / profile_path
+            generated = ([(profile_path, "native calibration")] if args.standalone else []) + \
+                        ([(target_path, "chainload target")] if args.stage1 else [])
+            for path, what in generated:
+                existing = dest / path
                 if (existing.is_symlink() or not existing.is_file() or
-                        existing.read_bytes() != (prepared / profile_path).read_bytes()):
-                    raise SystemExit(f"Refusing missing/changed native calibration: {existing}")
+                        existing.read_bytes() != (prepared / path).read_bytes()):
+                    raise SystemExit(f"Refusing missing/changed {what}: {existing}")
             print(f"Existing isolated loader matches pinned recipe: {dest}")
         else:
             prepared.rename(dest)
             print(f"Prepared isolated loader: {dest}")
         if args.stage1:
             print(f"Base: {BASE}; baseline patches only (no GPU, display or N1 hand-off changes)")
+            print(f"Chainload target, inside the image: {args.chainload}")
             return
         print(f"Base: {BASE}; GPU source: omacom/m1n1 PR37 2bebfe7708c7077377ecc0d80d29bfb458335c0d")
         print("Display handoff: explicit simpledrm opt-out supported" if args.simpledrm
