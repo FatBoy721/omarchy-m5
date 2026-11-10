@@ -27,13 +27,19 @@ FILES = {
     # usb-gadget-net.sh (initramfs) gives the gadget on UDC n (M5 port) the
     # EEM netdev usb<n>; the ThinkPad side is scripts/host-usbnet.sh
     # (10.55.<n>.1, NAT). One file per port, so any port gets a route.
+    # The tether is only a fallback default route: the host forwards nothing
+    # unless host-usbnet.sh runs, so Wi-Fi (NetworkManager metric 600) and
+    # Ethernet have to outrank it.
     **{f"etc/systemd/network/10-usb-gadget-{n}.network": f"""[Match]
 Name=usb{n}
 
 [Network]
 Address=10.55.{n}.2/24
-Gateway=10.55.{n}.1
 DNS=1.1.1.1
+
+[Route]
+Gateway=10.55.{n}.1
+Metric=2048
 """ for n in range(3)},
 }
 SYMLINKS = {}
