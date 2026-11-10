@@ -1316,23 +1316,53 @@ kernel logged no Oops, WARN or SError.
 
 The candidate is 24,643,107 bytes, SHA256
 `47f7a522326c077f01a84660a0a8bdbe8ce0fd768a529879bd4fbf6c436af4d8`.
-**It is not enrolled and nothing was written to the Mac's disk:** no recovery
-bundle for it is staged on the EFI partition. The limits of a RAM run stated
-above apply to it unchanged (iBoot's placement and the CTRR reservation, USB
-brought up cold, a cold boot with the cable unplugged), and so does the
-procedure below once a bundle with this candidate and a verified rollback
-image has been staged. An enrolled image carries its kernel: the two N1
-modules under `/usr/lib/modules` have to be the ones built with it.
+The RAM run wrote nothing to the Mac's disk. A recovery bundle with this
+candidate and a re-verified rollback image has since been staged
+(`omarchy-n1-20261109`, below). The limits of a RAM run stated above apply to
+it unchanged (iBoot's placement and the CTRR reservation, USB brought up cold,
+a cold boot with the cable unplugged). An enrolled image carries its kernel:
+the two N1 modules under `/usr/lib/modules` have to be the ones built with it.
 
 #### Enroll only after current-volume and rollback checks
 
-The staged recovery bundle is `omarchy-native-gpu-20261108` on the existing
-EFI partition, visible from Linux at `/boot/omarchy-native-gpu-20261108`.
-Copying it there does **not** enroll it or change the startup disk. It includes
-the candidate, saved raw proxy Stage 1, both GPU and non-GPU tether fallbacks,
-checksums and a manifest. The saved raw image's provenance was established
-before the stub refresh; **re-identify/backup the currently enrolled boot object
-and verify the saved rollback against it before replacing anything**.
+Two recovery bundles are staged on the existing EFI partition, visible from
+Linux under `/boot`: `omarchy-native-gpu-20261108` (the GPU image) and
+`omarchy-n1-20261109` (the N1 image, with `enroll.sh`). Copying them there does
+**not** enroll anything or change the startup disk. Each holds its candidate,
+the saved raw proxy Stage 1 as the rollback, checksums and a manifest; the
+older one also carries the GPU and non-GPU tether fallbacks. The partition's
+stale dirty flag was cleared with `fsck.fat` first, and the files were read
+back after a remount.
+
+The rollback image was saved before the stub refresh, so it was checked again
+against what is enrolled now (2026-11-09). With the Mac reset into its
+enrolled loader, that loader's code, constants and relocation table in RAM
+(447,088 bytes) equal the saved file once the loader's own relocations are
+applied, and the volume group it booted from (`/chosen` `boot-uuid`) is the one
+the bundle records. The mutable data section cannot be compared this way.
+**Repeat both checks before replacing a boot object with any later bundle.**
+
+`scripts/enroll-native.sh`, staged as `enroll.sh` next to an `enroll.conf`
+naming the stub, its volume group and the two images, does the Recovery side.
+It checks the image's size and SHA-256, finds the stub's System volume by
+volume group and name (it or the EFI partition may be the one mounted with a
+` 1` suffix), requires `bputil` to report `Paired` and `one true recoveryOS`,
+keeps a best-effort copy of the current custom object, and only after a typed
+confirmation runs the `kmutil` command below. `enroll.sh rollback` enrolls the
+saved Stage 1 the same way. It is plain POSIX sh with the tools the
+installation's step 2 used. Its control flow was dry-run on the host against
+stand-in tools (wrong confirmation, unpaired, not 1TR, another volume group,
+an altered image, the name collision, no hash tool), not in recoveryOS.
+
+In the stub's recoveryOS (shut down, wait 15 s, hold power until "Loading
+startup options", Options, then Utilities → Terminal):
+
+```sh
+sh /Volumes/*/omarchy-n1-20261109/enroll.sh        # add "rollback" for the way back
+diskutil mount disk0s4                             # first, if that path does not exist
+```
+
+What follows is the same procedure by hand.
 
 From macOS/Recovery, identify the current Omarchy **System** volume and its
 volume-group UUID afresh. Never reuse the pre-refresh UUID or guess a disk
