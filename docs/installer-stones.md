@@ -127,6 +127,20 @@ Bugs found on the way (each now fixed in this flavor or its loader):
 | port/DART left disabled | loader keys kernel-train mode off `apple,manual-availability` | `apple,manual-availability` on `dart_apcie0` (in the shared N1 dtsi) |
 | "GPU is disabled ... not filling it" / "mailbox GFX has no usable interrupts" | loader fills only an enabled node and assumed 4-cell AIC | `&gpu` okay (`0008`) + `patches/m1n1-installer/0002` |
 
+**DCP (internal display), 2026-11-10, same unit, under the m1n1 hypervisor only.**
+With `chosen.asahi,t6050-display=1`, DTB `t6050-j714s-gpu-tripleu.dtb` (not
+`-simpledrm`) and `patches/m1n1-installer/0003`-`0004`, the installer loader
+hands off the running DCP (`handed off: framebuffer 0x105d310c000+0x57ac000,
+firmware 27.3 beta`), and the firmware-27 driver picks build `27.2.98.1`,
+boots the DCP, sees the panel and modesets 3024x1890@120 (`appledrmfb` on
+fb0). Before 0003 the loader refused (`a display node has no phandle`: dtc
+gives the unreferenced dcp and display-subsystem nodes none); before 0004 the
+kernel refused (`firmware-compat 27.3.0 has no 27.x method table`).
+**Not yet good:** the same loader and DTB booted on bare metal hung with no
+network or USB (cause not yet read); the HV guest logs `format XR24 ... not
+supported`; no HV session has stayed up past about a minute after login.
+Keep `t6050-display=0` for daily boots.
+
 Still open: `ufw` fails (IPv6 netfilter missing from the config); the USB EEM
 gadget link drops after boot; Arch's `kernel-modules-hook` deletes this
 kernel's modules whenever another kernel boots (package them, or make this
