@@ -245,8 +245,10 @@ own Mac.
 
 ## License
 
-[MIT](LICENSE) for this repo's original scripts, docs, and device trees. The
-vendored patches under `patches/` keep their upstream SPDX identifiers (m1n1 is
-MIT; the Linux patches are GPL-2.0) and are governed by those. No Apple firmware
-is redistributed here - the extraction scripts re-derive everything from a
-locally-downloaded IPSW.
+[MIT](LICENSE) for this repo's original scripts and docs. Patches under
+`patches/` follow the project they apply to and keep its SPDX identifiers: the
+Linux patches are GPL-2.0, device trees (there and under `dt/`) are
+GPL-2.0+ OR MIT, and the m1n1 patches are MIT. Where a file carries an SPDX
+line, that line decides. Contributions are accepted on the same terms. No Apple
+firmware is redistributed here - the extraction scripts re-derive everything
+from a locally-downloaded IPSW.
