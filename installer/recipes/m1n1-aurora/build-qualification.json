@@ -1,0 +1,7 @@
+{
+  "source_commit": "02785a35e046901d5686ab9059b2c08b6256752a",
+  "hardware_tested": false,
+  "stage1_auto_enrollment": false,
+  "promotion_gate": "private developer candidate only: exact J714s normal-chain boot, matched kernel/modules/Mesa, encrypted fresh install, restart/poweroff, update and recovery remain unqualified; no model admission or publication",
+  "source_patch_sha256": "d634a7aba77bc72b5d4ed45ac964fd5c7b9bb0ab46cc7a70a6385771aaa1b1f8"
+}

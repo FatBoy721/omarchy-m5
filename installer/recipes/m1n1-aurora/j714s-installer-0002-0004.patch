@@ -1,0 +1,109 @@
+diff --git a/src/kboot.c b/src/kboot.c
+index 1e7d1ca..ee7b2a5 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -5400,8 +5400,8 @@ static void dt_reserve_t6050_oslogs(void)
+  * and the kboot_display_handoff.c walk is written for two-level tables; these are four-level).
+  *
+  * apple,firmware-compat names the DCP interface the stub's firmware implements: the stub's own
+- * version, except that the 27.3 beta 1 stub publishes <27 3 0>, the interface read from its DCP
+- * firmware (IOMFB method tags and swap layout). chosen.asahi,t6050-dcp-compat=27.0.0 publishes
++ * version, so 27.3 beta 1 publishes <27 2 98 1>, the key the firmware-27 DCP driver
++ * (linux-aurora 0013) chooses its method table and swap layout by. chosen.asahi,t6050-dcp-compat=27.0.0 publishes
+  * <27 0 0> instead: that claims an ABI this firmware was not built for; experiment only.
+  */
+ #define T6050_ASC_CPU_CONTROL     0x44
+@@ -5565,10 +5565,21 @@ static int t6050_disp_publish(const struct t6050_disp_nodes *ph, u64 vram, u64 v
+     return 0;
+ }
+ 
++/* The phandle of the first @compat node, giving it a new one if it has none */
++static bool t6050_disp_phandle(const char *compat, u32 *phandle)
++{
++    int node = fdt_node_offset_by_compatible(dt, -1, compat);
++
++    if (node < 0)
++        return false;
++    if (*phandle)
++        return true;
++    return !fdt_generate_phandle(dt, phandle) && !fdt_setprop_u32(dt, node, "phandle", *phandle);
++}
++
+ static void dt_set_display_t6050(void)
+ {
+     static const struct fw_version_info compat_27_0 = {V27_0, "27.0", {27, 0, 0}, 3, "override"};
+-    static const struct fw_version_info compat_27_3 = {V27_3B1, "27.3", {27, 3, 0}, 3, "compat"};
+     struct t6050_disp_state e;
+ 
+     t6050_disp_read(&e);
+@@ -5614,12 +5625,16 @@ static void dt_set_display_t6050(void)
+         t6050_dcp_log("no ADT /vram above OS RAM: no handoff\n");
+         return;
+     }
+-    const struct fw_version_info *compat =
+-        os_firmware.version == V27_3B1 ? &compat_27_3 : &os_firmware;
++    const struct fw_version_info *compat = &os_firmware;
+     if (t6050_chosen_is("asahi,t6050-dcp-compat", "27.0.0")) {
+         t6050_dcp_log("OVERRIDE: firmware-compat 27.0.0\n");
+         compat = &compat_27_0;
+     }
++    /*
++     * The DARTs and the mailbox are referenced, so they carry phandles. Nothing references the
++     * dcp and display-subsystem nodes themselves, and dtc gives an unreferenced node none: those
++     * two get one inside the undoable edit below.
++     */
+     struct t6050_disp_nodes ph = {
+         .dcp = fdt_get_phandle(dt, dcp),
+         .disp = fdt_get_phandle(dt, disp),
+@@ -5627,13 +5642,16 @@ static void dt_set_display_t6050(void)
+         .dart_disp = fdt_get_phandle(dt, dart_disp),
+         .mbox = fdt_get_phandle(dt, mbox),
+     };
+-    if (!ph.dcp || !ph.disp || !ph.dart_dcp || !ph.dart_disp || !ph.mbox) {
+-        t6050_dcp_log("a display node has no phandle: no handoff\n");
++    if (!ph.dart_dcp || !ph.dart_disp || !ph.mbox) {
++        t6050_dcp_log("a DART or the mailbox has no phandle: no handoff\n");
+         return;
+     }
+ 
+     void *saved = t6050_dt_save();
+-    if (!saved || !t6050_dt_done(saved, !t6050_disp_publish(&ph, vram, vram_size, compat))) {
++    bool ok = saved && t6050_disp_phandle("apple,t6050-dcp", &ph.dcp) &&
++              t6050_disp_phandle("apple,display-subsystem", &ph.disp) &&
++              !t6050_disp_publish(&ph, vram, vram_size, compat);
++    if (!saved || !t6050_dt_done(saved, ok)) {
+         t6050_dcp_log("DT edit failed: no handoff\n");
+         return;
+     }
+diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
+index 5bb0f25..c4e4efb 100644
+--- a/src/kboot_gpu.c
++++ b/src/kboot_gpu.c
+@@ -3245,15 +3245,23 @@ static int t6050_get_mbox(void *dt, u32 ph, u32 *seen, u64 *wrapper, u64 *vbar)
+         bail("FDT: GPU: T6050: no GPU coprocessor window for mailbox role %s\n", role);
+     *seen |= BIT(asc);
+ 
+-    /* AIC interrupts are <type die irq flags>; every irq must be one of the coprocessor's */
++    /*
++     * AIC interrupts are <type die irq flags>, or <type irq flags> where the DT's AIC binding
++     * has no die cell; every irq must be one of the coprocessor's.
++     */
++    int aic = fdt_node_offset_by_compatible(dt, -1, "apple,t8122-aic3");
++    const fdt32_t *aic_cells = aic < 0 ? NULL : fdt_getprop(dt, aic, "#interrupt-cells", NULL);
++    int cells = aic_cells ? (int)fdt32_ld(aic_cells) : 4;
++    if (cells != 3 && cells != 4)
++        bail("FDT: GPU: T6050: unsupported AIC #interrupt-cells %d\n", cells);
+     int len;
+     u32 alen;
+     const fdt32_t *irqs = fdt_getprop(dt, mbox, "interrupts", &len);
+     const u32 *airqs = adt_getprop(adt, anode, "interrupts", &alen);
+-    if (!irqs || !airqs || len <= 0 || len % 16)
++    if (!irqs || !airqs || len <= 0 || len % (cells * 4))
+         bail("FDT: GPU: T6050: mailbox %s has no usable interrupts\n", role);
+-    for (int i = 0; i < len / 16; i++) {
+-        u32 irq = fdt32_ld(&irqs[4 * i + 2]);
++    for (int i = 0; i < len / (cells * 4); i++) {
++        u32 irq = fdt32_ld(&irqs[cells * i + cells - 2]);
+         u32 j = 0;
+         while (j < alen / 4 && airqs[j] != irq)
+             j++;
