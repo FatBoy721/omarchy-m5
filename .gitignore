@@ -9,3 +9,6 @@ __pycache__/
 
 # Working handoff notes - kept locally, not part of the published repo
 docs/HANDOFF*.md
+
+# m5-remote run logs
+tools/m5-remote/logs/

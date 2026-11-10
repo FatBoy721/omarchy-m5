@@ -1,0 +1,52 @@
+From 6fd53e01a76b12a6793b8093376ba06b2ff8d7a3 Mon Sep 17 00:00:00 2001
+From: TripleU <usher@gentechsolution.com>
+Date: Tue, 10 Nov 2026 11:32:04 -0500
+Subject: [PATCH] arm64: dts: apple: j714s-gpu-tripleu: enable the GPU, keep
+ ATC0/ATC2 off
+
+For TripleU613's unit booted with the installer-family stage-2 m1n1:
+that loader only fills an already enabled GPU node (needs
+patches/m1n1-installer/0002 for this tree's 3-cell AIC), and, as in the
+installer freeze, it prepares only ATC1 for the EEM gadget.
+
+Verified on that unit: GPU firmware initdata acknowledged, Vulkan "Apple
+M5 Pro (G17S B1)" via the native Mesa; Wi-Fi, Bluetooth, 15 CPUs.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ .../dts/apple/t6050-j714s-gpu-tripleu.dts     | 21 +++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
+index 78ee93407..7714522f4 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
+@@ -15,3 +15,24 @@ &gpu {
+  * closure of the host include; a loader train leaves that closure as it is.
+  */
+ #include "t6050-j714s-n1-host.dtsi"
++
++/*
++ * The installer m1n1 only fills a GPU node that is already enabled ("FDT: GPU:
++ * T6050 GPU is disabled in the device tree, not filling it"); this repo's GPU
++ * loader enables it itself. Needs patches/m1n1-installer/0002 for this tree's
++ * 3-cell AIC. Verified: aurora firmware initdata acknowledged, Vulkan up.
++ */
++&gpu {
++	status = "okay";
++};
++
++/*
++ * As the installer freeze: the installer m1n1 prepares only ATC1 (the EEM
++ * gadget, 2aa280000.usb). Keep ATC0/ATC2 DWC3 and their DARTs off.
++ */
++&dwc3_0 { status = "disabled"; };
++&dwc3_0_dart_0 { status = "disabled"; };
++&dwc3_0_dart_1 { status = "disabled"; };
++&dwc3_2 { status = "disabled"; };
++&dwc3_2_dart_0 { status = "disabled"; };
++&dwc3_2_dart_1 { status = "disabled"; };
+-- 
+2.56.0
+

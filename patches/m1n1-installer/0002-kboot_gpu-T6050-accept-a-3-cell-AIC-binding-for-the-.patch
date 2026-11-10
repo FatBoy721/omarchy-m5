@@ -1,0 +1,56 @@
+From 4e3da7a7d976db94e8fb7d1cf57b8559d88d4837 Mon Sep 17 00:00:00 2001
+From: TripleU <usher@gentechsolution.com>
+Date: Tue, 10 Nov 2026 10:51:01 -0500
+Subject: [PATCH] kboot_gpu: T6050: accept a 3-cell AIC binding for the GPU
+ mailboxes
+
+The T6050 GPU handoff assumed <type die irq flags> mailbox interrupts and
+rejected trees whose AIC binding has no die cell (#interrupt-cells = 3, as
+in betizzel/omarchy-m5's t6050.dtsi): "mailbox GFX has no usable
+interrupts", GPU disabled. Read #interrupt-cells from the AIC node and
+index the irq cell accordingly; 4-cell trees behave as before.
+
+Verified on TripleU613's J714s: GPU handed off, aurora firmware initdata
+acknowledged, Vulkan via native Mesa.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWr3saGxDib7Zd5Ksyw
+---
+ src/kboot_gpu.c | 16 ++++++++++++----
+ 1 file changed, 12 insertions(+), 4 deletions(-)
+
+diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
+index 5bb0f25..c4e4efb 100644
+--- a/src/kboot_gpu.c
++++ b/src/kboot_gpu.c
+@@ -3245,15 +3245,23 @@ static int t6050_get_mbox(void *dt, u32 ph, u32 *seen, u64 *wrapper, u64 *vbar)
+         bail("FDT: GPU: T6050: no GPU coprocessor window for mailbox role %s\n", role);
+     *seen |= BIT(asc);
+ 
+-    /* AIC interrupts are <type die irq flags>; every irq must be one of the coprocessor's */
++    /*
++     * AIC interrupts are <type die irq flags>, or <type irq flags> where the DT's AIC binding
++     * has no die cell; every irq must be one of the coprocessor's.
++     */
++    int aic = fdt_node_offset_by_compatible(dt, -1, "apple,t8122-aic3");
++    const fdt32_t *aic_cells = aic < 0 ? NULL : fdt_getprop(dt, aic, "#interrupt-cells", NULL);
++    int cells = aic_cells ? (int)fdt32_ld(aic_cells) : 4;
++    if (cells != 3 && cells != 4)
++        bail("FDT: GPU: T6050: unsupported AIC #interrupt-cells %d\n", cells);
+     int len;
+     u32 alen;
+     const fdt32_t *irqs = fdt_getprop(dt, mbox, "interrupts", &len);
+     const u32 *airqs = adt_getprop(adt, anode, "interrupts", &alen);
+-    if (!irqs || !airqs || len <= 0 || len % 16)
++    if (!irqs || !airqs || len <= 0 || len % (cells * 4))
+         bail("FDT: GPU: T6050: mailbox %s has no usable interrupts\n", role);
+-    for (int i = 0; i < len / 16; i++) {
+-        u32 irq = fdt32_ld(&irqs[4 * i + 2]);
++    for (int i = 0; i < len / (cells * 4); i++) {
++        u32 irq = fdt32_ld(&irqs[cells * i + cells - 2]);
+         u32 j = 0;
+         while (j < alen / 4 && airqs[j] != irq)
+             j++;
+-- 
+2.56.0
+

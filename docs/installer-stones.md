@@ -105,23 +105,32 @@ keeping this repo's DT layout (`make kernel-aurora-n1`):
   installer m1n1 enables the port and DART after training.
 - Centauri Wi-Fi/BT are modules (`request_firmware_direct` needs the rootfs).
 
-Untested on hardware. Expected boots:
+**Status 2026-11-10, TripleU613's J714s, bare metal:** boots with 15 CPUs,
+N1 Wi-Fi (associated, DHCP, Tailscale) and Bluetooth, GPU (aurora firmware
+initdata acknowledged; Vulkan "Apple M5 Pro (G17S B1)" via the native Mesa
+session env) and simpledrm on the internal panel.
 
-| Loader | DTB | Expect |
+How it boots: the installer-family ESP stage-2 m1n1 with
+`patches/m1n1-installer/0002` (3-cell AIC for the GPU mailboxes;
+`make m1n1-installer-stage2`), DTB `t6050-j714s-gpu-tripleu-simpledrm.dtb`,
+the installer's boot args plus `fpwm0` in `m5_pmgr_allow`, and the modules
+under `/usr/lib/modules/<release>`.
+
+Bugs found on the way (each now fixed in this flavor or its loader):
+
+| Symptom | Cause | Fix |
 | --- | --- | --- |
-| this repo's m1n1 | `t6050-j714s-gpu*.dtb` | as before; N1 inert |
-| `make m1n1-installer` | `t6050-j714s-gpu-tripleu-simpledrm.dtb` | N1 may train; DCP display absent (simpledrm) |
+| hang in `deferred_probe_initcall` | `m5_pmgr_ro` skips power-on of `fpwm0`; the kbd-backlight PWM probe hits an unpowered block | add `fpwm0` to `m5_pmgr_allow` |
+| SError when pinctrl probes | DT lacked `gpio-reserved-ranges`; pin 112 is secure | reserved ranges on `pinctrl_ap` (betizzel's `0004`, found independently) |
+| N1 port deferred forever | `pinctrl-apple-gpio` was `=m`, PERST# unresolved | `=y` in `aurora-j714s-n1.config` |
+| "invalid or missing MSI slice" | pcie-apple only took 4-cell AIC slices | accept 3-cell (betizzel's `0005`, found independently) |
+| port/DART left disabled | loader keys kernel-train mode off `apple,manual-availability` | `apple,manual-availability` on `dart_apcie0` (in the shared N1 dtsi) |
+| "GPU is disabled ... not filling it" / "mailbox GFX has no usable interrupts" | loader fills only an enabled node and assumed 4-cell AIC | `&gpu` okay (`0008`) + `patches/m1n1-installer/0002` |
 
-**Result 2026-11-09 (TripleU613's unit, installer-family stage-2 m1n1):** bare
-metal hangs deterministically in `deferred_probe_initcall`. Found under the m1n1
-hypervisor (guest data abort at `0x505040000`): the boot args carried over from
-the installer (`m5_pmgr_ro m5_pmgr_allow=...`) make every PMGR domain outside the
-allowlist read-only, and power-on of such a domain silently returns 0. This
-repo's DT enables the keyboard-backlight PWM (`pwm@505040000`, domain `fpwm0`),
-so its deferred probe touches an unpowered block. With `fpwm0` added to
-`m5_pmgr_allow` the kernel completes all initcalls and runs `/init` under the
-HV. `apple,manual-availability` on `dart_apcie0` was a separate real omission
-(the loader enables port/DART off it). Not yet booted on bare metal.
+Still open: `ufw` fails (IPv6 netfilter missing from the config); the USB EEM
+gadget link drops after boot; Arch's `kernel-modules-hook` deletes this
+kernel's modules whenever another kernel boots (package them, or make this
+the default). Found with `tools/m5-remote` (m1n1 hypervisor + MMIO tracing).
 
 **Result 2026-11-09 (betizzel's unit, this repo's loader): the merged tree runs
 the N1.** Flavor `aurora-gpu-n1-simpledrm` (this unit's GPU bins) with

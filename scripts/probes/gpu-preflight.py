@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+import struct
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "proxyclient"))
@@ -27,6 +28,31 @@ PERF_SHA256 = {
     "cs-perf-states": "3db7509b5e5f37f47a9332291a075cbd3ba39bab26fccff05e36ca22c2785c15",
 }
 
+# TripleU613's J714s (owner ADT d7feb012...): the kernel's J714S_TRIPLEU tables,
+# as (MHz, core0, core1, sram0, sram1) mV and auxiliary (MHz, core, sram) mV.
+TRIPLEU_MAIN = [(0, 125, 125, 775, 775), (338, 590, 590, 775, 775), (486, 620, 620, 775, 775),
+                (636, 655, 655, 775, 775), (796, 705, 705, 775, 775), (888, 730, 730, 775, 775),
+                (988, 760, 760, 775, 775), (1084, 785, 785, 785, 785), (1182, 800, 800, 800, 800),
+                (1278, 840, 840, 840, 840), (1374, 880, 865, 880, 865), (1470, 925, 910, 925, 910),
+                (1578, 1000, 985, 1000, 985), (1620, 1025, 1010, 1025, 1010)]
+TRIPLEU_AUX = [(24, 125, 775), (338, 600, 775), (486, 635, 775), (636, 640, 775), (796, 680, 775),
+               (888, 700, 775), (988, 740, 775), (1084, 765, 775), (1182, 790, 790),
+               (1278, 830, 830), (1374, 860, 860), (1470, 895, 895), (1578, 955, 955),
+               (1620, 985, 985)]
+
+
+def decode_bins(sgx):
+    """Decode the live sgx voltage tables the way the kernel table was derived."""
+    rows = lambda name: list(struct.iter_unpack("<II", sgx[name]))
+    core, sram = rows("perf-states"), rows("perf-states-sram")
+    if len(core) != 28 or len(sram) != 28:
+        raise SystemExit("GPU preflight: unexpected perf-states shape")
+    main = [(core[i][0] // 10**6, core[i][1], core[i + 14][1], sram[i][1], sram[i + 14][1])
+            for i in range(14)]
+    aux_data = sgx["afr-perf-states"]
+    aux = list(struct.iter_unpack("<QQ", aux_data[16:-8]))
+    return main, [(f // 10**6, v // 1000, max(775, v // 1000)) for v, f in aux]
+
 
 def properties(node):
     return {prop["name"]: prop["value"] for prop in node["properties"]}
@@ -40,7 +66,7 @@ def child(node, name):
     return matches[0]
 
 
-def validate(data):
+def validate(data, unit="betizzel"):
     root = ADTNodeStruct.parse(data)
     model = properties(root).get("model", b"").split(b"\0", 1)[0].decode("ascii")
     if model != MODEL:
@@ -51,6 +77,12 @@ def validate(data):
         if value != FIRMWARE:
             raise SystemExit(f"GPU preflight: {name} {value!r} differs from {FIRMWARE}")
     sgx = properties(child(child(root, "arm-io"), "sgx"))
+    if unit == "tripleu":
+        main, aux = decode_bins(sgx)
+        if main != TRIPLEU_MAIN or aux != TRIPLEU_AUX:
+            raise SystemExit(f"GPU preflight: live bins differ from J714S_TRIPLEU\n main={main}\n aux={aux}")
+        print(f"GPU preflight PASS: {model}, {FIRMWARE}, live bins equal the kernel's J714S_TRIPLEU")
+        return root
     for name, expected in PERF_SHA256.items():
         actual = hashlib.sha256(sgx.get(name, b"")).hexdigest()
         if actual != expected:
@@ -87,13 +119,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adt", type=Path, help="check saved ADT without connecting to hardware")
     parser.add_argument("--save", type=Path, help="save raw ADT privately; never overwrite")
+    parser.add_argument("--unit", choices=("betizzel", "tripleu"), default="betizzel",
+                        help="which J714s unit's GPU voltage bins the kernel DTB selects")
     args = parser.parse_args()
     data = args.adt.read_bytes() if args.adt else capture()
     if args.save:
         with args.save.open("xb") as output:
             output.write(data)
         print(f"Saved private ADT: {args.save} (SHA256 {hashlib.sha256(data).hexdigest()})")
-    validate(data)
+    validate(data, args.unit)
 
 
 if __name__ == "__main__":

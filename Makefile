@@ -1,5 +1,5 @@
 # omarchy-m5 dev harness
-.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone m1n1-gpu-n1-standalone m1n1-stage1 esp-gpu-n1-simpledrm payload-gpu-simpledrm payload-gpu-n1-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
+.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone m1n1-gpu-n1-standalone m1n1-stage1 esp-gpu-n1-simpledrm payload-gpu-simpledrm payload-gpu-n1-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor m1n1-installer-stage2
 AURA_ROLLBACK ?= build/m1n1-enrolled-stage1.bin
 GPU_ADT ?= build/adt-runtime-j714s.bin
 # GPT partition UUID of the Mac's EFI (FAT) partition, where the loader and kernel live for a native boot
@@ -116,6 +116,10 @@ kernel-aurora-installer: ## build the installer's J714s kernel (N1 Wi-Fi/BT, PHY
 m1n1-installer: ## build the installer's J714s loader on omacom/m1n1 (N1 tunables)
 	scripts/prepare-m1n1-installer.sh
 	M1N1=build/m1n1-installer CHAINLOADING=1 scripts/build-m1n1.sh
+
+m1n1-installer-stage2: ## build the ESP stage-2 (RELEASE=1 ESP_STAGE2=1) used by the J714s installer boot
+	scripts/prepare-m1n1-installer.sh
+	cd build/m1n1-installer && $(MAKE) RELEASE=1 CHAINLOADING=1 ESP_STAGE2=1 USE_CLANG=1
 
 dtbs:           ## overlay DTs + build device trees only (fast syntax check)
 	scripts/build-kernel.sh dtbs

@@ -28,6 +28,7 @@ KERNEL_FLAVOR="${KERNEL_FLAVOR:-asahi}"
 CHAIN="${M1N1_CHAIN:-build/m1n1-chain.bin}"
 DT_NAME="t6050-$BOARD.dtb"
 GPU_TRIAL=0
+PREFLIGHT_UNIT=betizzel
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -78,7 +79,29 @@ case "$KERNEL_FLAVOR" in
         CHAIN="${M1N1_CHAIN:-build/m1n1-chain-gpu-n1.bin}"
         M1N1="${M1N1:-build/m1n1-gpu-n1}"
         ;;
-    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi, aurora, aurora-gpu, aurora-gpu-simpledrm, aurora-gpu-n1 or aurora-gpu-n1-simpledrm)" ;;
+    aurora-n1|aurora-n1-simpledrm)
+        # TripleU613's unit only: its GPU bins (checked live by the preflight).
+        # aurora-n1 keeps this repo's GPU loader and DCP; -simpledrm uses the
+        # installer m1n1, which trains N1 (make m1n1-installer).
+        GPU_TRIAL=1
+        PREFLIGHT_UNIT=tripleu
+        OUT="build/tether-$KERNEL_FLAVOR-bundle.tar.gz"
+        STAGE="build/tether-$KERNEL_FLAVOR"
+        BOOT="build/linux-aurora-n1-out/arch/arm64/boot"
+        BUILD_COMMAND="make kernel-$KERNEL_FLAVOR"
+        if [ "$KERNEL_FLAVOR" = aurora-n1 ]; then
+            DT_NAME="t6050-$BOARD-gpu-tripleu.dtb"
+            DISPLAY_SCOPE="Linux DCP handoff enabled (this repo's GPU loader); N1 stays inert."
+            CHAIN="${M1N1_CHAIN:-build/m1n1-chain-gpu.bin}"
+            M1N1="${M1N1:-build/m1n1-gpu}"
+        else
+            DT_NAME="t6050-$BOARD-gpu-tripleu-simpledrm.dtb"
+            DISPLAY_SCOPE="Installer m1n1: simpledrm scanout, no DCP; it may train and enable N1."
+            CHAIN="${M1N1_CHAIN:-build/m1n1-installer/build/m1n1.bin}"
+            M1N1="${M1N1:-build/m1n1-installer}"
+        fi
+        ;;
+    *) die "unknown KERNEL_FLAVOR=$KERNEL_FLAVOR (use asahi, aurora, aurora-gpu, aurora-gpu-simpledrm, aurora-gpu-n1, aurora-gpu-n1-simpledrm, aurora-n1 or aurora-n1-simpledrm)" ;;
 esac
 M1N1="${M1N1:-vendor/m1n1}"
 DTB="$BOOT/dts/apple/$DT_NAME"
@@ -108,6 +131,12 @@ cp "$KERNEL"                 "$STAGE/boot/Image.gz"
 cp "$DTB"                    "$STAGE/boot/$DT_NAME"
 cp build/initramfs.cpio.gz   "$STAGE/boot/"
 cp "$CHAIN"                 "$STAGE/boot/m1n1-chain.bin"
+# aurora-n1: the Centauri Wi-Fi/BT modules belong in the SSD root's /lib/modules.
+case "$KERNEL_FLAVOR" in aurora-n1*)
+    make -s -C build/linux-aurora-n1-out ARCH=arm64 LLVM=1 INSTALL_MOD_PATH="$PWD/$STAGE/modroot" INSTALL_MOD_STRIP=1 modules_install
+    tar -C "$STAGE/modroot" -czf "$STAGE/boot/modules.tar.gz" lib
+    rm -rf "$STAGE/modroot" ;;
+esac
 if [ "$KERNEL_FLAVOR" = asahi ] && [ -f build/m1n1-chain-payload.bin ]; then
     cp build/m1n1-chain-payload.bin "$STAGE/boot/"
 fi
@@ -127,7 +156,7 @@ fi
 BOOTARGS="earlycon=efifb keep_bootcon console=tty0 loglevel=8 pd_ignore_unused clk_ignore_unused no_console_suspend nvme_apple.flush_interval=0 arm64.nowfxt kvm-arm.wfi_trap_policy=trap m5.root=/dev/nvme0n1p5"
 GPU_PREFLIGHT=""
 if [ "$GPU_TRIAL" = 1 ]; then
-    GPU_PREFLIGHT="python3 hv/gpu-preflight.py"
+    GPU_PREFLIGHT="python3 hv/gpu-preflight.py --unit $PREFLIGHT_UNIT"
 fi
 
 cat > "$STAGE/boot-linux.sh" <<EOF

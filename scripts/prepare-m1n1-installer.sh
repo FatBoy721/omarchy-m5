@@ -16,11 +16,12 @@ if [ ! -e "$DIR/.git" ]; then
     git -C "$DIR" checkout -q -b j714s-installer FETCH_HEAD
     git -C "$DIR" submodule update --init --recursive
 fi
-# ponytail: one-patch series, so "applied" == HEAD is one commit above base.
+# ponytail: "applied" == HEAD is exactly the series' length above base.
+PATCHES=("$PWD"/patches/m1n1-installer/*.patch)
 if [ "$(git -C "$DIR" rev-parse HEAD)" = "$BASE_SHA" ]; then
     git -C "$DIR" -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
-        am -q "$PWD"/patches/m1n1-installer/*.patch
-elif [ "$(git -C "$DIR" rev-parse HEAD~1)" != "$BASE_SHA" ]; then
+        am -q "${PATCHES[@]}"
+elif [ "$(git -C "$DIR" rev-parse "HEAD~${#PATCHES[@]}" 2>/dev/null)" != "$BASE_SHA" ]; then
     echo "ERROR: $DIR is not $BASE_SHA plus patches/m1n1-installer; leaving it untouched." >&2
     exit 1
 fi
