@@ -8,12 +8,13 @@
 #   <bundle>/enroll.sh        this script
 #   <bundle>/enroll.conf      STUB_NAME, VGID, CANDIDATE, ROLLBACK and their sizes
 #   <bundle>/SHA256SUMS       of the two images
-#   <bundle>/boot/...         the native image (m1n1 + bootargs + kernel + DT + initramfs)
+#   <bundle>/boot/...         the loader to enroll: a small m1n1 that chainloads
+#                             m1n1/boot.bin from this partition (make m1n1-stage1)
 #   <bundle>/rollback/...     the boot object that was enrolled before
 #
 # In recoveryOS: Utilities -> Terminal, then
 #
-#   sh /Volumes/*/<bundle>/enroll.sh             # enroll the native image
+#   sh /Volumes/*/<bundle>/enroll.sh             # enroll the loader
 #   sh /Volumes/*/<bundle>/enroll.sh rollback    # enroll the saved object again
 #
 # Nothing is changed until every check has passed and the confirmation word
@@ -51,8 +52,13 @@ BUNDLE=$(pwd)
 case "${1:-enroll}" in
     enroll)
         IMAGE=$CANDIDATE BYTES=$CANDIDATE_BYTES WORD=ENROLL
-        WHAT="the new native image"
+        WHAT="the new boot loader"
         AFTER="The Mac now starts Linux by itself when it powers on."
+        # iBoot on these Macs only starts a small raw object: a 24 MiB image
+        # with the kernel inside boot-looped here, and a sibling M5 Pro stops
+        # just above 4.8 MiB. The kernel belongs in a file on this partition.
+        [ "$BYTES" -le 4194304 ] ||
+            die "$IMAGE is $BYTES bytes: too large for iBoot to start (4 MiB limit here)"
         ;;
     rollback)
         IMAGE=$ROLLBACK BYTES=$ROLLBACK_BYTES WORD=ROLLBACK
@@ -120,10 +126,16 @@ say "group:   $VGID"
 bputil -d -v "$VGID" > /tmp/enroll-bputil.txt 2>&1
 if ! grep -q ': Paired' /tmp/enroll-bputil.txt; then
     cat /tmp/enroll-bputil.txt
-    die "this recoveryOS is not the one paired with $STUB_NAME.
-      $STUB_NAME has to be the startup disk for the power button to lead to its
-      own recoveryOS. See docs/bringup.md, \"Enroll only after current-volume
-      and rollback checks\"."
+    # The power button leads to the recoveryOS of the startup disk. After a
+    # boot object failed to start, that was macOS again on this Mac.
+    die "this recoveryOS is not the one paired with $STUB_NAME: it belongs to
+      the current startup disk. Make $STUB_NAME the startup disk and come back:
+
+          bless --setBoot --mount \"$SYSTEM\"
+          shutdown -h now
+
+      Wait 15 seconds, press and HOLD power until \"Loading startup options\",
+      choose Options (not $STUB_NAME), open Terminal and run this script again."
 fi
 if ! grep -q 'one true recoveryOS' /tmp/enroll-bputil.txt; then
     die "this is not 1TR. Shut down fully, wait 15 seconds, then press and

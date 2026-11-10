@@ -147,12 +147,12 @@ The [GPU runbook](docs/bringup.md#gpu-trial-isolated-j714s) records the source
 pins, calibration guard and remaining limits. **GPU + DCP is not yet qualified.**
 
 The [standalone milestone](docs/bringup.md#standalone-no-second-machine---one-1tr-ceremony-per-image)
-now packages that same kernel/DT/initramfs with a native loader that checks this
+packaged that same kernel/DT/initramfs behind a native loader that checks this
 Mac's calibration and prepares NVMe without the host probe. Its real payload
 parser and boot routine were exercised from RAM: SSD-root Linux, all 15 CPUs
-and both GPU smoke modes passed. The full image is staged for an **attended
-Recovery enrollment**, not installed yet; an unplugged cold boot remains to
-be verified. No CTRR guard, disk layout or installed boot object was changed.
+and both GPU smoke modes passed. **Do not enroll that image.** The N1 image of
+the same shape and size boot-looped when it was enrolled (below); a RAM run
+does not show what iBoot does with the object.
 
 Omarchy itself is **not installed yet**. The
 [package preflight](docs/bringup.md#omarchy-installation-preflight-not-installed)
@@ -182,11 +182,27 @@ PCIe MMIO, and leaves the N1 off if anything is missing. The firmware is
 assembled locally from Apple's public restore image by `scripts/mk-n1-ftab.py`
 and is not redistributed.
 
-The same kernel, tree and loader also exist as a
-[native image](docs/bringup.md#native-n1-image-proven-from-ram-not-enrolled).
-Its own payload parser, calibration guard, NVMe preparation and hand-off were
-run from RAM and reached the same running system, Wi-Fi connected. **It is
-not enrolled**, and a boot with the cable unplugged is still to be tried.
+A self-contained
+[native image](docs/bringup.md#native-n1-image-proven-from-ram-boot-loops-when-enrolled)
+of the same kernel, tree and loader ran its own payload parser, calibration
+guard, NVMe preparation and hand-off from RAM and reached the same running
+system. **Enrolled on 2026-11-09, it boot-looped:** a few restarts, then back
+to the startup options, and nothing of it ever appeared on the cable. iBoot
+only starts a small raw object: this one was 24.6 MiB, and a sibling M5 Pro
+stops just above 4.8 MiB (the limit was not measured here). The saved boot
+object was put back with `enroll.sh rollback`.
+
+A native boot is therefore
+[two stages](docs/bringup.md#native-boot-in-two-stages): a 1.2 MB enrolled m1n1
+reads the GPU/N1 loader from the EFI partition, and that loader reads the
+kernel, device tree and initramfs from a file there. Chainloaded from the cable
+with nothing else sent, the whole chain booted this system, and with either
+file missing the stage concerned fell back to its USB proxy, from which the
+tether flow still works. Stage 1 is staged for enrollment and **not enrolled
+yet**: iBoot starting it and a boot with the cable unplugged are still to be
+shown. A small unit in the root image clears
+[iBoot's boot counter](docs/bringup.md#iboots-boot-counter), which otherwise
+adds up with every restart made without the cable.
 
 This is short functional coverage. Bluetooth pairing, HID and audio with a
 real device, suspend and sustained load are open. The

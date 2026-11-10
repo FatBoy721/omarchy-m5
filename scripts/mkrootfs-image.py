@@ -41,8 +41,42 @@ DNS=1.1.1.1
 Gateway=10.55.{n}.1
 Metric=2048
 """ for n in range(3)},
+    # iBoot counts every boot the OS does not acknowledge in the PMU's
+    # scratchpad and, after a few in a row, stops starting the OS ("needs to be
+    # reinstalled"). The m1n1 proxy tools zero the count, but only with the
+    # cable attached, and macsmc-reboot is not loaded here (it would take
+    # restart over from the watchdog). One watchdog restart was measured to
+    # add one boot error; this clears the byte once the system is up.
+    "usr/local/sbin/omarchy-m5-boot-ok": """#!/bin/sh
+# Acknowledge this boot to iBoot: zero the PMU's boot-error/panic byte.
+set -eu
+for cell in /sys/bus/nvmem/devices/*/cells/boot-error-count@*; do
+    [ -e "$cell" ] || exit 0
+    at=${cell##*@}
+    offset=$((0x${at%%,*}))     # boot-error-count@f802,0 -> 0xf802
+    nvmem=${cell%/cells/*}/nvmem
+    was=$(od -An -tx1 -j "$offset" -N 1 "$nvmem" | tr -d ' ')
+    # One byte: boot errors in the low nibble, panics in the high one.
+    printf '\\0' | dd of="$nvmem" bs=1 seek="$offset" conv=notrunc status=none
+    echo "boot acknowledged (the PMU's boot-error/panic byte was 0x$was)"
+done
+""",
+    "etc/systemd/system/omarchy-m5-boot-ok.service": """[Unit]
+Description=Acknowledge a successful boot to iBoot (clear the PMU boot-error count)
+ConditionPathExistsGlob=/sys/bus/nvmem/devices/*/cells/boot-error-count@*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/omarchy-m5-boot-ok
+
+[Install]
+WantedBy=multi-user.target
+""",
 }
-SYMLINKS = {}
+SYMLINKS = {
+    "etc/systemd/system/multi-user.target.wants/omarchy-m5-boot-ok.service":
+        "../omarchy-m5-boot-ok.service",
+}
 
 
 def is_pkg_db(path):
@@ -127,7 +161,7 @@ def main():
             kept += 1
         for name, text in FILES.items():
             data = text.encode()
-            tw.addfile(info(name, data), io.BytesIO(data))
+            tw.addfile(info(name, data, 0o755 if text.startswith("#!") else 0o644), io.BytesIO(data))
         for name, target in SYMLINKS.items():
             tw.addfile(info(name, link=target))
         tw.addfile(info("root/.ssh/authorized_keys", keys, 0o600), io.BytesIO(keys))

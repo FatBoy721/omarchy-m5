@@ -1,0 +1,127 @@
+From: omarchy-m5
+Subject: [PATCH] payload: load the kernel payload from a file on storage
+
+iBoot on T6050 only starts a small custom boot object: a self-contained
+image with the kernel behind the loader (24 MiB) boot-loops on the J714s,
+and a chainloaded image has to fit below the CTRR range at
+top_of_kernel_data. So a native boot keeps the kernel off the boot object.
+
+payload=<partition uuid>;<path> names a file on a FAT partition that holds
+what would otherwise be appended to the loader: variables, kernel, device
+tree and initramfs. It is read with the chainloader's existing file reader
+(CHAINLOADING=1 builds) and parsed by the same load_one_payload() as an
+appended payload. An appended kernel still wins, chainload= still comes
+first, and when the file cannot be read payload_run() fails and the loader
+falls back to its proxy.
+
+The read initialises and shuts NVMe down once, which is the state the
+standalone path prepares for Linux, so that preparation is not repeated.
+The calibration guard still runs before NVMe is touched.
+
+---
+diff --git a/src/payload.c b/src/payload.c
+--- a/src/payload.c
++++ b/src/payload.c
+@@ -45,6 +45,7 @@
+ static struct kernel_header *kernel = NULL;
+ static void *fdt = NULL;
+ static char *chainload_spec = NULL;
++static char *payload_spec = NULL;
+ 
+ static void *load_one_payload(void *start, size_t size);
+ 
+@@ -201,6 +202,8 @@
+             chosen[chosen_cnt++] = (char *)*p;
+     } else if (IS_VAR("chainload=")) {
+         chainload_spec = val;
++    } else if (IS_VAR("payload=")) {
++        payload_spec = val;
+     } else if (IS_VAR("display=")) {
+         display_configure(val);
+     } else if (IS_VAR("mitigations=")) {
+@@ -310,6 +313,46 @@
+     return true;
+ }
+ 
++#ifdef CHAINLOADING
++int rust_load_image(const char *spec, void **image, size_t *size);
++
++/*
++ * payload=<partition uuid>;<path>: the variables, kernel, device tree and
++ * initramfs from a file on a FAT partition, in the format of an appended
++ * payload. iBoot only starts a small boot object here, so a native boot
++ * keeps them on the EFI partition instead of behind the loader.
++ *
++ * NVMe is initialised and shut down once for the read, which is also the
++ * state the kernel expects it in.
++ */
++static int payload_load_storage(const char *spec)
++{
++    void *image;
++    size_t size;
++
++    if (!nvme_init()) {
++        printf("payload: NVMe initialization failed\n");
++        return -1;
++    }
++    int ret = rust_load_image(spec, &image, &size);
++    nvme_shutdown();
++    if (ret < 0)
++        return -1;
++
++    /* Recognising an item reads up to 0x3c bytes of it: stop short of the end. */
++    u8 *p = image, *end = p + size;
++    while (p && p + 0x40 <= end)
++        p = load_one_payload(p, 0);
++    return 0;
++}
++#else
++static int payload_load_storage(const char *spec)
++{
++    printf("payload: %s needs a CHAINLOADING=1 build\n", spec);
++    return -1;
++}
++#endif
++
+ int payload_run(void)
+ {
+     const char *target = adt_getprop(adt, 0, "target-type", NULL);
+@@ -335,20 +378,32 @@
+         return chainload_load(chainload_spec, chosen, chosen_cnt);
+     }
+ 
++    /*
++     * An appended kernel wins; the proxy is the fallback when the file cannot
++     * be read. Either way the calibration guard comes before NVMe is touched.
++     */
++    bool from_storage = payload_spec && !kernel;
++    if (from_storage &&
++        (!payload_gpu_profile_matches() || payload_load_storage(payload_spec)))
++        return -1;
++
+     if (kernel && fdt) {
+-        if (!payload_gpu_profile_matches())
++        if (!from_storage && !payload_gpu_profile_matches())
+             return -1;
+ 
+         /* Match the tethered NVMe init/shutdown handoff without a host probe.
+          * No disk writes are issued; shutdown leaves ANS cold for Linux.
+          * kboot_boot() already brings up the USB PHYs for the kernel.
++         * Reading the payload from storage has already done exactly this.
+          */
+-        printf("Standalone boot: preparing internal NVMe\n");
+-        if (!nvme_init()) {
+-            printf("Standalone boot: NVMe initialization failed\n");
+-            return -1;
++        if (!from_storage) {
++            printf("Standalone boot: preparing internal NVMe\n");
++            if (!nvme_init()) {
++                printf("Standalone boot: NVMe initialization failed\n");
++                return -1;
++            }
++            nvme_shutdown();
+         }
+-        nvme_shutdown();
+ 
+         cpufreq_init();
+         smp_start_secondaries();

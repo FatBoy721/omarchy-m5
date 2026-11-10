@@ -16,9 +16,17 @@
 #                   but every kernel change costs a ceremony, so use this for
 #                   milestone boots, not for iteration.
 #
+#   3. From storage - scripts/mkpayload.sh --payload-file --out PAYLOAD.bin
+#                   writes only what follows m1n1 (bootargs, kernel, DT,
+#                   initramfs) for a loader that reads it from the EFI
+#                   partition (payload=<partition uuid>;<path>). iBoot on
+#                   T6050 only starts a small boot object, so this is the
+#                   form a native boot uses there.
+#
 # Usage: scripts/mkpayload.sh [--bootargs "..."] [--board j714s] [--out PATH]
 #                             [--m1n1 PATH] [--kernel PATH] [--dtb PATH]
 #                             [--initramfs PATH] [--no-initramfs]
+#                             [--payload-file]
 
 set -euo pipefail
 
@@ -45,6 +53,7 @@ KERNEL="vendor/linux/arch/arm64/boot/Image.gz"
 DTB=""
 INITRAMFS="build/initramfs.cpio.gz"
 USE_INITRAMFS=1
+PAYLOAD_FILE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -56,6 +65,7 @@ while [ $# -gt 0 ]; do
         --dtb) DTB="$2"; shift 2 ;;
         --initramfs) INITRAMFS="$2"; shift 2 ;;
         --no-initramfs) USE_INITRAMFS=0; shift ;;
+        --payload-file) PAYLOAD_FILE=1; shift ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -64,7 +74,7 @@ DTB="${DTB:-vendor/linux/arch/arm64/boot/dts/apple/t6050-$BOARD.dtb}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
-[ -f "$M1N1" ]   || die "$M1N1 missing - run: CHAINLOADING=0 make m1n1"
+[ "$PAYLOAD_FILE" = 1 ] || [ -f "$M1N1" ] || die "$M1N1 missing - run: CHAINLOADING=0 make m1n1"
 [ -f "$KERNEL" ] || die "$KERNEL missing - run: make kernel"
 [ -f "$DTB" ]    || die "$DTB missing - run: make dtbs"
 if [ "$USE_INITRAMFS" = 1 ]; then
@@ -74,7 +84,7 @@ fi
 # build_cfg.h describes the vendor tree's last build, so it only tells us
 # anything when we're using that tree's output. A chainload payload (-m1n1
 # build/m1n1-chain.bin) is *supposed* to be a CHAINLOADING=1 image.
-if [ "$M1N1" = "vendor/m1n1/build/m1n1.bin" ] \
+if [ "$PAYLOAD_FILE" = 0 ] && [ "$M1N1" = "vendor/m1n1/build/m1n1.bin" ] \
    && grep -q CHAINLOADING vendor/m1n1/build/build_cfg.h 2>/dev/null; then
     die "$M1N1 is a CHAINLOADING=1 build; an installed boot object must be CHAINLOADING=0
      rebuild with: CHAINLOADING=0 make m1n1"
@@ -85,7 +95,7 @@ mkdir -p "$(dirname "$OUT")"
 echo "==> Assembling $OUT"
 echo "    bootargs: $BOOTARGS"
 {
-    cat "$M1N1"
+    [ "$PAYLOAD_FILE" = 1 ] || cat "$M1N1"
     printf 'chosen.bootargs=%s\n' "$BOOTARGS"
     cat "$KERNEL"
     cat "$DTB"
@@ -94,7 +104,12 @@ echo "    bootargs: $BOOTARGS"
 
 echo
 echo "==> Verifying the payload chain the way m1n1 parses it"
-M1N1_SIZE=$(stat -c %s "$M1N1" 2>/dev/null || stat -f %z "$M1N1") python3 - "$OUT" <<'EOF'
+if [ "$PAYLOAD_FILE" = 1 ]; then
+    M1N1_SIZE=0
+else
+    M1N1_SIZE=$(stat -c %s "$M1N1" 2>/dev/null || stat -f %z "$M1N1")
+fi
+M1N1_SIZE=$M1N1_SIZE python3 - "$OUT" <<'EOF'
 import os, sys, zlib
 
 blob = open(sys.argv[1], "rb").read()
@@ -134,7 +149,7 @@ while pos < len(blob):
     elif b"=" in p[:64] and b"\n" in p[:1024]:
         line = p[: p.index(b"\n")].decode()
         print(f"    +0x{pos:08x}  variable: {line}")
-        if not line.startswith(("chosen.", "chainload=", "display=",
+        if not line.startswith(("chosen.", "chainload=", "payload=", "display=",
                                 "mitigations=", "tso=")):
             sys.exit(f"ERROR: m1n1 would reject unknown variable '{line}'")
         found.append("var")

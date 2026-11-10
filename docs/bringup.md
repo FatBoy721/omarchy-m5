@@ -1052,8 +1052,9 @@ separate profile on top of the GPU/simpledrm one. On tethered boots of
 itself, loaded its firmware and registered `wlan0` and `hci0`. Wi-Fi joined a
 WPA2/WPA3 network on both bands and carried real traffic, and came back by
 itself after a reboot; Bluetooth answered classic and LE discovery. The same
-kernel, tree and loader were then proven as a
-[native image from RAM](#native-n1-image-proven-from-ram-not-enrolled). This
+kernel, tree and loader were then proven from RAM as a self-contained
+[native image](#native-n1-image-proven-from-ram-boot-loops-when-enrolled),
+which **boot-looped when it was enrolled**. This
 is short functional coverage; the [limits](#n1-limits) are listed below. The
 default, DCP and GPU bundles, their loaders and the installed boot object are
 unchanged.
@@ -1226,6 +1227,23 @@ were not booted here.
 
 ### Standalone (no second machine - one 1TR ceremony per image)
 
+> **Do not enroll the images of this section.** A self-contained image (the
+> kernel behind the loader, about 24 MiB) passes every check below and its own
+> boot path runs from RAM, but the N1 one was enrolled on 2026-11-09 and the
+> Mac boot-looped: a few restarts with a progress bar, then back to the
+> startup options, with nothing of the image ever reaching the cable. iBoot
+> most likely refuses a raw boot object of that size. A sibling T6050 machine
+> (J716s, same stub firmware) is reported to boot one at 0x4D0000 (4.8 MiB)
+> and to loop at 0x4E0000
+> ([firmware matrix](omarchy-m5-pro/m5-omarchy/reports/19-firmware-matrix.md)),
+> and the other J714s boots natively from a small enrolled stage 1 that reads
+> everything else from the EFI partition. J716s's owner states the size limit
+> outright ([issue #1](https://github.com/betizzel/omarchy-m5/issues/1)); it
+> was not measured on this unit. The way to a native boot is the
+> [two-stage chain](#native-boot-in-two-stages) below. The rest of this
+> section is the record of how the self-contained images were built and
+> qualified.
+
 The current candidate is a **device-specific GPU/simpledrm image**, not an
 enrolled boot object. It contains the native `CHAINLOADING=0` loader, the
 already-tested `7.3.0-g929e67a1da3e` kernel, GPU/simpledrm DT, initramfs and
@@ -1289,7 +1307,7 @@ The existing Stage-1 CTRR reservation cannot contain this whole image.
 the monolithic placement, cold USB initialization or an unplugged cold boot.
 Those still require the owner's attended native trial.
 
-#### Native N1 image: proven from RAM, not enrolled
+#### Native N1 image: proven from RAM, boot-loops when enrolled
 
 The N1 profile has the same kind of image:
 
@@ -1306,25 +1324,13 @@ three payload members are byte-identical to the tether bundle that booted with
 the modules loading by themselves. With `--source build/m1n1-gpu-n1-standalone`
 the 48 hand-off and guard cases and the 27 N1 cases pass on the host.
 
-The RAM qualification is now a tool, `scripts/probes/native-payload-ram.py`
-(`hv/` in the tether bundle); the GPU image above was qualified the same way.
-With the Mac in the m1n1 proxy and **no** host NVMe probe:
-
-```sh
-cd build/tether-aurora-gpu-n1-simpledrm
-python3 hv/wdt-arm.py 120
-./proxyclient/tools/chainload.py -r ../m1n1-stage1-gpu-n1.bin m1n1.wdt=keep
-python3 hv/native-payload-ram.py --candidate ../m1n1-gpu-n1-simpledrm-payload.bin \
-  --stage1 ../m1n1-stage1-gpu-n1.bin --elf ../m1n1-gpu-n1-standalone/build/m1n1-raw.elf
-```
-
-It refuses inputs that do not belong together before it touches the Mac. Then
-it checks that what runs is the candidate's stage 1 (code and constants, with
-the loader's own relocations applied), copies the payload tail to ordinary RAM
-and reads it back, has the loader's compiled `load_one_payload()` parse that
-copy and its `payload_run()` take over, and finally leaves the proxy, where
-the loader's `main()` continues as it does after a native `payload_run()`. The
-watchdog is re-armed before each step and left armed for Linux.
+It was qualified from RAM with a probe that went away with this approach
+(`scripts/probes/native-payload-ram.py` in the history). With the candidate's
+stage 1 chainloaded and **no** host NVMe probe, it compared what ran with the
+candidate's stage 1, copied the payload tail to ordinary RAM, had the loader's
+compiled `load_one_payload()` parse that copy and its `payload_run()` take
+over, and left the proxy, where the loader's `main()` continues as it does
+after a native `payload_run()`.
 
 **Result (2026-11-09):** calibration guard PASS, the loader's own NVMe
 init/shutdown, 14 secondaries started, `n1: port 0: root port and DART okay`,
@@ -1337,22 +1343,126 @@ kernel logged no Oops, WARN or SError.
 The candidate is 24,643,107 bytes, SHA256
 `47f7a522326c077f01a84660a0a8bdbe8ce0fd768a529879bd4fbf6c436af4d8`.
 The RAM run wrote nothing to the Mac's disk. A recovery bundle with this
-candidate and a re-verified rollback image has since been staged
-(`omarchy-n1-20261109`, below). The limits of a RAM run stated above apply to
-it unchanged (iBoot's placement and the CTRR reservation, USB brought up cold,
-a cold boot with the cable unplugged). An enrolled image carries its kernel:
-the two N1 modules under `/usr/lib/modules` have to be the ones built with it.
+candidate and a re-verified rollback image was then staged
+(`omarchy-n1-20261109`, below) and the candidate enrolled from the stub's
+paired 1TR on 2026-11-09. **It did not boot:** the Mac restarted a few times
+and returned to the startup options (see the note at the top of this
+section). A RAM run cannot show that: iBoot's handling of the object is
+exactly what it leaves out.
+
+#### Native boot in two stages
+
+iBoot only starts a small boot object, so the kernel cannot ride behind the
+loader. The enrolled object is a plain m1n1 that reads a second loader from the
+EFI partition, and that loader reads the kernel from a file:
+
+| Stage | Where | What |
+|---|---|---|
+| 1 | enrolled boot object, `build/m1n1-stage1-esp.bin` | baseline m1n1 (`patches/m1n1`, `CHAINLOADING=1`) with `chainload=<EFI PARTUUID>;m1n1/boot.bin` appended |
+| 2 | EFI partition, `m1n1/boot.bin` | the GPU and N1 loader with its calibration guard, `payload=<EFI PARTUUID>;m1n1/payload.bin` appended |
+| payload | EFI partition, `m1n1/payload.bin` | command line, `Image.gz`, device tree and initramfs, as `mkpayload.sh` used to append them to the loader |
+
+`patches/m1n1-gpu/0005` adds the `payload=` variable. With no kernel behind
+its image, the loader checks the GPU calibration first, initialises NVMe once,
+reads the file through m1n1's FAT reader and parses it with the same
+`load_one_payload()` as an appended payload. Stage 2 is small enough to land at
+stage 1's base, below the secondary-only CTRR range (`patches/m1n1/0004`
+refuses anything that is not), so it needs neither the relocation nor the RVBAR
+trampoline that larger second stages do.
+
+```sh
+make m1n1-stage1 esp-gpu-n1-simpledrm \
+  GPU_ADT=build/adt-runtime-j714s-unattended-20261108T213635Z.bin
+# build/m1n1-stage1-esp.bin, build/esp-gpu-n1/m1n1/boot.bin and payload.bin
+```
+
+`ESP_PARTUUID` defaults to this Mac's EFI partition. The two files go to
+`m1n1/` on it (`/boot/m1n1/` from Linux), with a checksum read-back:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `m1n1-stage1-esp.bin` | 1,179,709 | `22deb5acad932fb3f450773caf763476085aa0a4549f2bce01c0ac76a720f092` |
+| `m1n1/boot.bin` | 1,212,478 | `e7567a5fa08f767abe1ff12ba9c2a9f2c5764d1e7ca3986afcd784545b7f3a9b` |
+| `m1n1/payload.bin` | 23,479,843 | `09f88f9bb541db04df8e0ea0a1c90a8bbf504ca28738afb53409e86f672af6d7` |
+
+The payload's kernel, device tree and initramfs are those of the tether bundle.
+
+**Run from the cable with nothing enrolled (2026-11-09).** Both files in place,
+the Mac reset into its enrolled proxy loader, the watchdog armed and kept:
+
+| Run | Result |
+|---|---|
+| Stage 2 alone from its proxy, `native-chain-probe.py --payload` | It read `payload.bin` itself and prepared the hand-off; Linux on the SSD root, 15 CPUs. The probe's first version gave up after the proxy client's 3 s reply timeout and lost the loader's output; the loader had finished |
+| The whole chain: stage 1 chainloaded with its variable, no host NVMe probe, nothing else sent | Linux came up by itself: 15 CPUs, `running`, both N1 modules, Wi-Fi connected, no kernel complaints |
+| `m1n1/boot.bin` renamed away | Stage 1: `Chainload failed: FATError(NotFound)`, then its USB proxy. The usual tether flow booted Linux from that proxy |
+| `m1n1/payload.bin` renamed away | Stage 2, started by stage 1: `GPU profile PASS`, `FATError(NotFound)`, then its USB proxy. The tether flow booted Linux from there too |
+
+The whole chain is simply the object to enroll, chainloaded:
+
+```sh
+cd build/tether-aurora-gpu-n1-simpledrm           # Mac in the m1n1 proxy
+python3 hv/wdt-arm.py 170
+./proxyclient/tools/chainload.py -r ../m1n1-stage1-esp.bin m1n1.wdt=keep
+```
+
+`chainload.py` then times out waiting for a proxy: stage 1 goes straight on,
+and the next thing on the cable is Linux. Neither stage brings USB up before it
+is done, so a working chain prints nothing to the host. A stage that falls back
+to its proxy replays what it printed. `scripts/probes/native-chain-probe.py`
+(`hv/` in the bundle) runs one stage's own code from its proxy instead, after
+comparing what runs with the given loader: `--payload SPEC` for stage 2 (run
+above), `--chainload SPEC` for stage 1 (not run on the Mac yet), `--identify`
+to tell which loader answers after a fallback.
+
+What this leaves open is what only an enrolled object shows: iBoot starting
+stage 1, and a boot with the cable unplugged.
+
+Living with it:
+
+- A new kernel, device tree, initramfs or stage 2 is a file copy to `m1n1/`,
+  with no Recovery step. The two N1 modules under `/usr/lib/modules` have to
+  be the ones built with the kernel in `payload.bin`.
+- `sudo mv /boot/m1n1/boot.bin /boot/m1n1/boot.off` turns the Mac back into
+  one that waits for the cable.
+- Neither loader checks the file it reads beyond its format. If `boot.bin` is
+  ever damaged, delete it from macOS (`diskutil mount disk0s4`).
+- `poweroff` is not expected to cut power, because `macsmc-reboot` is not
+  loaded (not tried). Hold the power button once the system has stopped.
+
+#### iBoot's boot counter
+
+iBoot keeps a boot stage and counts boot errors and panics in the PMU's legacy
+scratchpad (`info-leg_scrpad` 0xf800: the stage at +1, the two counts as the
+nibbles of +2, the stage of the last error at +3).
+`scripts/probes/pmu-boot-counters.py` reads them from the proxy without the
+reset the other proxy tools perform. After each watchdog restart of a running
+Linux it read `20 30 01 30`, one boot error at stage 0x30, four times out of
+four.
+
+With the cable that never adds up, because everything that imports
+`m1n1.setup` zeroes the count as it connects. Without the cable nothing did:
+`macsmc-reboot` is the driver that would, and it is not loaded here
+(`CONFIG_POWER_RESET_MACSMC=m`, kept out so that restart stays with the
+watchdog). J716s reports that iBoot ends in "needs to be reinstalled" after a
+few such restarts
+([issue #1](https://github.com/betizzel/omarchy-m5/issues/1)).
+
+The root image therefore carries `omarchy-m5-boot-ok.service`
+(`scripts/mkrootfs-image.py`), which zeroes that byte through the PMU's nvmem
+device once the system is up. On the Mac a staged `01` was cleared and logged,
+and the unit ran on the following boots. How many errors iBoot tolerates was
+not measured.
 
 #### Enroll only after current-volume and rollback checks
 
-Two recovery bundles are staged on the existing EFI partition, visible from
-Linux under `/boot`: `omarchy-native-gpu-20261108` (the GPU image) and
-`omarchy-n1-20261109` (the N1 image, with `enroll.sh`). Copying them there does
-**not** enroll anything or change the startup disk. Each holds its candidate,
-the saved raw proxy Stage 1 as the rollback, checksums and a manifest; the
-older one also carries the GPU and non-GPU tether fallbacks. The partition's
-stale dirty flag was cleared with `fsck.fat` first, and the files were read
-back after a remount.
+Three bundles are on the existing EFI partition, visible from Linux under
+`/boot`. `omarchy-chain-20261109` holds stage 1 of the chain above, the
+rollback image and `enroll.sh`. `omarchy-n1-20261109` and
+`omarchy-native-gpu-20261108` are kept for their rollback image and tether
+fallbacks only: their self-contained candidates have been deleted. Copying a
+bundle there does **not** enroll anything or change the startup disk. The
+partition's stale dirty flag was cleared with `fsck.fat` first, and the files
+were read back after a remount.
 
 The rollback image was saved before the stub refresh, so it was checked again
 against what is enrolled now (2026-11-09). With the Mac reset into its
@@ -1361,24 +1471,39 @@ enrolled loader, that loader's code, constants and relocation table in RAM
 applied, and the volume group it booted from (`/chosen` `boot-uuid`) is the one
 the bundle records. The mutable data section cannot be compared this way.
 **Repeat both checks before replacing a boot object with any later bundle.**
+After the rollback of 2026-11-09 the same comparison found no differing byte.
 
 `scripts/enroll-native.sh`, staged as `enroll.sh` next to an `enroll.conf`
 naming the stub, its volume group and the two images, does the Recovery side.
-It checks the image's size and SHA-256, finds the stub's System volume by
-volume group and name (it or the EFI partition may be the one mounted with a
-` 1` suffix), requires `bputil` to report `Paired` and `one true recoveryOS`,
-keeps a best-effort copy of the current custom object, and only after a typed
-confirmation runs the `kmutil` command below. `enroll.sh rollback` enrolls the
-saved Stage 1 the same way. It is plain POSIX sh with the tools the
-installation's step 2 used. Its control flow was dry-run on the host against
-stand-in tools (wrong confirmation, unpaired, not 1TR, another volume group,
-an altered image, the name collision, no hash tool), not in recoveryOS.
+It refuses a candidate above 4 MiB, checks the image's size and SHA-256, finds
+the stub's System volume by volume group and name (it or the EFI partition may
+be the one mounted with a ` 1` suffix), requires `bputil` to report `Paired`
+and `one true recoveryOS`, keeps a best-effort copy of the current custom
+object, and only after a typed confirmation runs the `kmutil` command below.
+`enroll.sh rollback` enrolls the saved Stage 1 the same way. It is plain POSIX
+sh with the tools the installation's step 2 used. Its control flow is dry-run
+on the host against stand-in tools (wrong confirmation, unpaired, another
+volume group, an oversized image). Both paths have run in recoveryOS
+(2026-11-09): the enroll path installed the object it was given, and the
+rollback path put the saved object back.
+
+After the boot object had failed to start, holding power and choosing Options
+opened a recoveryOS that `bputil` did not report as paired with the stub. The
+helper stops there and prints the remedy, which worked here:
+
+```sh
+bless --setBoot --mount "/Volumes/Omarchy"     # the path the helper prints as "target:"
+shutdown -h now
+```
+
+Then wait 15 s, hold power until "Loading startup options" and choose
+**Options**, not the stub's name: choosing the stub starts its boot object.
 
 In the stub's recoveryOS (shut down, wait 15 s, hold power until "Loading
 startup options", Options, then Utilities → Terminal):
 
 ```sh
-sh /Volumes/*/omarchy-n1-20261109/enroll.sh        # add "rollback" for the way back
+sh /Volumes/*/omarchy-chain-20261109/enroll.sh     # add "rollback" for the way back
 diskutil mount disk0s4                             # first, if that path does not exist
 ```
 
@@ -1401,7 +1526,7 @@ The owner must approve the exact target and candidate and enter any required
 credentials interactively. Only then:
 
 ```sh
-kmutil configure-boot -c "$BUNDLE/boot/m1n1-gpu-simpledrm-payload.bin" \
+kmutil configure-boot -c "$BUNDLE/boot/m1n1-stage1-esp.bin" \
   --raw --entry-point 2048 --lowest-virtual-address 0 -v "$TARGET"
 ```
 
@@ -1419,8 +1544,9 @@ kmutil configure-boot -c "$BUNDLE/rollback/m1n1-stage1-saved.bin" \
 `finish-install.sh --undo` does not restore an enrolled boot object. A fresh
 boot with the tether disconnected, working display/input and SSD root is the
 acceptance check; keep the tether and Recovery fallback available until it
-passes. Kernel/DT/initramfs changes need another enrollment, while ordinary
-rootfs and desktop changes do not.
+passes. With the two-stage chain, kernel, device-tree, initramfs and stage-2
+changes are file copies to the EFI partition; only a change to stage 1 itself
+needs another enrollment.
 
 Kernel cmdline: `arm64.nowfxt kvm-arm.wfi_trap_policy=trap`. On this SoC WFI
 loses x0-x30 and FP/SIMD on every core except the boot CPU; SP, PC and system

@@ -1,7 +1,9 @@
 # omarchy-m5 dev harness
-.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone m1n1-gpu-n1-standalone payload-gpu-simpledrm payload-gpu-n1-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
+.PHONY: setup fetch m1n1 m1n1-gpu m1n1-gpu-simpledrm m1n1-gpu-n1 m1n1-gpu-standalone m1n1-gpu-n1-standalone m1n1-stage1 esp-gpu-n1-simpledrm payload-gpu-simpledrm payload-gpu-n1-simpledrm aura aura-kernel aura-test kernel kernel-aurora kernel-aurora-gpu kernel-aurora-gpu-simpledrm kernel-aurora-gpu-n1 kernel-aurora-gpu-n1-simpledrm kernel-aurora-n1 kernel-aurora-n1-simpledrm kernel-aurora-installer m1n1-installer dtbs initramfs payload tether clean-vendor
 AURA_ROLLBACK ?= build/m1n1-enrolled-stage1.bin
 GPU_ADT ?= build/adt-runtime-j714s.bin
+# GPT partition UUID of the Mac's EFI (FAT) partition, where the loader and kernel live for a native boot
+ESP_PARTUUID ?= 79e793a2-ba60-4560-bf05-a8e268faddd9
 
 setup:          ## install host deps (brew llvm, rust target, ...)
 	scripts/setup.sh
@@ -48,6 +50,28 @@ payload-gpu-n1-simpledrm: m1n1-gpu-n1-standalone ## package the verified N1 kern
 		--kernel build/linux-aurora-n1-out/arch/arm64/boot/Image.gz \
 		--dtb build/linux-aurora-n1-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dtb \
 		--out build/m1n1-gpu-n1-simpledrm-payload.bin
+
+# Native boot in two stages. iBoot on T6050 only starts a small boot object (a
+# 24 MiB image with the kernel behind m1n1 boot-loops), so the enrolled object
+# is a plain loader that reads the real one from the EFI partition, and that
+# one reads the kernel. Updating either is then a file copy, not a ceremony;
+# without m1n1/boot.bin the enrolled loader falls back to its USB proxy.
+m1n1-stage1:    ## the small object to enroll: chainloads m1n1/boot.bin from the EFI partition
+	python3 scripts/prepare-m1n1-gpu.py --stage1
+	M1N1=build/m1n1-stage1 CHAINLOADING=1 scripts/build-m1n1.sh
+	{ cat build/m1n1-stage1/build/m1n1.bin; \
+	  printf 'chainload=%s;m1n1/boot.bin\n' "$(ESP_PARTUUID)"; } > build/m1n1-stage1-esp.bin
+
+esp-gpu-n1-simpledrm: ## EFI partition files for a native N1 boot: m1n1/boot.bin (loader), m1n1/payload.bin (kernel)
+	python3 scripts/prepare-m1n1-gpu.py --simpledrm --n1 --standalone --storage --adt "$(GPU_ADT)"
+	M1N1=build/m1n1-gpu-n1-esp CHAINLOADING=1 scripts/build-m1n1.sh
+	mkdir -p build/esp-gpu-n1/m1n1
+	{ cat build/m1n1-gpu-n1-esp/build/m1n1.bin; \
+	  printf 'payload=%s;m1n1/payload.bin\n' "$(ESP_PARTUUID)"; } > build/esp-gpu-n1/m1n1/boot.bin
+	scripts/mkpayload.sh --payload-file \
+		--kernel build/linux-aurora-n1-out/arch/arm64/boot/Image.gz \
+		--dtb build/linux-aurora-n1-out/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dtb \
+		--out build/esp-gpu-n1/m1n1/payload.bin
 
 aura:           ## build pinned proxy-only Mach-O Aura Stage 1 (no installation)
 	scripts/build-aura.sh

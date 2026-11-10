@@ -103,14 +103,27 @@ def main():
     parser.add_argument("--standalone", action="store_true",
                         help="prepare the calibrated self-contained GPU simpledrm loader")
     parser.add_argument("--adt", type=Path, help="private saved runtime ADT for --standalone")
+    parser.add_argument("--storage", action="store_true",
+                        help="with --standalone: read the kernel payload from a file on storage "
+                             "(payload=...) in build/m1n1-gpu-n1-esp; build it with CHAINLOADING=1")
+    parser.add_argument("--stage1", action="store_true",
+                        help="only the baseline, no GPU hand-off, in build/m1n1-stage1: the small "
+                             "object to enroll, which chainloads the real loader from storage")
     args = parser.parse_args()
+    if args.stage1 and (args.simpledrm or args.n1 or args.standalone or args.storage):
+        parser.error("--stage1 is the plain baseline and takes no other variant")
     if args.standalone and (not args.simpledrm or args.adt is None):
         parser.error("--standalone requires --simpledrm and --adt")
     if args.adt is not None and not args.standalone:
         parser.error("--adt is only used with --standalone")
     if args.n1 and not args.simpledrm:
         parser.error("--n1 requires --simpledrm")
-    default = ("m1n1-gpu-n1-standalone" if args.standalone and args.n1 else
+    if args.storage and not args.standalone:
+        parser.error("--storage requires --standalone")
+    default = ("m1n1-stage1" if args.stage1 else
+               "m1n1-gpu-n1-esp" if args.storage and args.n1 else
+               "m1n1-gpu-esp" if args.storage else
+               "m1n1-gpu-n1-standalone" if args.standalone and args.n1 else
                "m1n1-gpu-standalone" if args.standalone else
                "m1n1-gpu-n1" if args.n1 else
                "m1n1-gpu-simpledrm" if args.simpledrm else "m1n1-gpu")
@@ -128,7 +141,8 @@ def main():
         git(prepared, "add", "-u")
         git(prepared, "-c", "user.name=Local GPU Trial", "-c", "user.email=local@localhost",
             "commit", "-m", "Snapshot reproducible local J714s loader baseline")
-        git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0001-t6050-g17s-adt-handoff.patch"))
+        if not args.stage1:
+            git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0001-t6050-g17s-adt-handoff.patch"))
         if args.simpledrm:
             git(prepared, "apply", "--binary", str(root / "patches/m1n1-gpu/0002-kboot-t6050-simpledrm-only.patch"))
         if args.n1:
@@ -141,6 +155,9 @@ def main():
             git(prepared, "apply", "--binary",
                 str(root / "patches/m1n1-gpu/0003-t6050-standalone-gpu-profile.patch"))
             (prepared / profile_path).write_text(profile_header(root, prepared, args.adt))
+        if args.storage:
+            git(prepared, "apply", "--binary",
+                str(root / "patches/m1n1-gpu/0005-payload-load-the-kernel-payload-from-storage.patch"))
         if dest.exists():
             expected = tracked_files(prepared)
             actual = tracked_files(dest)
@@ -166,11 +183,16 @@ def main():
         else:
             prepared.rename(dest)
             print(f"Prepared isolated loader: {dest}")
+        if args.stage1:
+            print(f"Base: {BASE}; baseline patches only (no GPU, display or N1 hand-off changes)")
+            return
         print(f"Base: {BASE}; GPU source: omacom/m1n1 PR37 2bebfe7708c7077377ecc0d80d29bfb458335c0d")
         print("Display handoff: explicit simpledrm opt-out supported" if args.simpledrm
               else "Display handoff: original DCP behavior")
         if args.standalone:
             print("Native GPU admission: seven byte-exact properties from the validated private ADT")
+        if args.storage:
+            print("Kernel payload: payload=<partition uuid>;<path> on storage (CHAINLOADING=1 build)")
 
 
 if __name__ == "__main__":
