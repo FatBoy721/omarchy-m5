@@ -1,0 +1,35 @@
+From 29651ea1b794c350b2eddc5b035257d79ac14125 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 15:46:34 -0500
+Subject: [PATCH] arm64: dts: apple: t6050: name the t6050 NVMe compatible
+ second, for U-Boot
+
+The normal boot chain's U-Boot only matches apple,t6050-nvme-ans2 and
+found no NVMe on this tree. Linux keeps the t8140 profile, which comes
+first.
+---
+ arch/arm64/boot/dts/apple/t6050-storage-net.dtsi | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
+index dbd8d7857..cc84182b6 100644
+--- a/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
+@@ -41,9 +41,12 @@ nvme: nvme@45dcc0000 {
+ 		 * The driver's own "apple,t6050-nvme-ans2" entry is that T6041
+ 		 * layout (64 KiB "nvme" block, doorbells in the NVMMU block, as
+ 		 * the installer tree describes it). It has not been run with
+-		 * these reg windows or this loader, so it is not named here.
++		 * these reg windows or this loader, so Linux must not pick it: it
++		 * comes second. U-Boot (edimoldovan/u-boot 70e990818a89) knows only
++		 * the t6050 name and finds no NVMe without it; its t6050 entry reads
++		 * the GPT with these windows (m1n1 HV, TripleU613's J714s).
+ 		 */
+-		compatible = "apple,t8140-nvme-ans2";
++		compatible = "apple,t8140-nvme-ans2", "apple,t6050-nvme-ans2";
+ 		/* nvme = ADT reg[9] (real NVMe regs; ADT size 0x10000 is too small, the
+ 		 * doorbells/LINEAR_SQ regs sit at +0x24908; use 0x60000 like t6030),
+ 		 * ans = reg[0] (ASC CPU control, +0x44),
+-- 
+2.56.0
+

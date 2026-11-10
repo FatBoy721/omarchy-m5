@@ -8674,10 +8674,10 @@ index 000000000..462e27c9b
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
 new file mode 100644
-index 000000000..dbd8d7857
+index 000000000..cc84182b6
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
-@@ -0,0 +1,193 @@
+@@ -0,0 +1,196 @@
 +// SPDX-License-Identifier: GPL-2.0+ OR MIT
 +/*
 + * T6050 storage (ANS NVMe) + USB device-mode (gadget) nodes.
@@ -8721,9 +8721,12 @@ index 000000000..dbd8d7857
 +		 * The driver's own "apple,t6050-nvme-ans2" entry is that T6041
 +		 * layout (64 KiB "nvme" block, doorbells in the NVMMU block, as
 +		 * the installer tree describes it). It has not been run with
-+		 * these reg windows or this loader, so it is not named here.
++		 * these reg windows or this loader, so Linux must not pick it: it
++		 * comes second. U-Boot (edimoldovan/u-boot 70e990818a89) knows only
++		 * the t6050 name and finds no NVMe without it; its t6050 entry reads
++		 * the GPT with these windows (m1n1 HV, TripleU613's J714s).
 +		 */
-+		compatible = "apple,t8140-nvme-ans2";
++		compatible = "apple,t8140-nvme-ans2", "apple,t6050-nvme-ans2";
 +		/* nvme = ADT reg[9] (real NVMe regs; ADT size 0x10000 is too small, the
 +		 * doorbells/LINEAR_SQ regs sit at +0x24908; use 0x60000 like t6030),
 +		 * ans = reg[0] (ASC CPU control, +0x44),

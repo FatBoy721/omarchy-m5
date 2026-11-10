@@ -10,13 +10,13 @@
 
 _auroraver=7.3.0
 _aurorarel=16.j714s3
-pkgrel=1
+pkgrel=2
 
 # Immutable pin on omacom/linux-aurora (branch integration/aurora). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
 # the PR's attached qualification evidence before channel publication.
 _commit=34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a
-# Plus betizzel/omarchy-m5 linux-aurora + linux-aurora-n1 0001-0008 (harness tree 6fd53e01a76b) as one diff.
+# Plus betizzel/omarchy-m5 linux-aurora + linux-aurora-n1 0001-0009 (harness tree 29651ea1b794) as one diff.
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -45,7 +45,7 @@ sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '8965c3d489d9475b390ff8fb3b99a96e275f9d67260cfc59f0bb573d6d856158'
-            '577a42387715d72a92ff89be3581841a2763a8b64e373aeb13152235d7c649a2'
+            'dfb5389d9329a218cfd6b6e5a24a69b759607b135276acae568eeb3a94ee7ad8'
             '2950746d220015a76d0c20b00ff68a7189089d16af65fbaa36b8f46b31c7be93')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
