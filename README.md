@@ -28,6 +28,61 @@ not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
 > **Reviewing this?** Start with **[`FOR-AURORA.md`](FOR-AURORA.md)** - the three
 > things worth your time, and what to skip.
 
+## Try it: Omarchy on an M5 Pro (developer image, for the brave)
+
+There is now a full **Omarchy 4.5.0 image** for the J714s, built in CI from
+this repo:
+[**`j714s-developer-image-2026.11.10`**](https://github.com/betizzel/omarchy-m5/releases/tag/j714s-developer-image-2026.11.10).
+On 2026-11-10 it was installed onto TripleU613's J714s and booted through the
+normal chain (m1n1 → U-Boot → Limine → EFI Linux) to Omarchy's first-boot
+owner setup.
+
+**What you get:** the merged kernel (`linux-aurora 7.3.0.aurora16.j714s3-2`,
+this repo's `patches/linux-aurora` + `patches/linux-aurora-n1`) on **15
+cores**, NVMe, keyboard and trackpad, **N1 Wi-Fi and Bluetooth**, the GPU with
+Vulkan (see the GPU caveat below), the panel on simpledrm, and Omarchy's normal
+first-boot setup.
+
+**Be honest with yourself before trying:**
+
+- **One unit tested, installed by hand.** The image was written from Linux on
+  the Mac (below), not through the Omarchy Mac app from macOS; that path is next.
+- **J714s only** (MacBook Pro 14-inch, M5 Pro), with the **macOS 27.3 beta 1
+  stub firmware** (`mBoot-20457.60.65.0.1`) the bring-up needs for all cores.
+- **GPU bins are per chip.** The image carries TripleU613's device tree, so on
+  any other unit the GPU driver refuses to start (no acceleration; the
+  rest should run). betizzel's unit needs `_j714s_unit_dtb=…` in
+  [`installer/recipes`](installer/recipes/README.md).
+- The internal-display DCP driver works but is off by default (simpledrm);
+  the USB-C gadget network does not always come up.
+
+**How it was installed (you need this repo's bring-up first):** a J714s that
+already boots Linux the [`docs/bringup.md`](docs/bringup.md) way (stub +
+stage-1 m1n1), and about **35 GiB of free disk space** (we shrank the existing
+Linux ext4 to make room; macOS can shrink its APFS container instead).
+
+```sh
+# on a PC: download and check the image (two parts: GitHub's 2 GiB limit)
+gh release download j714s-developer-image-2026.11.10 -R betizzel/omarchy-m5
+cat omarchy-2026.11.10-*.zip.part0 omarchy-2026.11.10-*.zip.part1 \
+  > omarchy-2026.11.10-aarch64-apple-silicon-mac-edge-os-package.zip
+sha256sum -c SHA256SUMS --ignore-missing
+
+# on the Mac's Linux, as root: write EFI/Boot/Root into free space
+tools/install-image/install-from-linux.sh omarchy-2026.11.10-*.zip /usr/lib/firmware
+```
+
+The script prints the line that boots the image (the new ESP's
+`m1n1/boot.bin` plus `chosen.asahi,efi-system-partition=<uuid>`). Try it once
+from RAM with [`tools/m5-remote/bmboot.sh`](tools/m5-remote/README.md) before
+making it your stage 1's default. The first boot sets up the system, then asks
+for your user name and password on screen.
+
+How the image is built: [`installer/README.md`](installer/README.md) (patches
+on omacom/omarchy-mac-installer, the signed build inputs, and the manual
+[`installer-image`](.github/workflows/installer-image.yml) workflow).
+Bring-up notes and credits: [`docs/installer-stones.md`](docs/installer-stones.md).
+
 ## Status - verified on hardware
 
 Unless noted, this table describes the default `vendor/linux` kernel.
