@@ -141,10 +141,13 @@ network or USB (cause not yet read); the HV guest logs `format XR24 ... not
 supported`; no HV session has stayed up past about a minute after login.
 Keep `t6050-display=0` for daily boots.
 
-Still open: `ufw` fails (IPv6 netfilter missing from the config); the USB EEM
-gadget link drops after boot; Arch's `kernel-modules-hook` deletes this
-kernel's modules whenever another kernel boots (package them, or make this
-the default). Found with `tools/m5-remote` (m1n1 hypervisor + MMIO tracing).
+Still open: the USB EEM gadget does not always enumerate (UDC bound, `not
+attached`, link in Suspend; a UDC rebind does not help); `ufw` failing at
+boot was `/usr/lib` owned by a non-root user (fixed), not netfilter; Arch's `kernel-modules-hook` deletes a
+non-pacman kernel's modules whenever another kernel boots: on the test unit a
+`linux-modules-cleanup.service` drop-in skips trees holding a `.keep` file, and
+the installer image ships this kernel as the `linux-aurora` package
+([`installer/recipes`](../installer/recipes)). Found with `tools/m5-remote` (m1n1 hypervisor + MMIO tracing).
 
 **Result 2026-11-09 (betizzel's unit, this repo's loader): the merged tree runs
 the N1.** Flavor `aurora-gpu-n1-simpledrm` (this unit's GPU bins) with

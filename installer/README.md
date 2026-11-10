@@ -60,3 +60,11 @@ The old bundle (`76004483a972`, freeze kernel) got through package resolution
 with 0006 and failed in mkinitcpio (`dm_integrity`, `mt7932-fullmac` missing);
 0007 and the recipes fix both. Its signing key did not survive the fork, so
 0007 replaces it; the new key's private half is kept off the repo.
+
+**Result:** run [42883681094](https://github.com/betizzel/omarchy-m5/actions/runs/42883681094)
+built `omarchy-2026.11.10-aarch64-apple-silicon-mac-edge-os-package.zip`
+(3.6 GB; root.img 12.9 GB) and its `installer_data.json` for device class
+`j714sap`; the image inspection and payload contract checks passed. It is a
+CI artifact (kept 7 days), not a release, and has **not been installed on
+hardware yet**. Next: install it on a J714s (normal m1n1 → U-Boot → Limine →
+EFI Linux chain), then first boot, Wi-Fi, encryption prompt input.
