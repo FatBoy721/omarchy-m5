@@ -7,7 +7,7 @@ normal-system image work. It now lives here; the fork is deleted.
 
 Six commits on top of
 [omacom/omarchy-mac-installer `c07e54c2134a`](https://github.com/omacom/omarchy-mac-installer/commit/c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9).
-0001-0006 reproduce the fork's final `main` tree exactly (`b3da2a18094e`); with 0007 the tree is `990d586db85a`.
+0001-0006 reproduce the fork's final `main` tree exactly (`b3da2a18094e`); with 0007-0008 the tree is `d5b7517559fe`.
 
 ```sh
 git clone https://github.com/omacom/omarchy-mac-installer && cd omarchy-mac-installer
@@ -24,6 +24,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0005 | native J714s kernel headers build check (not run yet) |
 | 0006 | resolve Omarchy desktop packages against matching pinned versions |
 | 0007 | merged kernel, loader 0002-0004 and firmware-hook packages from [`recipes/`](recipes); new developer signer `0DA040FF…B6D116B1`; the merged kernel's verified boot arguments |
+| 0008 | kernel pkgrel 2 (aurora-n1 0009: the t6050 NVMe compatible U-Boot needs) and the gcc-built `uboot-aurora` (the cross build's arm64 `image_size` was refused by m1n1) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
@@ -55,7 +56,7 @@ only, not an installer release.
 
 `.github/workflows/installer-image.yml` (manual dispatch) rebuilds the tree
 above and builds the image from the bundle in release
-[`installer-build-inputs-j714s-213f90ca1b8c`](https://github.com/betizzel/omarchy-m5/releases/tag/installer-build-inputs-j714s-213f90ca1b8c).
+[`installer-build-inputs-j714s-3c430ee3393b`](https://github.com/betizzel/omarchy-m5/releases/tag/installer-build-inputs-j714s-3c430ee3393b).
 The old bundle (`76004483a972`, freeze kernel) got through package resolution
 with 0006 and failed in mkinitcpio (`dm_integrity`, `mt7932-fullmac` missing);
 0007 and the recipes fix both. Its signing key did not survive the fork, so
@@ -68,3 +69,9 @@ built `omarchy-2026.11.10-aarch64-apple-silicon-mac-edge-os-package.zip`
 CI artifact (kept 7 days), not a release, and has **not been installed on
 hardware yet**. Next: install it on a J714s (normal m1n1 → U-Boot → Limine →
 EFI Linux chain), then first boot, Wi-Fi, encryption prompt input.
+
+**Boot-chain findings (m1n1 HV, before any disk write):** the first image's
+`boot.bin` stopped in m1n1 (`Assertion failed: 'size <= kernel->image_size'`,
+the U-Boot payload) and, with that fixed, U-Boot found no NVMe (merged tree's
+`apple,t8140-nvme-ans2` only). 0008 fixes both; with them U-Boot reads the
+J714s GPT under the HV.
