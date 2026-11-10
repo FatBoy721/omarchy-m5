@@ -1,0 +1,189 @@
+From: FatBoy721 <203330788+FatBoy721@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 17:30:00 -0500
+Subject: [PATCH] arm64: dts: apple: j714s: describe the internal DCP for the
+ installer loader
+
+The installer tree (0001) has no internal display nodes, so the installer
+m1n1 (m1n1-aurora j714s3: 0002-0004) has nothing to hand the DCP to and the
+panel stays on simpledrm at 60 Hz.
+
+Port the aurora-n1 tree's t6050-dcp.dtsi and the J714s panel node onto
+this tree, changing only what this tree needs:
+ - parent &soc -> &die0 (soc@200000000; its ranges map 0x2_0000_0000
+   +0x3_c000_0000 identity, covering the DCP at 0x4_8ae00000, which
+   matches the unit's ADT /arm-io/dcp read in macOS);
+ - 3-cell AIC specifiers -> this tree's 4-cell <AIC_IRQ die irq flags>;
+ - reuse the existing dcpext0_pmc node for apple,bw-scratch instead of a
+   second pmc-metadata@286700000.
+
+Every node stays disabled. The loader enables them only with
+chosen.asahi,t6050-display=1 and passing checks; without it the DTB boots
+exactly like 0001 (verified: only additions, 15 old properties differ by
+renumbered phandles only, no status changes).
+
+Tested on a second J714s (not betizzel's or TripleU613's unit), bare metal,
+normal chain m1n1 stage 2 -> U-Boot -> Limine -> UKI with LUKS:
+ - display switch off: boots unchanged;
+ - display switch on + aurora-n1 kernel with DRM_APPLE=y: DCP fw 27.2.98.1
+   bound, 6 modes, set_digital_out_mode "3024x1890": 120, appledrmfb,
+   Hyprland (alpha-only scanout patch) at 3024x1890@120, backlight works.
+For comparison, the tripleu DTB hung this unit before Limine three times,
+display switch on or off, with the same loader.
+
+Assisted-by: Claude (Claude Code)
+---
+diff --git i/arch/arm64/boot/dts/apple/t6050-j714s-dcp-port.dtsi w/arch/arm64/boot/dts/apple/t6050-j714s-dcp-port.dtsi
+new file mode 100644
+index 000000000..1ebfd2fba
+--- /dev/null
++++ w/arch/arm64/boot/dts/apple/t6050-j714s-dcp-port.dtsi
+@@ -0,0 +1,138 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * J714s internal display (DCP) for the installer device tree.
++ *
++ * Ported 2026-11-10 from betizzel/omarchy-m5's aurora-n1 tree
++ * (arch/arm64/boot/dts/apple/t6050-dcp.dtsi + the &dcp panel block of its
++ * t6050-j714s.dts) onto the installer J714s tree this Mac boots, changing only:
++ *   - parent: &soc -> &die0 (soc@200000000, ranges identity over 0x2_0000_0000+0x3_c000_0000);
++ *   - interrupts: 3-cell AIC_IRQ <irq flags> -> this tree's 4-cell <die irq flags>;
++ *   - the PMC window: reuse the existing dcpext0_pmc node (same reg) instead of a
++ *     second pmc-metadata@286700000.
++ * Address 0x4_8AE00000 matches this Mac's ADT (/arm-io/dcp, read in macOS).
++ *
++ * Every node starts disabled; m1n1 (installer 0003/0004) enables them only when
++ * chosen.asahi,t6050-display=1 and its checks pass, otherwise simpledrm keeps the panel.
++ */
++
++/ {
++	aliases {
++		/* m1n1 finds the display nodes through these. */
++		dcp = &dcp;
++		disp0 = &display;
++		disp0-piodma = &disp0_piodma;
++	};
++
++	clk_disp0_361: clock-disp0-361 {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <0>;
++		clock-output-names = "clk_disp0_361";
++	};
++
++	clk_disp0_458: clock-disp0-458 {
++		compatible = "fixed-clock";
++		#clock-cells = <0>;
++		clock-frequency = <0>;
++		clock-output-names = "clk_disp0_458";
++	};
++
++	/* Component master without MMIO, outside the simple-bus. */
++	display: display-subsystem {
++		compatible = "apple,display-subsystem";
++		/* disp0_dart is locked by the bootloader and must come first */
++		iommus = <&disp0_dart 0>;
++		memory-region = <&dcp_fb>;
++		memory-region-names = "framebuffer";
++		status = "disabled";
++	};
++};
++
++&{/reserved-memory} {
++	/* The boot framebuffer (ADT /vram); m1n1 fills reg and enables it with the DCP. */
++	dcp_fb: framebuffer@0 {
++		compatible = "framebuffer";
++		reg = <0 0 0 0>;
++		no-map;
++		status = "disabled";
++	};
++};
++
++&die0 {
++	/* The ASC v4 mailbox at dcp + 0x8000 */
++	dcp_mbox: mailbox@48ae08000 {
++		compatible = "apple,t6050-asc-mailbox", "apple,asc-mailbox-v4";
++		reg = <0x4 0x8ae08000 0x0 0x4000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 0 1043 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 0 1044 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 0 1045 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 0 1046 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "send-empty", "send-not-empty",
++				  "recv-empty", "recv-not-empty";
++		#mbox-cells = <0>;
++		status = "disabled";
++	};
++
++	/* dart-dcp and dart-disp0 share ADT interrupt 990 */
++	dcp_dart: iommu@48a340000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x4 0x8a340000 0x0 0x20000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 0 990 IRQ_TYPE_LEVEL_HIGH>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x0 0x300 0x0>;
++		status = "disabled";
++	};
++
++	disp0_dart: iommu@48a300000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x4 0x8a300000 0x0 0xc000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 0 990 IRQ_TYPE_LEVEL_HIGH>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x0 0x300 0x0>;
++		status = "disabled";
++	};
++
++	dcp: dcp@48ae00000 {
++		compatible = "apple,t6050-dcp", "apple,dcp";
++		reg = <0x4 0x8ae00000 0x0 0x4000>,
++		      <0x4 0x88000000 0x0 0x4000000>,
++		      <0x4 0x8a240000 0x0 0x10000>,
++		      <0x4 0x8a3ac000 0x0 0x4000>,
++		      <0x4 0x8a800000 0x0 0x800000>,
++		      <0x2 0x86700000 0x0 0x114000>,
++		      <0x4 0x8a850000 0x0 0x4000>;
++		reg-names = "coproc", "disp-0", "disp-1", "disp-2", "disp-3",
++			    "disp-4", "iop-vbar";
++		mboxes = <&dcp_mbox>;
++		mbox-names = "mbox";
++		iommus = <&dcp_dart 23>;
++		apple,bw-scratch = <&dcpext0_pmc 0 5 0x20000>;
++		clocks = <&clk_disp0_361>, <&clk_disp0_458>;
++		apple,clock-ids = <361 458>;
++		memory-region = <&dcp_fb>;
++		memory-region-names = "framebuffer";
++		/* Placeholder: m1n1 overwrites it with the running firmware's version. */
++		apple,firmware-compat = <0 0 0>;
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++		status = "disabled";
++
++		disp0_piodma: piodma {
++			iommus = <&disp0_dart 16>;
++		};
++
++		/* 14.2" 3024x1964 mini-LED panel, Display P3, 600 nits SDR (from the n1 J714s board file) */
++		panel: panel {
++			compatible = "apple,panel-j714", "apple,panel-mini-led", "apple,panel";
++			width-mm = <302>;
++			height-mm = <196>;
++			adj-height-mm = <189>;
++			apple,max-brightness = <600>;
++			apple,color-gamut = "display-p3";
++		};
++	};
++};
+diff --git i/arch/arm64/boot/dts/apple/t6050-j714s.dts w/arch/arm64/boot/dts/apple/t6050-j714s.dts
+index 57061b1e2..4fd456326 100644
+--- i/arch/arm64/boot/dts/apple/t6050-j714s.dts
++++ w/arch/arm64/boot/dts/apple/t6050-j714s.dts
+@@ -1078,3 +1078,6 @@ power-controller@280 {
+ 		apple,no-auto-pm;
+ 	};
+ };
++
++/* Internal display (DCP), ported from the aurora-n1 tree; all nodes disabled until m1n1 hands over. */
++#include "t6050-j714s-dcp-port.dtsi"

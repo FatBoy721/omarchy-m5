@@ -201,3 +201,46 @@ carry their own SPDX headers.
 
 Full source inventory:
 [installer SOURCES.md](https://github.com/TripleU613/omarchy-mac-installer/blob/main/SOURCES.md).
+
+## DCP at 120 Hz through the normal chain on a second J714s (FatBoy721's unit, 2026-11-10)
+
+A third J714s (stub mBoot-20457.60.65.0.1, macOS 27.3 beta 1), booted from its own
+SSD through the normal chain: ESP stage-2 m1n1 → U-Boot → Limine → UKI, with a
+LUKS2 root. No tethering and no hypervisor.
+
+| Piece | What was used |
+| --- | --- |
+| m1n1 | `installer/recipes/m1n1-aurora` j714s3 (omacom `02785a35` + frozen + installer 0002-0004), ESP stage 2, built locally with clang 23 / Rust 1.89 |
+| DTB | the installer tree (0001) + [`linux-aurora-installer/0002`](../patches/linux-aurora-installer/) (internal DCP nodes, all disabled until the loader hands over) |
+| boot.bin config | `chosen.asahi,t6050-display=1` |
+| U-Boot | unchanged from the installer image (the native build that boots this unit) |
+| Kernel | `aurora-n1` (0001-0008) + [`linux-aurora-n1/0010`](../patches/linux-aurora-n1/) + `CONFIG_DRM_APPLE=y` |
+| Hyprland | 0.57.1 + [`patches/hyprland/0001`](../patches/hyprland/) (Omarchy's PKGBUILD, same build ID, so the titlebars plugin still loads) |
+
+Tests, one change per boot:
+
+| Boot | Loader | DTB | Display switch | Result |
+| --- | --- | --- | --- | --- |
+| 2, 2b | j714s3 | `t6050-j714s-gpu-tripleu` (GPU node disabled) | on | hang on the logo, before Limine |
+| 2c | j714s3 | `t6050-j714s-gpu-tripleu` (GPU node disabled) | off | hang on the logo, before Limine |
+| 2d | j714s3 | installer (0001) | off | boots normally |
+| 3a | j714s3 | installer + 0002 | off | boots normally; DCP nodes present, disabled |
+| 3b | j714s3 | installer + 0002 | on | `apple-dcp: firmware 27.x build 27.2.98.1`, `nr_modes:6`, `set_digital_out_mode "3024x1890": 120`, `fb0: appledrmfb`; unpatched Hyprland crash-loops (`GBM: format XR24 isn't supported`) |
+| 3b + Hyprland patch | same | same | on | Hyprland on `eDP-2` at `3024x1890@120`, `ARGB8888`; backlight `apple-panel-bl` 0..600 works |
+
+So the tripleu DTB is not portable to every J714s: on this unit it hangs before
+Limine even with the display handoff off, while the installer DTB boots with the
+same loader.
+
+**60 FPS cap at 120 Hz.** With the DCP at 120 Hz, a vsync-paced client
+(`es2gears_wayland`) measured exactly **60.000 FPS**. On firmware 27 the non-desktop
+mode set enables swap timestamps only for VRR timings
+(`use_timestamps = mode->vrr && main_display`), so the firmware completes one swap
+per 16.7 ms. rolotrealanis98's fix (carried here as `linux-aurora-n1/0010`, author
+kept) lifts it: **73-80 FPS** in the same test, now limited by software rendering
+(Hyprland at ~1260 % CPU on llvmpipe, GPU off).
+
+Still open on this unit: lid suspend on the DCP kernel enters s2idle but the
+panel does not come back on resume (with `CONFIG_INPUT_MACSMC_INPUT=m` added; the
+installer config has it off, so the lid did nothing before). GPU is off: no
+per-unit `apple,j714s-gpu*` bins yet for this chip.
