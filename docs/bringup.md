@@ -1054,10 +1054,12 @@ WPA2/WPA3 network on both bands and carried real traffic, and came back by
 itself after a reboot; Bluetooth answered classic and LE discovery. The same
 kernel, tree and loader were then proven from RAM as a self-contained
 [native image](#native-n1-image-proven-from-ram-boot-loops-when-enrolled),
-which **boot-looped when it was enrolled**. This
-is short functional coverage; the [limits](#n1-limits) are listed below. The
-default, DCP and GPU bundles, their loaders and the installed boot object are
-unchanged.
+which **boot-looped when it was enrolled**. The plain aligned stage 1 later
+booted the direct storage chain natively. That exposed a driver-probe race
+fixed by 0007; native `7.3.0-g76b01c3f2e1c` now reconnects Wi-Fi and starts
+Bluetooth automatically, with Wi-Fi SSH, ICMP and HTTPS verified.
+This is short functional coverage; the [limits](#n1-limits) are listed below.
+The earlier default, DCP and GPU recovery bundles remain unchanged.
 
 Sources:
 
@@ -1065,7 +1067,8 @@ Sources:
   0001 is TripleU613's merge of the installer kernel's N1 work onto this
   tree's layout (Centauri drivers and the kernel-owned PCIe train by
   rolotrealanis98; see [`installer-stones.md`](installer-stones.md)).
-  0002–0006 are what that merge needed to run here (table below).
+  0002–0006 made that merge run here; 0007 fixes the probe race exposed by
+  native startup (table below).
 - This repo's GPU loader plus `patches/m1n1-gpu/0004`, built in
   `build/m1n1-gpu-n1`. Its N1 hand-off only edits the device tree: it copies
   the control function's identity and the six host and five port tunable lists
@@ -1080,14 +1083,16 @@ Sources:
   from Apple and no per-unit ticket is involved. The file stays private and
   is never committed.
 
-What the merged tree needed before the N1 came up here. Each row cost one
-boot; all three failures were clean (no hang, the N1 simply stayed absent):
+What the merged tree needed before the N1 came up here. The first three
+hardware failures appeared during tethered bring-up; the probe race appeared
+on the first native boot. Each left the N1 unavailable without hanging Linux:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `pcie-apple` defers forever: `Port … probe fail` | PERST# is pin 80 of the AP pin controller, whose driver was only modular and never loaded | `CONFIG_PINCTRL_APPLE_GPIO=y`; 0004 reserves every AP pin but 80 (pin 112's register takes an SError when read) and leaves the unused NUB/AOP banks disabled |
 | `invalid or missing MSI slice` | The T6050 MSI window check demanded the four-cell AIC specifier of the multi-die layout; this tree's AIC has three cells | 0005 accepts both forms of die 0's IRQ 1888 |
 | `shared PHY: 0xf3c030d1, waiting for 0x4/0x4`, port setup `-110` | iBoot leaves the GP power closure targeted on but auto-gated, so the shared PHY never acknowledges its clock request | 0006: `APCIE_SYS_GP`, `APCIE_PHY_SW` and `APHY_GP_AUS5` always on with auto-PM off, `APCIE_GP` and `APHY_GP_AUS5_A` kept on, in the N1-enabled trees only (m1n1's `pcie_t6050` stage A; the installer kernel's board file) |
+| Native startup aborts in phase2 with `IPC bootstrap failed: -16`, after Alpha IRQ allocation but before Beta mapping | The driver core temporarily sets Beta's `dev.driver` while `btcentauri` probes and defers until shared firmware is ready; the unlocked ownership check mistakes that probe for a bound driver | 0007 takes the sibling device lock across the ownership check and resource acquisition, releasing it on every exit; no retry or delay |
 | (found by review) SMC battery, lid and RTC gone, cpufreq and NVMe on unverified bindings | The merge made the installer's FT21 SMC write gate and its NVMe/cpufreq compatibles the default | 0003 makes the gate opt-in (`macsmc.m5_smc_gate=1`) and restores this unit's verified compatibles |
 | (found by review) loader would never enable the port | `apple,manual-availability` missing on the port's DART | 0002 |
 
@@ -1112,6 +1117,11 @@ copied, a disabled host left byte-identical, every missing precondition or
 bad ADT record fail-closed, the power closure and pin guard present), and the
 GPU/DCP/watchdog cases again with the N1 trees (26).
 
+The actual Centauri enumeration C also runs in a deterministic host probe-race
+fixture. The old code fails with `-16`; the fixed code waits for a deferred
+Beta probe, still refuses a genuinely bound driver, and releases sibling
+locks after mapping and IRQ-allocation failures (four cases).
+
 ```sh
 D=build/linux-aurora-n1-out/arch/arm64/boot/dts/apple
 A=build/adt-runtime-j714s-unattended-20261108T213635Z.bin
@@ -1120,6 +1130,7 @@ python3 patches/m1n1-gpu/smoke-n1.py --adt $A \
 python3 patches/m1n1-gpu/smoke-handoff.py --source build/m1n1-gpu-n1 --adt $A \
   --dtb $D/t6050-j714s-gpu-n1.dtb --simpledrm-dtb $D/t6050-j714s-gpu-n1-simpledrm.dtb \
   --default-dtb build/linux-aurora-out/arch/arm64/boot/dts/apple/t6050-j714s.dtb
+python3 patches/linux-aurora-n1/smoke-bootstrap.py
 ```
 
 **Firmware** (once per macOS build; the three inputs are members of the
@@ -1428,9 +1439,13 @@ make m1n1-stage1 esp-gpu-n1-simpledrm \
 |---|---|---|
 | `m1n1-stage1-esp.bin` | 1,179,648 | `ec29ead17a2e545312142b605c58ee0fd1cf593bf36e92d4cc9ff143a39debeb` |
 | `m1n1/boot.bin` | 1,212,478 | `e7567a5fa08f767abe1ff12ba9c2a9f2c5764d1e7ca3986afcd784545b7f3a9b` |
-| `m1n1/payload.bin` | 23,479,843 | `09f88f9bb541db04df8e0ea0a1c90a8bbf504ca28738afb53409e86f672af6d7` |
+| `m1n1/payload.bin` (current native kernel `7.3.0-g76b01c3f2e1c`) | 23,477,000 | `487a480e7c02b2e55b4bd41ef489fa29e3be4242fdbe38074328f032038d41f3` |
+| `m1n1/payload-before-n1-probe-fix.bin` (previous kernel rollback) | 23,479,843 | `09f88f9bb541db04df8e0ea0a1c90a8bbf504ca28738afb53409e86f672af6d7` |
 
-The payload's kernel, device tree and initramfs are those of the tether bundle.
+The initial cable and native trials used the previous payload, matching the
+preserved tether bundle. The current native payload contains the probe-race
+fix and uses its separately installed, matching kernel module directory.
+The old module directory and payload remain available for rollback.
 
 **Run from the cable with nothing enrolled (2026-11-09).** Both files in place,
 the Mac reset into its enrolled proxy loader, the watchdog armed and kept:
@@ -1471,13 +1486,28 @@ the two loader versions, 15 CPUs and the SSD root. The boot-acknowledgement
 service succeeded; the selected BUG/WARNING/SError/Call-trace patterns had no
 matches in the kernel log. No Hyprland process was running during this check.
 
-**Native radio limitation:** Linux trained the N1 link at 0.842 s, but
-`apple_centauri` reported `IPC bootstrap failed: -16 (Control stage=0x1)`
-and `N1 automatic startup failed in phase2: -16`. Both radio modules had
-autoloaded; NetworkManager was active, but no Wi-Fi interface appeared and
-Bluetooth was inactive. The earlier tethered Wi-Fi/Bluetooth success is not
-yet reproduced through this native startup. No driver reload, reset or reboot
-was attempted during this inspection.
+**Native radio probe race (fixed):** the first native boot trained the N1 link
+at 0.842 s, then reported `IPC bootstrap failed: -16 (Control stage=0x1)`
+and `N1 automatic startup failed in phase2: -16`. Both modules autoloaded;
+Alpha had all 16 IRQs, but Beta was never mapped. The driver core temporarily
+sets `dev.driver` before calling the Beta probe, which defers until Control
+publishes shared-firmware readiness. The unlocked sibling ownership check
+mistook that in-progress probe for a bound driver and permanently aborted IPC.
+
+`patches/linux-aurora-n1/0007` holds each sibling's device lock while checking
+ownership and acquiring resources, with unlocks on every error path. It adds
+no delay or retry and still rejects an actually bound driver. The deterministic
+host regression reproduces `-16` with the old C and passes all four fixed-code
+cases.
+
+With owner approval, only the ESP kernel payload and a new matching module
+directory were installed; neither loader nor enrollment changed. Native
+`7.3.0-g76b01c3f2e1c` booted with 15 CPUs, trained the link, started firmware
+and registered both radios. NetworkManager reconnected the saved network by
+itself; Wi-Fi SSH reached the same boot, the Internet route used `wlan0`,
+ICMP succeeded and HTTPS returned 200. Bluetooth was active with `hci0`
+powered and BR/EDR, LE and secure connections enabled. The boot counter was
+acknowledged and the selected warning/Oops/SError patterns had no matches.
 
 An unplugged cold boot remains owner-attended and unconfirmed.
 

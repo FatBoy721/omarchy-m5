@@ -206,17 +206,20 @@ fell back to its USB proxy, from which the tether flow still works. **The owner
 enrolled the plain stage 1 on 2026-11-09 and it booted successfully.** Live SSH
 confirmed both loader versions, Linux `7.3.0-gc1fabe3c06f9`, all 15 CPUs and the
 existing SSD root, with no host-supplied boot images. An unplugged cold boot
-remains to be confirmed. On this first native boot the N1 link trained, but
-firmware IPC bootstrap failed with `-16`; Wi-Fi and Bluetooth were unavailable.
-The earlier tethered radio results therefore do not yet qualify native startup.
-A small unit in the root image clears
+remains to be confirmed. The first native boot exposed an N1 probe-order race:
+Bluetooth's temporarily assigned driver pointer caused shared IPC startup to
+abort with `-16`. Patch 0007 synchronizes sibling acquisition with probing.
+**Native `7.3.0-g76b01c3f2e1c` now reconnects Wi-Fi and starts Bluetooth
+automatically**; Wi-Fi SSH, ICMP and HTTPS passed, with `hci0` powered and no
+matches for the selected kernel warning/Oops/SError checks. The enrolled
+loader is unchanged. A small unit in the root image clears
 [iBoot's boot counter](docs/bringup.md#iboots-boot-counter), which otherwise
 adds up with every restart made without the cable.
 
 This is short functional coverage. Bluetooth pairing, HID and audio with a
 real device, suspend and sustained load are open. The
 [N1 runbook](docs/bringup.md#n1-wi-fi-and-bluetooth-isolated-j714s) has the
-build, the three failures on the way and what fixed them, and the limits.
+build, the bring-up failures and their fixes, and the remaining limits.
 
 ## Aura Mach-O Stage 1 (optional, untested on hardware)
 

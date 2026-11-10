@@ -1,0 +1,80 @@
+From 76b01c3f2e1ce67b40298ebfcf4a3be623eea877 Mon Sep 17 00:00:00 2001
+From: omarchy-m5 <omarchy-m5@localhost>
+Date: Mon, 9 Nov 2026 21:59:11 -0600
+Subject: [PATCH] wifi: apple: centauri: serialize sibling acquisition with
+ driver probing
+
+The PCI rescan publishes Alpha and Beta while udev may register btcentauri. The driver core sets dev.driver before calling probe, but Beta must defer until shared firmware is ready. Testing the pointer without the device lock can mistake this temporary probe for an established owner and abort IPC with -EBUSY. On the native J714s boot, Alpha acquired all 16 IRQs but Beta was never mapped and startup stopped in phase2.
+
+Lock each sibling during ownership checking and resource setup. A deferred Beta probe then finishes before the ownership decision; a genuinely bound driver still fails closed. Release the lock on every error path. Control is not locked by its own asynchronous worker. No retry or delay is added.
+
+Co-authored-by: OpenAI Codex <noreply@openai.com>
+---
+ .../wireless/apple/centauri/centauri_ipc.c    | 33 ++++++++++++++-----
+ 1 file changed, 25 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/net/wireless/apple/centauri/centauri_ipc.c b/drivers/net/wireless/apple/centauri/centauri_ipc.c
+index 1b8b8abb0..6b0954392 100644
+--- a/drivers/net/wireless/apple/centauri/centauri_ipc.c
++++ b/drivers/net/wireless/apple/centauri/centauri_ipc.c
+@@ -323,32 +323,49 @@ static int enumerate_functions(struct centauri *c)
+ 		    !(pci_resource_flags(ipc->function[i], 0) & IORESOURCE_MEM) ||
+ 		    pci_resource_len(ipc->function[i], 0) < (i ? 0x2000 : 0x9080))
+ 			return -ENODEV;
+-		if (i && ipc->function[i]->dev.driver)
+-			return -EBUSY;
++		if (i) {
++			/*
++			 * The driver core sets dev.driver before calling probe().
++			 * Beta can be probing only to defer until c->ready. Wait
++			 * for that probe before deciding the function is owned.
++			 */
++			device_lock(&ipc->function[i]->dev);
++			if (ipc->function[i]->dev.driver) {
++				ret = -EBUSY;
++				goto unlock;
++			}
++		}
+ 		ipc->owned[i] = true;
+ 		ipc->bar[i] = pci_iomap(ipc->function[i], 0, 0);
+-		if (!ipc->bar[i])
+-			return -ENOMEM;
++		if (!ipc->bar[i]) {
++			ret = -ENOMEM;
++			goto unlock;
++		}
+ 		if (i) {
+ 			ret = pci_enable_device_mem(ipc->function[i]);
+ 			if (ret)
+-				return ret;
++				goto unlock;
+ 			ipc->enabled[i] = true;
+ 		}
+-		if (i == 1 && !ipc->function[i]->dev.driver) {
++		if (i == 1) {
+ 			dev_pm_domain_set(&ipc->function[i]->dev, &centauri_alpha_pm_domain);
+ 			ipc->alpha_pm_domain = true;
+ 		}
+ 		ret = dma_set_mask_and_coherent(&ipc->function[i]->dev, DMA_BIT_MASK(40));
+ 		if (ret)
+-			return ret;
++			goto unlock;
+ 		if (i == 1) {
+ 			ret = centauri_request_irqs(&c->alpha_irqs, ipc->function[i],
+ 						    16, centauri_alpha_irq, c);
+ 			if (ret)
+-				return ret;
++				goto unlock;
+ 		}
+ 		pci_set_master(ipc->function[i]);
++unlock:
++		if (i)
++			device_unlock(&ipc->function[i]->dev);
++		if (ret)
++			return ret;
+ 	}
+ 	return 0;
+ }
+-- 
+2.56.0
+
