@@ -136,10 +136,14 @@ boots the DCP, sees the panel and modesets 3024x1890@120 (`appledrmfb` on
 fb0). Before 0003 the loader refused (`a display node has no phandle`: dtc
 gives the unreferenced dcp and display-subsystem nodes none); before 0004 the
 kernel refused (`firmware-compat 27.3.0 has no 27.x method table`).
-**Not yet good:** the same loader and DTB booted on bare metal hung with no
-network or USB (cause not yet read); the HV guest logs `format XR24 ... not
-supported`; no HV session has stayed up past about a minute after login.
-Keep `t6050-display=0` for daily boots.
+**Bare metal too (boot of 18:11 UTC):** the same loader and DTB booted from
+the ESP (`tools/m5-remote/bmboot.sh`) probed the DCP, modeset 3024x1890@120,
+brought up `appledrmfb`, and SDDM started the Hyprland session on it; the boot
+ran 14 minutes until a forced power-off. It looked hung from outside only
+because `kernel-modules-hook` had deleted this kernel's modules (no Wi-Fi, no
+USB gadget). Still logged: `format XR24 ... not supported` (fbdev), `backlight
+restore unavailable: -61`. The HV sessions themselves reset about a minute
+after login for an unrelated, unexplained reason.
 
 Still open: the USB EEM gadget does not always enumerate (UDC bound, `not
 attached`, link in Suspend; a UDC rebind does not help); `ufw` failing at
