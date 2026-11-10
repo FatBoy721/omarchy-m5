@@ -105,7 +105,7 @@ keeping this repo's DT layout (`make kernel-aurora-n1`):
   installer m1n1 enables the port and DART after training.
 - Centauri Wi-Fi/BT are modules (`request_firmware_direct` needs the rootfs).
 
-**Status 2026-11-10, TripleU613's J714s, bare metal:** boots with 15 CPUs,
+**Status 2026-11-10, TripleU613's J714s, bare metal** (exact series `linux-aurora-n1` 0001-0008, kernel `7.3.0-g6fd53e01a76b`, harness tree `a52459a2430a`): boots with 15 CPUs,
 N1 Wi-Fi (associated, DHCP, Tailscale) and Bluetooth, GPU (aurora firmware
 initdata acknowledged; Vulkan "Apple M5 Pro (G17S B1)" via the native Mesa
 session env) and simpledrm on the internal panel.
