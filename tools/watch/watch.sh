@@ -25,7 +25,8 @@ done
 
 # People: every repo they pushed to in the last 3 days, each branch head
 PEOPLE=(maralcbr scottjones chriskearney malik-na DjDeveloperr joshuaswarren themartiano riverscn RyanTheTide Acelogic LiamRay11 erykwieliczko subedijaidip shawnyeager jondkinney
-        rolotrealanis98 edimoldovan betizzel erikwb satchlj joske TripleU613 FatBoy721 cameroncooper)
+        rolotrealanis98 edimoldovan betizzel erikwb satchlj joske TripleU613 FatBoy721 cameroncooper
+        IronsideXXVI jgoyvaerts kazuhidet andreinita21 fbalazsy Blueemi pixbroker)
 since=$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%SZ)
 for u in "${PEOPLE[@]}"; do
   gh repo list "$u" --limit 200 --json nameWithOwner,pushedAt -q ".[]|select(.pushedAt>\"$since\")|.nameWithOwner" 2>/dev/null | while read -r r; do
@@ -33,7 +34,7 @@ for u in "${PEOPLE[@]}"; do
   done
 done >> new.tsv
 # Anyone on GitHub: repos mentioning the M5 Pro/Max chips, by last push
-for q in t6050 j714s j714c j716s "m5 pro linux" "m5 max linux"; do
+for q in t6050 j714s j714c j716s "m5 pro linux" "m5 max linux" "omarchy m4" j604 j616s j713 t6040 t8132; do
   gh api -X GET search/repositories -f q="$q pushed:>$since" -q '.items[]|.full_name+"\tREPO\t"+.pushed_at' 2>/dev/null
 done >> new.tsv
 # The J714 owners' thread
