@@ -10,13 +10,13 @@
 
 _auroraver=7.3.0
 _aurorarel=16.j714s3
-pkgrel=2
+pkgrel=3
 
 # Immutable pin on omacom/linux-aurora (branch integration/aurora). Every bump is a
 # PR that moves _commit; its cold-boot qualification is recorded in
 # the PR's attached qualification evidence before channel publication.
 _commit=34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a
-# Plus betizzel/omarchy-m5 linux-aurora + linux-aurora-n1 0001-0009 (harness tree 29651ea1b794) as one diff.
+# Plus betizzel/omarchy-m5 linux-aurora + linux-aurora-n1 0001-0010 (harness tree 63cef437e) as one diff.
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -45,7 +45,7 @@ sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '8965c3d489d9475b390ff8fb3b99a96e275f9d67260cfc59f0bb573d6d856158'
-            'dfb5389d9329a218cfd6b6e5a24a69b759607b135276acae568eeb3a94ee7ad8'
+            '34b16a83c946833bb21bb5fc614cd33e360fc5fb4850bf4fa8d273fe15fea3ee'
             '2950746d220015a76d0c20b00ff68a7189089d16af65fbaa36b8f46b31c7be93')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
@@ -139,10 +139,11 @@ _package_kernel() {
 
   echo "Installing device trees..."
   install -Dt "$modulesdir/dtbs" "$O"/arch/arm64/boot/dts/apple/*.dtb
-  # Developer image: boot loaders pick t6050-j714s.dtb, and GPU voltage bins are
-  # per chip, so the image names its unit. Default: TripleU613's (N1 host, GPU,
-  # simpledrm). betizzel's unit: _j714s_unit_dtb=t6050-j714s-gpu-n1-simpledrm.dtb
-  install -Dm644 "$modulesdir/dtbs/${_j714s_unit_dtb:-t6050-j714s-gpu-tripleu-simpledrm.dtb}" \
+  # Boot loaders pick t6050-j714s.dtb. The default fits any J714s (N1 host, GPU,
+  # simpledrm): the GPU takes its chip's voltage bins from the ADT, which
+  # m1n1-aurora (patches/m1n1-installer 0005) passes in. A per-unit tree
+  # (t6050-j714s-gpu-tripleu-simpledrm.dtb) can still be named here.
+  install -Dm644 "$modulesdir/dtbs/${_j714s_unit_dtb:-t6050-j714s-gpu-adt-simpledrm.dtb}" \
     "$modulesdir/dtbs/t6050-j714s.dtb"
 
   # Touch ID needs this Mac's Mesa calibration, which the SEP driver loads as

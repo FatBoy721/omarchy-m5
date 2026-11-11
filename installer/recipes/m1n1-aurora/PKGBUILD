@@ -1,6 +1,6 @@
 # omacom/m1n1; ordinary updates refresh ESP Stage 2, never enroll Stage 1.
 pkgname=m1n1-aurora
-pkgver=1.6.1.aurora22.j714s3
+pkgver=1.6.1.aurora22.j714s4
 pkgrel=1
 pkgdesc='Private J714s normal-chain loader with the demonstrated G17S and N1 handoffs'
 arch=('aarch64')
@@ -17,20 +17,20 @@ _commit=02785a35e046901d5686ab9059b2c08b6256752a
 source=("m1n1::git+$url.git#commit=$_commit"
         build-qualification.json validate-qualification.py
         bootlogo_48.bin bootlogo_128.bin bootlogo_256.bin j714s-frozen-source.patch
-        j714s-installer-0002-0004.patch)
+        j714s-installer-0002-0005.patch)
 sha256sums=('SKIP' 'c278c77c5c6d3e782b6724d0fbe438ded4e1dbd4a46845bc0391b3a4feb25e33'
             '43578b83ebea180319b64c9b63377dab6148e997e6f75fd4abcb325484f7ca95'
             '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
             'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'
             '9c659b392aacfa31c62c638003d2257abfdbe17919b5c90cde4c4e62f87addab'
             'd634a7aba77bc72b5d4ed45ac964fd5c7b9bb0ab46cc7a70a6385771aaa1b1f8'
-            '79e24dba24be52186b4148bad9748e99260091dcd0e1b692736c954ab15f06df')
+            'ab5b5aaf633c1bd23ebf2de8372237b948d064539de0b7d7ae2b28c1061c602f')
 
 prepare() {
   [[ $(git -C "$srcdir/m1n1" rev-parse HEAD) == "$_commit" ]]
   patch -d "$srcdir/m1n1" -p1 --fuzz=0 --batch --no-backup-if-mismatch < "$srcdir/j714s-frozen-source.patch"
-  # betizzel/omarchy-m5 patches/m1n1-installer 0002-0004: 3-cell AIC GPU mailboxes, DCP handoff
-  patch -d "$srcdir/m1n1" -p1 --fuzz=0 --batch --no-backup-if-mismatch < "$srcdir/j714s-installer-0002-0004.patch"
+  # betizzel/omarchy-m5 patches/m1n1-installer 0002-0005: 3-cell AIC GPU mailboxes, DCP handoff, GPU voltage bins
+  patch -d "$srcdir/m1n1" -p1 --fuzz=0 --batch --no-backup-if-mismatch < "$srcdir/j714s-installer-0002-0005.patch"
   rustup toolchain install 1.89.0 --profile minimal --target aarch64-unknown-none-softfloat
   # Preserve this package's existing artwork; only its source changes.
   for size in 48 128 256; do

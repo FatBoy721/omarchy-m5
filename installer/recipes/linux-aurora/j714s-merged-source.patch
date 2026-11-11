@@ -1073,10 +1073,10 @@ index c0ef0498f..1c0d31194 100644
  	bool "Experimental mixed-granule userspace"
  	select ARCH_HAS_MM_PGTABLE
 diff --git a/arch/arm64/boot/dts/apple/Makefile b/arch/arm64/boot/dts/apple/Makefile
-index 52b15f4bd..575cedb81 100644
+index 52b15f4bd..bedc9d99f 100644
 --- a/arch/arm64/boot/dts/apple/Makefile
 +++ b/arch/arm64/boot/dts/apple/Makefile
-@@ -98,6 +98,16 @@ dtb-$(CONFIG_ARCH_APPLE) += t6040-j614s.dtb
+@@ -98,6 +98,18 @@ dtb-$(CONFIG_ARCH_APPLE) += t6040-j614s.dtb
  dtb-$(CONFIG_ARCH_APPLE) += t6040-j616s.dtb
  dtb-$(CONFIG_ARCH_APPLE) += t6040-j616s-tether.dtb
  dtb-$(CONFIG_ARCH_APPLE) += t6041-j616c.dtb
@@ -1085,6 +1085,8 @@ index 52b15f4bd..575cedb81 100644
 +dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-simpledrm.dtb
 +dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-n1.dtb
 +dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-n1-simpledrm.dtb
++dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-adt.dtb
++dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-adt-simpledrm.dtb
 +dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-tripleu.dtb
 +dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-gpu-tripleu-simpledrm.dtb
 +dtb-$(CONFIG_ARCH_APPLE) += t6050-j716c.dtb
@@ -1093,7 +1095,7 @@ index 52b15f4bd..575cedb81 100644
  dtb-$(CONFIG_ARCH_APPLE) += t8112-j413.dtb
  dtb-$(CONFIG_ARCH_APPLE) += t8112-j415.dtb
  dtb-$(CONFIG_ARCH_APPLE) += t8112-j473.dtb
-@@ -120,3 +130,4 @@ dtb-$(CONFIG_ARCH_APPLE) += t8142-j813.dtb
+@@ -120,3 +132,4 @@ dtb-$(CONFIG_ARCH_APPLE) += t8142-j813.dtb
  dtb-$(CONFIG_ARCH_APPLE) += t8152-j873g.dtb
  
  # Explicit cold-ANE lead test; never select as the production board DTB.
@@ -3333,6 +3335,64 @@ index 000000000..94e9def55
 +		apple,dma-range = <0x100 0x4000 0x0 0xffff0000>;
 +	};
 +};
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts
+new file mode 100644
+index 000000000..074bacb00
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts
+@@ -0,0 +1,7 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/* Any J714s, simple framebuffer kept (no DCP hand-off): the installer image's tree. */
++#include "t6050-j714s-gpu-adt.dts"
++
++&dcp {
++	apple,m1n1-simpledrm-only;
++};
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
+new file mode 100644
+index 000000000..54d7dd974
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
+@@ -0,0 +1,39 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * Any J714s: the GPU takes the voltage bins of the chip it runs on from the ADT,
++ * which the loader copies into the gpu node (apple,adt-* properties; m1n1
++ * patches/m1n1-installer 0005). Without them the GPU does not start.
++ */
++#include "t6050-j714s-gpu.dts"
++
++&gpu {
++	compatible = "apple,j714s-gpu-adt", "apple,agx-g17s";
++};
++
++/*
++ * Booted with the installer m1n1, which enables port00 and the DART after its
++ * own train or for the kernel train. The kernel train needs the GP power
++ * closure of the host include; a loader train leaves that closure as it is.
++ */
++#include "t6050-j714s-n1-host.dtsi"
++
++/*
++ * The installer m1n1 only fills a GPU node that is already enabled ("FDT: GPU:
++ * T6050 GPU is disabled in the device tree, not filling it"); this repo's GPU
++ * loader enables it itself. Needs patches/m1n1-installer/0002 for this tree's
++ * 3-cell AIC. Verified: aurora firmware initdata acknowledged, Vulkan up.
++ */
++&gpu {
++	status = "okay";
++};
++
++/*
++ * As the installer freeze: the installer m1n1 prepares only ATC1 (the EEM
++ * gadget, 2aa280000.usb). Keep ATC0/ATC2 DWC3 and their DARTs off.
++ */
++&dwc3_0 { status = "disabled"; };
++&dwc3_0_dart_0 { status = "disabled"; };
++&dwc3_0_dart_1 { status = "disabled"; };
++&dwc3_2 { status = "disabled"; };
++&dwc3_2_dart_0 { status = "disabled"; };
++&dwc3_2_dart_1 { status = "disabled"; };
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dts
 new file mode 100644
 index 000000000..4bb2f0edb
@@ -3396,48 +3456,21 @@ index 000000000..ff73dded8
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
 new file mode 100644
-index 000000000..7714522f4
+index 000000000..f8da99aff
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,11 @@
 +// SPDX-License-Identifier: GPL-2.0+ OR MIT
 +/*
 + * TripleU613's J714s unit: same board tree, its own fused GPU voltage bins.
 + * GPU bins are per chip; boot this DTB only on that unit (owner ADT d7feb012...).
++ * t6050-j714s-gpu-adt.dts boots on any J714s with a loader that passes the bins.
 + */
-+#include "t6050-j714s-gpu.dts"
++#include "t6050-j714s-gpu-adt.dts"
 +
 +&gpu {
 +	compatible = "apple,j714s-gpu-tripleu", "apple,agx-g17s";
 +};
-+
-+/*
-+ * Booted with the installer m1n1, which enables port00 and the DART after its
-+ * own train or for the kernel train. The kernel train needs the GP power
-+ * closure of the host include; a loader train leaves that closure as it is.
-+ */
-+#include "t6050-j714s-n1-host.dtsi"
-+
-+/*
-+ * The installer m1n1 only fills a GPU node that is already enabled ("FDT: GPU:
-+ * T6050 GPU is disabled in the device tree, not filling it"); this repo's GPU
-+ * loader enables it itself. Needs patches/m1n1-installer/0002 for this tree's
-+ * 3-cell AIC. Verified: aurora firmware initdata acknowledged, Vulkan up.
-+ */
-+&gpu {
-+	status = "okay";
-+};
-+
-+/*
-+ * As the installer freeze: the installer m1n1 prepares only ATC1 (the EEM
-+ * gadget, 2aa280000.usb). Keep ATC0/ATC2 DWC3 and their DARTs off.
-+ */
-+&dwc3_0 { status = "disabled"; };
-+&dwc3_0_dart_0 { status = "disabled"; };
-+&dwc3_0_dart_1 { status = "disabled"; };
-+&dwc3_2 { status = "disabled"; };
-+&dwc3_2_dart_0 { status = "disabled"; };
-+&dwc3_2_dart_1 { status = "disabled"; };
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts
 new file mode 100644
 index 000000000..2d3054aa4
@@ -12612,7 +12645,7 @@ index ac1ded5eb..54f31f57f 100644
  void iomfb_firmware_state_cleanup_v27(void *data);
  int iomfb_modeset_v27(struct apple_dcp *dcp, struct drm_crtc_state *state);
 diff --git a/drivers/gpu/drm/asahi/driver.rs b/drivers/gpu/drm/asahi/driver.rs
-index ef1534619..f3a1ce8a8 100644
+index ef1534619..c8006dbe4 100644
 --- a/drivers/gpu/drm/asahi/driver.rs
 +++ b/drivers/gpu/drm/asahi/driver.rs
 @@ -3,7 +3,7 @@
@@ -12624,16 +12657,18 @@ index ef1534619..f3a1ce8a8 100644
  use kernel::{
      device::{
          Core,
-@@ -141,6 +141,8 @@ impl drm::driver::Driver for AsahiDrmDriver {
+@@ -141,6 +141,10 @@ impl drm::driver::Driver for AsahiDrmDriver {
  pub(crate) enum ProbeConfig {
      Legacy(&'static hw::HwConfig),
      G17(&'static g17::Config),
 +    /// A per-unit J714s G17 config whose fuse masks must be checked before firmware init.
 +    G17J714s(&'static g17::Config),
++    /// Any J714s: voltage bins from the ADT the loader copied into the gpu node.
++    G17J714sAdt,
      /// M5 Pro, Max and Ultra: the ID registers select the configuration.
      G17M5,
      M3(crate::m3::Chip),
-@@ -173,6 +175,14 @@ macro_rules! asahi_of_device_table {
+@@ -173,6 +177,18 @@ macro_rules! asahi_of_device_table {
                      of::DeviceId::new(c"apple,agx-t8142"),
                      ProbeConfig::M5
                  ),
@@ -12642,13 +12677,17 @@ index ef1534619..f3a1ce8a8 100644
 +                    ProbeConfig::G17(&hw::t6050::CONFIG_J714S)
 +                ),
 +                (
++                    of::DeviceId::new(c"apple,j714s-gpu-adt"),
++                    ProbeConfig::G17J714sAdt
++                ),
++                (
 +                    of::DeviceId::new(c"apple,j714s-gpu-tripleu"),
 +                    ProbeConfig::G17J714s(&hw::t6050::CONFIG_J714S_TRIPLEU)
 +                ),
                  (
                      of::DeviceId::new(c"gpu,t6050"),
                      ProbeConfig::G17M5
-@@ -270,6 +280,14 @@ fn probe<'bound>(
+@@ -270,6 +286,27 @@ fn probe<'bound>(
              ProbeConfig::G17(cfg) => {
                  return AsahiPlatformDriver::probe_g17(pdev, regs::G17Resources::new(pdev)?, cfg)
              }
@@ -12660,10 +12699,23 @@ index ef1534619..f3a1ce8a8 100644
 +                }
 +                return AsahiPlatformDriver::probe_g17(pdev, res, cfg)
 +            }
++            ProbeConfig::G17J714sAdt => {
++                let res = regs::G17Resources::new(pdev)?;
++                if !hw::t6050::j714s_core_masks_valid(&res.get_g17_id()?) {
++                    dev_err!(pdev.as_ref(), "J714s GPU core geometry or fuse masks invalid; refusing firmware init\n");
++                    return Err(ENODEV);
++                }
++                let node = pdev.as_ref().of_node().ok_or(ENODEV)?;
++                let cfg = hw::t6050::config_j714s_adt(&node).map_err(|e| {
++                    dev_err!(pdev.as_ref(), "J714s GPU: no valid ADT voltage bins from the loader ({:?}); refusing firmware init\n", e);
++                    ENODEV
++                })?;
++                return AsahiPlatformDriver::probe_g17(pdev, res, cfg)
++            }
              ProbeConfig::G17M5 => return AsahiPlatformDriver::probe_g17_m5(pdev),
              ProbeConfig::M3(chip) => return Err(crate::m3::refuse_probe(pdev, *chip)),
              #[cfg(CONFIG_DRM_ASAHI_M5)]
-@@ -414,6 +432,21 @@ fn probe_g17_m5<'bound>(
+@@ -414,6 +451,21 @@ fn probe_g17_m5<'bound>(
                  id.variant, id.num_dies);
              ENODEV
          })?;
@@ -12698,7 +12750,7 @@ index 254063e51..bfb0df03c 100644
              let crate::g17::fw::variant::Firmware::Identified(builds) = cfg.firmware else {
                  panic!("an M5 board on bare metal must identify its loaded firmware");
 diff --git a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
-index 68c828d1b..ca92d7e60 100644
+index 68c828d1b..59c62d705 100644
 --- a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
 +++ b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
 @@ -1581,6 +1581,16 @@ fn write_relocated_words(
@@ -12840,8 +12892,148 @@ index 68c828d1b..ca92d7e60 100644
  /// Four-table states (MHz, four core-voltage tables, four SRAM-voltage tables), the rest 0.
  const fn four_tables(states: [(u32, [u32; 4], [u32; 4]); 14]) -> [M5PerfState; 14] {
      let mut out = [(0, [0; M5_PERF_LANES], [0; M5_PERF_LANES]); 14];
+@@ -3630,3 +3727,139 @@ pub(crate) fn encode_m5_policy_controller_defaults_j775d(out: &mut [u8]) -> Resu
+     }
+     Ok(())
+ }
++
++/// Voltage bins taken from the running chip's ADT.
++///
++/// The bins are fused per chip, so a table measured on one unit is wrong for the next. m1n1
++/// copies the sgx node's perf-states, perf-states-sram and afr-perf-states byte for byte into
++/// apple,adt-* properties of the gpu node (little-endian, as in the ADT). They replace the
++/// voltages of `base`; everything else, frequencies included, stays `base`'s. Any layout,
++/// frequency or voltage outside what the M5 Pro parts measured so far show is refused, and the
++/// GPU then does not start.
++pub(crate) mod adt_bins {
++    use super::{Board, M5AuxPerfState, M5PerfState, M5_PERF_LANES};
++    use kernel::{c_str, error::Result, of, prelude::*, str::CStr};
++
++    const STATES: usize = 14;
++    /// No M5 Pro voltage is near this; a value past it is a parse error, not a bin.
++    const MAX_MV: u32 = 1150;
++    /// Bins differ between units by a few tens of mV; further from `base` is refused.
++    const MAX_DELTA_MV: u32 = 100;
++    /// The auxiliary domain's SRAM floor where the ADT does not give one.
++    const AUX_SRAM_FLOOR_MV: u32 = 775;
++
++    fn prop(node: &of::Node, name: &CStr) -> Result<KVec<u8>> {
++        node.get_opt_property::<KVec<u8>>(name)?.ok_or(ENOENT)
++    }
++
++    fn u32_at(b: &[u8], at: usize) -> Result<u32> {
++        let s = b.get(at..at + 4).ok_or(EINVAL)?;
++        Ok(u32::from_le_bytes(s.try_into().map_err(|_| EINVAL)?))
++    }
++
++    fn u64_at(b: &[u8], at: usize) -> Result<u64> {
++        let s = b.get(at..at + 8).ok_or(EINVAL)?;
++        Ok(u64::from_le_bytes(s.try_into().map_err(|_| EINVAL)?))
++    }
++
++    fn mhz(hz: u64) -> Result<u32> {
++        u32::try_from((hz + 500_000) / 1_000_000).map_err(|_| EINVAL)
++    }
++
++    fn near(value: u32, reference: u32) -> bool {
++        value <= MAX_MV && value.abs_diff(reference) <= MAX_DELTA_MV
++    }
++
++    /// Main domain: `tables` x 14 {u32 Hz, u32 mV}, table n for lane n.
++    fn main_states(node: &of::Node, base: &Board) -> Result<[M5PerfState; STATES]> {
++        let count = u32_at(&prop(node, c_str!("apple,adt-perf-state-count"))?, 0)? as usize;
++        let tables = u32_at(&prop(node, c_str!("apple,adt-perf-state-table-count"))?, 0)? as usize;
++        let core = prop(node, c_str!("apple,adt-perf-states"))?;
++        let sram = prop(node, c_str!("apple,adt-perf-states-sram"))?;
++        let lanes = base.perf_tables;
++        if count != STATES
++            || tables < lanes
++            || tables > M5_PERF_LANES
++            || core.len() != tables * count * 8
++            || sram.len() != core.len()
++        {
++            return Err(EINVAL);
++        }
++        let mut out = *base.perf_states;
++        for (state, entry) in out.iter_mut().enumerate() {
++            for lane in 0..lanes {
++                let at = (lane * count + state) * 8;
++                let (core_hz, core_mv) = (u32_at(&core, at)?, u32_at(&core, at + 4)?);
++                let (sram_hz, sram_mv) = (u32_at(&sram, at)?, u32_at(&sram, at + 4)?);
++                if mhz(core_hz.into())? != entry.0
++                    || mhz(sram_hz.into())? != entry.0
++                    || !near(core_mv, entry.1[lane])
++                    || !near(sram_mv, entry.2[lane])
++                {
++                    return Err(EINVAL);
++                }
++                entry.1[lane] = core_mv;
++                entry.2[lane] = sram_mv;
++            }
++        }
++        Ok(out)
++    }
++
++    /// Auxiliary domain: {u64 dies, u64 count}, then {u64 uV, u64 Hz} per state, then
++    /// optionally the u64 SRAM floor in uV. SRAM is max(floor, core).
++    fn aux_states(node: &of::Node, base: &Board) -> Result<[M5AuxPerfState; STATES]> {
++        let afr = prop(node, c_str!("apple,adt-afr-perf-states"))?;
++        let (dies, count) = (u64_at(&afr, 0)?, u64_at(&afr, 8)?);
++        let body = 16 + STATES * 16;
++        if dies != 1 || count != STATES as u64 || (afr.len() != body && afr.len() != body + 8) {
++            return Err(EINVAL);
++        }
++        let floor = if afr.len() == body + 8 {
++            u32::try_from(u64_at(&afr, body)? / 1000).map_err(|_| EINVAL)?
++        } else {
++            AUX_SRAM_FLOOR_MV
++        };
++        if !near(floor, AUX_SRAM_FLOOR_MV) {
++            return Err(EINVAL);
++        }
++        // cs-perf-states drives the same clock; where present it must agree.
++        if let Some(cs) = node.get_opt_property::<KVec<u8>>(c_str!("apple,adt-cs-perf-states"))? {
++            if cs.as_slice() != afr.as_slice() {
++                return Err(EINVAL);
++            }
++        }
++        let mut out = *base.aux_perf_states;
++        for (state, entry) in out.iter_mut().enumerate() {
++            let at = 16 + state * 16;
++            let core_mv = u32::try_from(u64_at(&afr, at)? / 1000).map_err(|_| EINVAL)?;
++            let sram_mv = core_mv.max(floor);
++            if mhz(u64_at(&afr, at + 8)?)? != entry.0
++                || !near(core_mv, entry.1[0])
++                || !near(sram_mv, entry.2[0])
++            {
++                return Err(EINVAL);
++            }
++            entry.1[0] = core_mv;
++            entry.2[0] = sram_mv;
++        }
++        Ok(out)
++    }
++
++    /// `base` with the voltage bins of the chip it runs on. The board lives as long as the
++    /// kernel: one per probe of the single GPU.
++    pub(crate) fn board(node: &of::Node, base: &'static Board) -> Result<&'static Board> {
++        let perf = KBox::leak(KBox::new(main_states(node, base)?, GFP_KERNEL)?);
++        let aux = KBox::leak(KBox::new(aux_states(node, base)?, GFP_KERNEL)?);
++        let board = Board {
++            perf_states: perf,
++            aux_perf_states: aux,
++            ..*base
++        };
++        Ok(KBox::leak(KBox::new(board, GFP_KERNEL)?))
++    }
++
++    /// Whether `board`'s bins are exactly those of `known`, for the boot log.
++    pub(crate) fn same_bins(board: &Board, known: &Board) -> bool {
++        board.perf_states == known.perf_states && board.aux_perf_states == known.aux_perf_states
++    }
++}
 diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
-index 76d1b7f16..e89b59497 100644
+index 76d1b7f16..7d42375f2 100644
 --- a/drivers/gpu/drm/asahi/hw/t6050.rs
 +++ b/drivers/gpu/drm/asahi/hw/t6050.rs
 @@ -123,8 +123,8 @@
@@ -12855,7 +13047,7 @@ index 76d1b7f16..e89b59497 100644
      m5: Some(&crate::g17::fw::m5::initdata::J716S),
      adopt_root_entries: true,
      fabric_bridge: false,
-@@ -142,6 +142,28 @@
+@@ -142,6 +142,46 @@
      },
  };
  
@@ -12872,6 +13064,24 @@ index 76d1b7f16..e89b59497 100644
 +    ..CONFIG
 +};
 +
++/// Any J714s: the generic M5 Pro profile with the voltage bins of the chip it runs on, from the
++/// ADT the loader copied into `node` (see [`crate::g17::fw::m5::initdata::adt_bins`]). Selected
++/// by "apple,j714s-gpu-adt"; without those properties the GPU does not start.
++pub(crate) fn config_j714s_adt(node: &kernel::of::Node) -> kernel::error::Result<&'static Config> {
++    use crate::g17::fw::m5::initdata::{adt_bins, J714S, J714S_TRIPLEU, J716S};
++    let board = adt_bins::board(node, &J716S)?;
++    let unit = if adt_bins::same_bins(board, &J714S_TRIPLEU) {
++        "TripleU613's unit"
++    } else if adt_bins::same_bins(board, &J714S) {
++        "betizzel's unit"
++    } else {
++        "no unit measured before"
++    };
++    kernel::pr_info!("asahi: J714s GPU voltage bins from the ADT ({})\n", unit);
++    let config = kernel::alloc::KBox::new(Config { m5: Some(board), ..CONFIG }, kernel::alloc::flags::GFP_KERNEL)?;
++    Ok(kernel::alloc::KBox::leak(config))
++}
++
 +/// Require actual nonzero fuse masks before starting firmware on the owner J714s.
 +/// The ID describes two clusters of ten physical slots; enabled cores come from the masks.
 +pub(crate) fn j714s_core_masks_valid(id: &G17Id) -> bool {
@@ -12884,7 +13094,7 @@ index 76d1b7f16..e89b59497 100644
  /// M5 Max: ID variant 4, GPU variant C, HAL generation 300 like the M5 Pro.
  pub(crate) const CONFIG_MAX: Config = Config {
      chip_id: 0x6050,
-@@ -299,11 +321,13 @@
+@@ -299,11 +339,13 @@
  const _: () = {
      use crate::g17::fw::m5::initdata::{J716C, J716S, J775D};
      assert!(CONFIG.core_layout.operand_state.bank_bytes() == J716S.gpu_cores * 0x1800);

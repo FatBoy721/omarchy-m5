@@ -76,7 +76,7 @@ index 1e7d1ca..ee7b2a5 100644
          return;
      }
 diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
-index 5bb0f25..c4e4efb 100644
+index 5bb0f25..93534be 100644
 --- a/src/kboot_gpu.c
 +++ b/src/kboot_gpu.c
 @@ -3245,15 +3245,23 @@ static int t6050_get_mbox(void *dt, u32 ph, u32 *seen, u64 *wrapper, u64 *vbar)
@@ -107,3 +107,50 @@ index 5bb0f25..c4e4efb 100644
          u32 j = 0;
          while (j < alen / 4 && airqs[j] != irq)
              j++;
+@@ -3266,6 +3274,36 @@ static int t6050_get_mbox(void *dt, u32 ph, u32 *seen, u64 *wrapper, u64 *vbar)
+     return 0;
+ }
+ 
++/*
++ * The GPU's voltage bins are fused per chip, and iBoot publishes this chip's in the sgx node.
++ * The kernel keeps its own power model, but takes the bins from here rather than from a table
++ * measured on one unit: each ADT property is copied byte for byte (little-endian, as in the ADT)
++ * to an apple,adt-<name> property of the gpu node, and the kernel validates them. An ADT that
++ * lacks one leaves the property out, so a kernel that needs it refuses to start the GPU instead
++ * of guessing.
++ */
++static int t6050_copy_perf_states(void *dt, int sgx)
++{
++    static const char *const props[] = {
++        "perf-states",     "perf-states-sram", "perf-state-count",
++        "perf-state-table-count", "afr-perf-states", "cs-perf-states",
++    };
++    for (size_t i = 0; i < ARRAY_SIZE(props); i++) {
++        u32 len = 0;
++        const void *val = adt_getprop(adt, sgx, props[i], &len);
++        if (!val || !len)
++            continue;
++        char name[48];
++        snprintf(name, sizeof(name), "apple,adt-%s", props[i]);
++        int gpu = fdt_path_offset(dt, "gpu");
++        if (gpu < 0 || fdt_setprop(dt, gpu, name, val, len)) {
++            printf("FDT: GPU: T6050: failed to set %s\n", name);
++            return -1;
++        }
++    }
++    return 0;
++}
++
+ static int dt_set_gpu_t6050(void *dt)
+ {
+     int gpu = fdt_path_offset(dt, "gpu");
+@@ -3327,6 +3365,9 @@ static int dt_set_gpu_t6050(void *dt)
+             goto disable;
+     }
+ 
++    if (t6050_copy_perf_states(dt, sgx))
++        goto disable;
++
+     printf("FDT: GPU: T6050 GPU handed off: UAT, firmware and mailboxes from the ADT\n");
+     return 0;
+ 
