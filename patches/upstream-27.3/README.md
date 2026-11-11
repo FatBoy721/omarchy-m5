@@ -20,3 +20,12 @@ e0516e36058b). Aura branch: `~/m5/work/up/aura` `up-273` (25bbef2d).
 
 Still to check on the Mac: GPU firmware up, DCP modeset 3024x1964@120 with the notch rows,
 Wi-Fi (`CONFIG_APPLE_CENTAURI_T6050=m`), trackpad, NVMe.
+
+## Boot test on TripleU613's J714s (27.3 beta 1 stub, 2026-11-11)
+
+Aura (0002, test watchdog) chainloaded from the stage-1 m1n1 proxy, kernel `7.3.0-j714s-up+` (0001):
+
+- GPU: `GPU firmware build: 26C5035r for T6050 G17S` (the 27.3 firmware); Vulkan `Apple M5 Pro (G17S B1)`, Borealis.
+- Internal display: DCP handed over, `eDP-1` 3024x1890 at 120 Hz (`set_digital_out_mode ... 120`); notch rows not shown yet (m1n1 0007's default is not in Aura yet). External DCPs and `DP-1`..`DP-4` registered.
+- Wi-Fi (N1) up, trackpad (`Touch MT ready`), NVMe, USB (a device enumerates, Type-C ports 0/1), SEP firmware reserved by Aura, USB4 router (acio) present, AOP sensors.
+- No sound card yet on this base.
