@@ -20,7 +20,7 @@ not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
 > **N1 Wi-Fi/Bluetooth, T6050 PHYs and the installer image's kernel/loader**
 > are an isolated extra flavor: [`docs/installer-stones.md`](docs/installer-stones.md)
 > (`make kernel-aurora-installer`, `make m1n1-installer`). Merged with this repo's GPU
-> kernel as `make kernel-aurora-n1` (per-unit GPU bins). This Mac's variant,
+> kernel as `make kernel-aurora-n1` (GPU bins from the ADT with `t6050-j714s-gpu-adt`). This Mac's variant,
 > `make kernel-aurora-gpu-n1-simpledrm`, now
 > [runs Wi-Fi and Bluetooth](#n1-wi-fi-and-bluetooth-isolated-j714s).
 > Full J714s status/evidence history: [`docs/omarchy-m5-pro/`](docs/omarchy-m5-pro/README.md).
@@ -32,12 +32,13 @@ not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
 
 There is now a full **Omarchy 4.5.0 image** for the J714s, built in CI from
 this repo:
-[**`j714s-developer-image-2026.11.10`**](https://github.com/betizzel/omarchy-m5/releases/tag/j714s-developer-image-2026.11.10).
-On 2026-11-10 it was installed onto TripleU613's J714s and booted through the
-normal chain (m1n1 → U-Boot → Limine → EFI Linux) to Omarchy's first-boot
-owner setup.
+[**`j714s-developer-image-2026.11.11`**](https://github.com/betizzel/omarchy-m5/releases/tag/j714s-developer-image-2026.11.11).
+The previous build (2026.11.10) was installed onto TripleU613's J714s and
+booted through the normal chain (m1n1 → U-Boot → Limine → EFI Linux) into
+Omarchy, with Wi-Fi and trackpad. 2026.11.11 adds one change: the GPU takes
+its own chip's voltage bins, so the image is meant for any J714s.
 
-**What you get:** the merged kernel (`linux-aurora 7.3.0.aurora16.j714s3-2`,
+**What you get:** the merged kernel (`linux-aurora 7.3.0.aurora16.j714s3-3`,
 this repo's `patches/linux-aurora` + `patches/linux-aurora-n1`) on **15
 cores**, NVMe, keyboard and trackpad, **N1 Wi-Fi and Bluetooth**, the GPU with
 Vulkan (see the GPU caveat below), the panel on simpledrm, and Omarchy's normal
@@ -49,10 +50,12 @@ first-boot setup.
   the Mac (below), not through the Omarchy Mac app from macOS; that path is next.
 - **J714s only** (MacBook Pro 14-inch, M5 Pro), with the **macOS 27.3 beta 1
   stub firmware** (`mBoot-20457.60.65.0.1`) the bring-up needs for all cores.
-- **GPU bins are per chip.** The image carries TripleU613's device tree, so on
-  any other unit the GPU driver refuses to start (no acceleration; the
-  rest should run). betizzel's unit needs `_j714s_unit_dtb=…` in
-  [`installer/recipes`](installer/recipes/README.md).
+- **GPU bins come from your chip** (new in 2026.11.11). m1n1 passes the
+  voltage bins macOS's device tree holds for your GPU, and the kernel checks
+  them against the M5 Pro profile; if they look wrong it refuses to start the
+  GPU (no acceleration, the rest runs). Checked on one unit so far: its bins
+  came out identical to the hand-measured table. A second unit's boot log line
+  `J714s GPU voltage bins from the ADT (...)` is the result we want next.
 - The internal-display DCP driver works but is off by default (simpledrm);
   the USB-C gadget network does not always come up.
 
@@ -63,13 +66,13 @@ Linux ext4 to make room; macOS can shrink its APFS container instead).
 
 ```sh
 # on a PC: download and check the image (two parts: GitHub's 2 GiB limit)
-gh release download j714s-developer-image-2026.11.10 -R betizzel/omarchy-m5
-cat omarchy-2026.11.10-*.zip.part0 omarchy-2026.11.10-*.zip.part1 \
-  > omarchy-2026.11.10-aarch64-apple-silicon-mac-edge-os-package.zip
+gh release download j714s-developer-image-2026.11.11 -R betizzel/omarchy-m5
+cat omarchy-2026.11.11-*.zip.part0 omarchy-2026.11.11-*.zip.part1 \
+  > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
 sha256sum -c SHA256SUMS --ignore-missing
 
 # on the Mac's Linux, as root: write EFI/Boot/Root into free space
-tools/install-image/install-from-linux.sh omarchy-2026.11.10-*.zip /usr/lib/firmware
+tools/install-image/install-from-linux.sh omarchy-2026.11.11-*.zip /usr/lib/firmware
 ```
 
 The script prints the line that boots the image (the new ESP's
