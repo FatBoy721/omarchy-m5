@@ -30,6 +30,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0011 | lid sleep, quiet idle clocks, N1 6 GHz: kernel pkgrel 5 (aurora-n1 0013-0016 from FatBoy721 and rolotrealanis98, `UCLAMP_TASK`) and `omarchy-aurora-firmware` `j714s4` (edimoldovan's realtime uclamp sysctl and N1 iwd default) |
 | 0012 | the internal display through the DCP by default at full panel height, GPU-rendered desktop: `m1n1-aurora` j714s5 (m1n1 0006-0007), kernel pkgrel 6 (DCP device tree), `omarchy-aurora-firmware` j714s5 (two-card Hyprland session) and the new `hyprland-m5` support package (the builder installs it in the hyprland role); `finish-inputs` counts the profile's roles instead of a fixed 15 |
 | 0013 | speakers and jack in PipeWire: `omarchy-aurora-firmware` j714s6 (edimoldovan's J714 UCM profiles, kazuhidet's busy-card discovery) |
+| 0014 | hardware video decode: kernel pkgrel 7 (aurora-n1 0017, DjDeveloperr's J714s decoder DT) and `omarchy-aurora-firmware` j714s7 (avd-fw v5-t2 built from source) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
