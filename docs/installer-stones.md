@@ -214,7 +214,7 @@ LUKS2 root. No tethering and no hypervisor.
 | DTB | the installer tree (0001) + [`linux-aurora-installer/0002`](../patches/linux-aurora-installer/) (internal DCP nodes, all disabled until the loader hands over) |
 | boot.bin config | `chosen.asahi,t6050-display=1` |
 | U-Boot | unchanged from the installer image (the native build that boots this unit) |
-| Kernel | `aurora-n1` (0001-0008) + [`linux-aurora-n1/0010`](../patches/linux-aurora-n1/) + `CONFIG_DRM_APPLE=y` |
+| Kernel | `aurora-n1` (0001-0008) + [`linux-aurora-n1/0010`](../patches/linux-aurora-n1/) + `CONFIG_DRM_APPLE=y` (sleep: + 0011-0013, `CONFIG_INPUT_MACSMC_INPUT=m`) |
 | Hyprland | 0.57.1 + [`patches/hyprland/0001`](../patches/hyprland/) (Omarchy's PKGBUILD, same build ID, so the titlebars plugin still loads) |
 
 Tests, one change per boot:
@@ -240,7 +240,30 @@ per 16.7 ms. rolotrealanis98's fix (carried here as `linux-aurora-n1/0010`, auth
 kept) lifts it: **73-80 FPS** in the same test, now limited by software rendering
 (Hyprland at ~1260 % CPU on llvmpipe, GPU off).
 
-Still open on this unit: lid suspend on the DCP kernel enters s2idle but the
-panel does not come back on resume (with `CONFIG_INPUT_MACSMC_INPUT=m` added; the
-installer config has it off, so the lid did nothing before). GPU is off: no
-per-unit `apple,j714s-gpu*` bins yet for this chip.
+**Lid sleep (s2idle).** With `CONFIG_INPUT_MACSMC_INPUT=m` added (the installer
+config has it off, so the lid did nothing before), closing the lid reset the
+machine. Every reset left no log, so the bisection aborted `pm_test=devices`
+on purpose at the Nth device (a local debug parameter, not carried here) and
+resumed. A clean abort at N plus a reset at N+1 names the device. Three devices
+reset the machine when they suspend, each found after the one before was fixed:
+
+| Patch | Device | Fix |
+| --- | --- | --- |
+| [`linux-aurora-n1/0011`](../patches/linux-aurora-n1/) | post-M4 ANS NVMe | for s2idle, keep the controller live (no disable and queue rebuild); its power domains already stay on |
+| [`linux-aurora-n1/0012`](../patches/linux-aurora-n1/) | dwc3 (`2aa280000.usb`) | on T6050, skip its system sleep callbacks |
+| [`linux-aurora-n1/0013`](../patches/linux-aurora-n1/) | USB-C DARTs `2aaf00000.iommu`, `2aaf80000.iommu` | on T6050, skip their force-suspend, since dwc3 stays live under them |
+
+Watch out: the dwc3 UDC class device shares the name `2aa280000.usb` and
+suspends much earlier, so aborting on a name instead of a count gives a false
+pass.
+
+With 0011-0013, the full `pm_test=devices` and `platform` runs pass and real lid sleep works:
+`PM: suspend entry (s2idle)`, a lid-open wakeup from macsmc-input, the panel
+back on `eDP-2` at `3024x1890@120`, and Wi-Fi reconnected within about a second.
+Tested for 9 s and for 10 minutes. Power drawn while asleep is not measured
+yet: this kernel has no battery driver (`/sys/class/power_supply` is empty),
+and the NVMe, dwc3 and the two DARTs now stay powered. Wi-Fi once failed to
+get an IP after a `platform`-level test resume, and not after a real sleep since.
+
+Still open on this unit: GPU is off (no per-unit `apple,j714s-gpu*` bins yet for
+this chip), so rendering is on llvmpipe. LUKS asks for the password on a text console, not Plymouth.

@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: FatBoy721 <203330788+FatBoy721@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 21:05:32 -0500
+Subject: [PATCH] iommu: apple-dart: Keep the T6050 USB DARTs live across sleep
+
+With dwc3 now live across sleep (previous patch), the next reset was
+the force-suspend of the two DARTs in front of it
+(2aaf00000.iommu, 2aaf80000.iommu): powering a DART down under a running
+controller resets the machine.
+
+Replace DEFINE_RUNTIME_DEV_PM_OPS with explicit system-sleep callbacks
+that skip pm_runtime_force_suspend()/resume() for the DARTs named in
+t6050_keep_live (default: those two) on T6050, and keep the old
+behaviour for every other DART. The list is read-only at runtime, so
+suspend and resume always agree.
+
+With patches 0011-0013 a J714s sleeps on lid close (s2idle), wakes on
+lid open, brings the internal display back at 120 Hz and reconnects
+Wi-Fi (tested 9 s and 10 min).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+  drivers/iommu/apple-dart.c | 44 +++++++++++++++++++++++++++++++++++++++++++-
+  1 file changed, 43 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
+index 5bfb12eb7..d46cf899f 100644
+--- a/drivers/iommu/apple-dart.c
++++ b/drivers/iommu/apple-dart.c
+@@ -5509,7 +5509,49 @@ static __maybe_unused int apple_dart_resume(struct device *dev)
+ 	return ret;
+ }
+ 
+-static DEFINE_RUNTIME_DEV_PM_OPS(apple_dart_pm_ops, apple_dart_suspend, apple_dart_resume, NULL);
++/*
++ * On Apple T6050 dwc3 stays live across system sleep (see dwc3_plat_suspend),
++ * so the DARTs in front of it have to stay live too: force-suspending them
++ * under the running controller resets the machine (J714s, found by aborting
++ * pm_test=devices at each device in turn). The default names the two USB-C
++ * DARTs of the J714s device tree. Read-only at runtime so suspend and resume
++ * always take the same path.
++ */
++static char *t6050_keep_live = "2aaf80000.iommu,2aaf00000.iommu";
++module_param(t6050_keep_live, charp, 0444);
++MODULE_PARM_DESC(t6050_keep_live, "On Apple T6050, DARTs (comma-separated device names) left alone across system sleep");
++
++static bool apple_dart_keep_live(struct device *dev)
++{
++	const char *list = READ_ONCE(t6050_keep_live), *p;
++	size_t n = strlen(dev_name(dev));
++
++	if (!list || !of_machine_is_compatible("apple,t6050"))
++		return false;
++	for (p = list; (p = strstr(p, dev_name(dev))); p += n)
++		if ((p == list || p[-1] == ',') && (p[n] == ',' || p[n] == '\0'))
++			return true;
++	return false;
++}
++
++static int apple_dart_sys_suspend(struct device *dev)
++{
++	if (apple_dart_keep_live(dev))
++		return 0;
++	return pm_runtime_force_suspend(dev);
++}
++
++static int apple_dart_sys_resume(struct device *dev)
++{
++	if (apple_dart_keep_live(dev))
++		return 0;
++	return pm_runtime_force_resume(dev);
++}
++
++static const struct dev_pm_ops apple_dart_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(apple_dart_sys_suspend, apple_dart_sys_resume)
++	RUNTIME_PM_OPS(apple_dart_suspend, apple_dart_resume, NULL)
++};
+ 
+ static const struct of_device_id apple_dart_of_match[] = {
+ 	{ .compatible = "apple,t8103-dart", .data = &apple_dart_hw_t8103 },
+-- 
+2.47.0
