@@ -16,13 +16,13 @@ test it on a real J714s, and say who made each part.
 | Keyboard, backlight | ✅ | rolotrealanis98, edimoldovan |
 | Trackpad (every boot) | ✅ | edimoldovan (the reset fix) |
 | Wi-Fi, Bluetooth | ✅ | rolotrealanis98, betizzel, TripleU613, DjDeveloperr |
-| Wi-Fi on 6 GHz | 🟡 in the next image, not tested here | edimoldovan |
+| Wi-Fi on 6 GHz | 🟡 allowed in the image; some units' Wi-Fi firmware has no 6 GHz channels | edimoldovan |
 | Speakers, headphone jack, microphones | 🟡 works, speakers kept quiet on purpose (-30 dB cap) | rolotrealanis98, edimoldovan |
 | GPU (Vulkan) | ✅ | TripleU613, betizzel, DjDeveloperr |
 | Screen | ✅ (basic mode; full-speed mode coming) | betizzel, DjDeveloperr |
-| Sleep (lid close) | 🟡 works on the dev kernel, not yet in the image | betizzel |
+| Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
 | USB-C ports, external displays, USB4 | 🔜 testing now (aurora-silicon's new J714s kernel) | DjDeveloperr, erikwb |
-| Quiet fans at idle | 🔜 in the next image | edimoldovan |
+| Quiet fans at idle | ✅ in the image | edimoldovan |
 | Camera, Touch ID | ❌ not yet | |
 
 ✅ works · 🟡 partly · 🔜 coming · ❌ no
@@ -44,8 +44,8 @@ Steps:
    follow [`docs/bringup.md`](docs/bringup.md). This is the only fiddly part.
 2. **Download the image** on your PC:
    ```sh
-   gh release download j714s-developer-image-2026.11.11 -R betizzel/omarchy-m5
-   cat omarchy-2026.11.11-*.zip.part0 omarchy-2026.11.11-*.zip.part1 \
+   gh release download j714s-developer-image-2026.11.11-2 -R betizzel/omarchy-m5
+   cat omarchy-2026.11.11-2-*.zip.part0 omarchy-2026.11.11-2-*.zip.part1 \
      > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
    sha256sum -c SHA256SUMS --ignore-missing
    ```
@@ -74,7 +74,7 @@ gets pulled in here.
 | [DjDeveloperr](https://github.com/DjDeveloperr) | 14" M5 Pro (J714s) | via [aurora-silicon/linux](https://github.com/aurora-silicon/linux) and [aura](https://github.com/aurora-silicon/aura) | the upstream J714s device tree: USB-C, USB4, displays, GPU handoff (testing now) |
 | [betizzel](https://github.com/betizzel) | 14" M5 Pro (J714s) | this repo | the first J714s boot, display, GPU |
 | [TripleU613](https://github.com/TripleU613) (Nignion on X) | 14" M5 Pro (J714s) | this repo | Wi-Fi, GPU, the installer image |
-| [FatBoy721](https://github.com/FatBoy721) | 14" M5 Pro (J714s) | | reported the installer image booting to the Omarchy desktop (#293) |
+| [FatBoy721](https://github.com/FatBoy721) | 14" M5 Pro (J714s) | | lid sleep fixes; first install by someone else (#293) |
 | [cameroncooper](https://github.com/cameroncooper) | 16" M5 Max (J716c) | | watched (Aura stage 1, accelerated Hyprland on J716c) |
 | [joshuaswarren](https://github.com/joshuaswarren) | | | J714c PMP and USB-C upstream, PMP analysis in #293 |
 | [erikwb](https://github.com/erikwb) | | | T6050 USB4 and external displays upstream (J716c) |
