@@ -57,6 +57,14 @@ case "$("$GMAKE" --version | head -1)" in
     *" 3."*) echo "ERROR: $GMAKE is too old for m1n1; brew install make" >&2; exit 1 ;;
 esac
 
+# Omarchy artwork, never m1n1's stock (Asahi) boot logo: the same files the
+# installer's m1n1-aurora package ships. make rebuilds the logo objects when
+# these differ from what the tree had.
+for size in 48 128 256; do
+    cmp -s installer/recipes/m1n1-aurora/bootlogo_$size.bin "$M1N1/data/bootlogo_$size.bin" ||
+        cp installer/recipes/m1n1-aurora/bootlogo_$size.bin "$M1N1/data/bootlogo_$size.bin"
+done
+
 echo "==> Building $M1N1 (CHAINLOADING=$CHAINLOADING, RELEASE=$RELEASE, -j$JOBS)"
 "$GMAKE" -C "$M1N1" -j"$JOBS" CHAINLOADING="$CHAINLOADING" RELEASE="$RELEASE"
 

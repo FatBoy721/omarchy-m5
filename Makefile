@@ -119,6 +119,7 @@ m1n1-installer: ## build the installer's J714s loader on omacom/m1n1 (N1 tunable
 
 m1n1-installer-stage2: ## build the ESP stage-2 (RELEASE=1 ESP_STAGE2=1) used by the J714s installer boot
 	scripts/prepare-m1n1-installer.sh
+	for s in 48 128 256; do cmp -s installer/recipes/m1n1-aurora/bootlogo_$$s.bin build/m1n1-installer/data/bootlogo_$$s.bin || cp installer/recipes/m1n1-aurora/bootlogo_$$s.bin build/m1n1-installer/data/; done
 	cd build/m1n1-installer && $(MAKE) RELEASE=1 CHAINLOADING=1 ESP_STAGE2=1 USE_CLANG=1
 
 dtbs:           ## overlay DTs + build device trees only (fast syntax check)
