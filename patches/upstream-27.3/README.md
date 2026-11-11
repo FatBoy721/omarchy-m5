@@ -1,0 +1,19 @@
+# aurora-silicon base on the 27.3 beta 1 stub (J714s)
+
+Work toward running aurora-silicon's `integration/aurora` kernel and the Aura bootloader on
+TripleU613's J714s while it stays on the macOS 27.3 beta 1 stub (26C5035r,
+mBoot-20457.60.65.0.1), with the GPU and the internal display handed over as our own kernel and
+m1n1 do today.
+
+Status (2026-11-11): **builds, not yet boot-tested.** Do not ship.
+
+| Patch | Applies to | What |
+| --- | --- | --- |
+| `0001-linux-integration-aurora-pr1173-pr1174-merged.patch` | aurora-silicon/linux `integration/aurora` at 990e00b72b56 | #1174 (DCP 27.3 method table and swap layout; Jeff Queisser, Rolando Trevino) and #1173 (GPU 27.2/27.3 InitData layouts and firmware identity; Rolando Trevino) merged. #1173 conflicted with upstream's `Graph` refactor: each build gets its own `Graph` (`M5_GRAPH_26B123`, `M5_GRAPH_26C5035`, chosen by the firmware's identified layouts), `hw_offset()` and the board graph are kept, and the J813 (common26) keeps its board graph. Compiles with rustc 1.98.0 on ush. |
+| `0002-aura-t6050-27.3-gpu-dcp-handoff.patch` | aurora-silicon Aura 1669cad0 | Aura knows 27.2 and 27.3 beta 1; its T6050 GPU handoff admits the 27.0, 27.2 and 27.3 beta 1 GPU builds (digests and boot-filled ranges from #1173); its T6050 DCP handoff accepts 27.3 beta 1, takes the DCP image the ADT names and publishes `apple,firmware-compat <27 3 0>` (what #1174 keys its 27.3 table by). Ported from our m1n1 (patches/m1n1-installer 0003-0007; betizzel, FatBoy721). |
+
+Kernel branch: `build/linux-up` branch `up-273` (merges 0929f4f5c93b, 8a0eb8647062, fix
+e0516e36058b). Aura branch: `~/m5/work/up/aura` `up-273` (5a03f554).
+
+Still to check on the Mac: GPU firmware up, DCP modeset 3024x1964@120 with the notch rows,
+Wi-Fi (`CONFIG_APPLE_CENTAURI_T6050=m`), trackpad, NVMe.
