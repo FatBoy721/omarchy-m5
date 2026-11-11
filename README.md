@@ -17,11 +17,12 @@ test it on a real J714s, and say who made each part.
 | Trackpad (every boot) | ✅ | edimoldovan (the reset fix) |
 | Wi-Fi, Bluetooth | ✅ | rolotrealanis98, betizzel, TripleU613, DjDeveloperr |
 | Wi-Fi on 6 GHz | 🟡 allowed in the image; some units' Wi-Fi firmware has no 6 GHz channels | edimoldovan |
-| Speakers, headphone jack, microphones | 🟡 works, speakers kept quiet on purpose (-30 dB cap) | rolotrealanis98, edimoldovan |
-| GPU (Vulkan) | ✅ | TripleU613, betizzel, DjDeveloperr |
-| Screen | ✅ (basic mode; full-speed mode coming) | betizzel, DjDeveloperr |
+| Speakers, headphone jack, microphones | ✅ in the image (speakers capped at -30 dB on purpose, with speaker protection) | rolotrealanis98, edimoldovan, kazuhidet |
+| GPU (Vulkan, and the desktop renders on it) | ✅ | TripleU613, betizzel, DjDeveloperr, rolotrealanis98 |
+| Screen: full panel incl. the notch, 3024x1964 at 120 Hz | ✅ in the image | FatBoy721, edimoldovan, rolotrealanis98, betizzel |
+| Hardware video decode (H.264/H.265) | ✅ in the image | DjDeveloperr |
 | Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
-| USB-C ports, external displays, USB4 | 🔜 testing now (aurora-silicon's new J714s kernel) | DjDeveloperr, erikwb |
+| USB-C ports, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
 | Camera, Touch ID | ❌ not yet | |
 
@@ -44,8 +45,8 @@ Steps:
    follow [`docs/bringup.md`](docs/bringup.md). This is the only fiddly part.
 2. **Download the image** on your PC:
    ```sh
-   gh release download j714s-developer-image-2026.11.11-2 -R betizzel/omarchy-m5
-   cat omarchy-2026.11.11-2-*.zip.part0 omarchy-2026.11.11-2-*.zip.part1 \
+   gh release download j714s-developer-image-2026.11.11-3 -R betizzel/omarchy-m5
+   cat omarchy-2026.11.11-3-*.zip.part0 omarchy-2026.11.11-3-*.zip.part1 \
      > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
    sha256sum -c SHA256SUMS --ignore-missing
    ```
