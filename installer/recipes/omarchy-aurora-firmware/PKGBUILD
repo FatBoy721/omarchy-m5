@@ -1,5 +1,5 @@
 pkgname=omarchy-aurora-firmware
-pkgver=20261014.j714s3
+pkgver=20261014.j714s4
 pkgrel=1
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
@@ -13,7 +13,9 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         20-aurora-vendor-order.conf aurora-regdom-fallback
         aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules
         # J714 audio: edimoldovan/omarchy-mac-pkgs j714-speaker-route-volume 0a00f7a88711
-        speakersafetyd-j714.conf j714-speakers.json j714-mic.json wireplumber-j714-speakers.conf wireplumber-j714-mic.conf)
+        speakersafetyd-j714.conf j714-speakers.json j714-mic.json wireplumber-j714-speakers.conf wireplumber-j714-mic.conf
+        # N1 6 GHz: edimoldovan/omarchy-mac-pkgs iwd-6ghz-bcm4388-only 702a6ec363
+        iwd-n1-main.conf 30-aurora-n1-6ghz.conf)
 sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'abd1fd7f2c40561311356c5748f964687e45771ad461ef7786fbdbda2aff530d'
             '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31'
@@ -28,7 +30,9 @@ sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             '1ee05ccf8937081661dd8be77cbaf55329677b43ccf064d8494e9c6c2ba33956'
             '2ed01ea6fc1139f5c24bde4385fd5c7ec2f7dcd1fa53d056f5afe40d148d93d8'
             '39b866d847f9ed569abe36ddf2301d0cee75f27e96c709afc11febb400938c2e'
-            'b6a234e472009913a4b44203fb3a1834f3e5904d67ccd949b2f840307279180b')
+            'b6a234e472009913a4b44203fb3a1834f3e5904d67ccd949b2f840307279180b'
+            '345282cf4827e1324ab454fba40c6693a828899ef1fe3c8a461918f2b785076f'
+            'bd8c5c3d03ba3678e08b328fee603cbfd89e76241e029f6e80e90fc1dcff7294')
 package() {
   # These services run on the target system; packaging only installs files.
   depends=('bash' 'iw' 'kmod' 'omarchy-mac-boot' 'wireless-regdb' 'linux-aurora>=7.1.12.aurora5')
@@ -53,4 +57,9 @@ package() {
   install -Dm644 j714-mic.json "$pkgdir/usr/share/omarchy-mac/j714/mic.json"
   install -Dm644 wireplumber-j714-speakers.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/j714-speakers.conf"
   install -Dm644 wireplumber-j714-mic.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/j714-mic.conf"
+
+  # 6 GHz Wi-Fi on the N1 (edimoldovan/omarchy-mac-pkgs iwd-6ghz-bcm4388-only
+  # 702a6ec363): iwd's own defaults in place of the Apple one that keeps 6 GHz off.
+  install -Dm644 iwd-n1-main.conf "$pkgdir/usr/lib/omarchy-aurora/iwd-n1/main.conf"
+  install -Dm644 30-aurora-n1-6ghz.conf "$pkgdir/usr/lib/systemd/system/iwd.service.d/30-aurora-n1-6ghz.conf"
 }
