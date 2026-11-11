@@ -24,7 +24,7 @@ test it on a real J714s, and say who made each part.
 | Lid angle sensor | ✅ in the image | DjDeveloperr |
 | Ambient light sensor | 🟡 in the image; needs this Mac's calibration, saved once from macOS with [`tools/als-calibration/save-als-cal.py`](tools/als-calibration/save-als-cal.py) | DjDeveloperr, aurora-silicon |
 | Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
-| USB 2.0 host on the left-back and right USB-C ports | ✅ in the image (a USB stick mounts on TripleU613's J714s) | edimoldovan |
+| USB host on all three USB-C ports | ✅ next image (a USB stick mounts on TripleU613's J714s; USB 3 on the left-front port not tried yet) | edimoldovan |
 | USB 3, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
 | Camera, Touch ID | ❌ not yet | |

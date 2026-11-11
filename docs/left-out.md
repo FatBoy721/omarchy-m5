@@ -17,5 +17,7 @@ with the reason and what would bring it back. The 30-minute watch
 | N1 shutdown park (no ASPM, hold the port on restart) | edimoldovan (linux-aurora ab24d156868e) | Fixes aurora's adopt path; our kernel trains the N1 differently and has rebooted cleanly all day | Restart hangs show up here |
 | Per-unit GPU bins (FatBoy721's unit) | FatBoy721 (PR #5 0014) | The image reads every unit's bins from its own ADT now | Never (superseded) |
 | Light sensor calibration in the image | aurora-silicon installer | Per machine and only in macOS; [`tools/als-calibration/save-als-cal.py`](../tools/als-calibration/save-als-cal.py) saves it | An installer path that runs on macOS for the J714s |
+| SuperSpeed (USB 3) checked on port 1 | edimoldovan (in the image) | Port 1 runs his SuperSpeed host in the image, but on TripleU613's J714s the PC recovery cable lives on that port, so no USB 3 device has been tried | Someone plugs a USB 3 device into the left-front port |
+| USB-C network gadget on port 1 | this repo | Port 1 is a USB host now (all three ports host); the image doesn't need the gadget, the dev Linux keeps it | If someone needs the cable network back |
 | SMC key inventory (debug) | satchlj (t6050-smc-key-inventory) | A debugging aid, no user feature | — |
 | Haptic actuator without hidraw | DjDeveloperr (#1576) | Our kernel has `CONFIG_HIDRAW=y`; the actuator binds | — |

@@ -1,0 +1,71 @@
+From 3171d8b88050b5888e2a9e88a442ab330902b4e4 Mon Sep 17 00:00:00 2001
+From: ed <edimoldovan@gmail.com>
+Date: Wed, 28 Oct 2026 18:52:50 +0100
+Subject: [PATCH 27/31] arm64: dts: apple: t6050-j714c: port 1's Type-C
+ controller
+
+The SPMI controller nub-spmi-a0 with hpm1 only (ADT hpm1, left-front,
+SPMI address 0xa, apple,sn201202x, polled, a connector without a graph),
+with the unlock key for its debug mode (the ADT target-type's first four
+characters reversed). usb2phy_1 points at it with apple,typec-controller.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 6cee1d7fcc4804e0133e5cbbc582a8485795d2d4)
+---
+ .../boot/dts/apple/t6050-j714c-usb2.dtsi      | 26 +++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+index 671965c7ce7c..0fe31cc1fe53 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+@@ -14,6 +14,8 @@
+  * Port 1 is the proxy cable.
+  */
+ 
++#include <dt-bindings/spmi/spmi.h>
++
+ / {
+ 	aliases {
+ 		usb0 = &dwc3_0;
+@@ -23,6 +25,29 @@ aliases {
+ };
+ 
+ &soc {
++	/* Port 1's Type-C controller only (ADT hpm1, left-front), polled. */
++	nub_spmi_a0: spmi@28a188000 {
++		compatible = "apple,t6050-spmi", "apple,t8142-spmi";
++		reg = <0x2 0x8a188000 0x0 0x4000>;
++		#address-cells = <2>;
++		#size-cells = <0>;
++		power-domains = <&ps_nub_spmi_a0>;
++
++		hpm1: usb-pd@a {
++			compatible = "apple,sn201202x";
++			reg = <0xa SPMI_USID>;
++			/* ADT target-type "J714c": first four characters reversed */
++			apple,unlock-key = "417J";
++
++			connector {
++				compatible = "usb-c-connector";
++				label = "USB-C port 1";
++				power-role = "dual";
++				data-role = "host";
++			};
++		};
++	};
++
+ 	usb2phy_0: phy@2a2a90000 {
+ 		compatible = "apple,t6050-usb2-phy";
+ 		reg = <0x2 0xa2a90000 0x0 0x4000>, <0x2 0xa2a84000 0x0 0x4000>,
+@@ -82,6 +107,7 @@ usb2phy_1: phy@2aaa90000 {
+ 			    "atc-axi2af-lioa", "atc-common-cfg", "pmgr", "pmgr-mxwrap";
+ 		#phy-cells = <0>;
+ 		power-domains = <&ps_atc1_usb>;
++		apple,typec-controller = <&hpm1>;
+ 
+ 		apple,tunable-gbl =
+ 			<0xc100 0x8 0x8>,
+-- 
+2.56.0
+

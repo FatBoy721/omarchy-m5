@@ -1,0 +1,147 @@
+From 4c648104e9ddc94371076352f51e7f15980522be Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 15:38:30 -0500
+Subject: [PATCH 31/31] arm64: dts: apple: j714s: USB host on all three USB-C
+ ports (gathered)
+
+The rest of edimoldovan's J714c USB series (cherry-picked before this:
+SuperSpeed host on port 1 with the PHY CPU's firmware, the SN201202x Type-C
+controllers of all three ports, xhci-plat wakeup-source, the USB 2.0-only
+port re-arm) on the J714s: the base tree's gadget-oriented port nodes give
+way to his t6050-j714c-usb2.dtsi, whose ATC tunables match the J714s ADT
+(atc-phy1 ATC_FABRIC, ATC_COMMON_CFG) and whose Type-C unlock key is the
+same.
+
+On TripleU613's J714s: all three PHYs reach host mode and xhci-hcd registers
+buses 1-6; /sys/class/typec has port0-2 with partners on port 1 (the PC
+cable) and port 2; a USB stick in port 2 enumerates (usb-storage, sda1/sda2);
+the next boot's m1n1 proxy still comes up on the cable. Port 1 now runs host,
+not the EEM gadget. SuperSpeed on port 1 not tried here (the PC cable is on
+it).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ .../boot/dts/apple/t6050-j714s-usb2.dtsi      | 99 +++++++------------
+ 1 file changed, 37 insertions(+), 62 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi
+index 57708c21d2b5..3f2ba2300162 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi
+@@ -1,75 +1,50 @@
+ // SPDX-License-Identifier: GPL-2.0+ OR MIT
+ /*
+- * USB 2.0 host on the J714s's left-back (port 0, ATC0) and right (port 2, ATC2) USB-C ports.
++ * USB host on all three USB-C ports of the J714s: USB 2.0 on the left-back (port 0) and right
++ * (port 2), SuperSpeed on the left-front (port 1), with the ports' Type-C controllers.
+  *
+- * Gathered from edimoldovan's J714c (edimoldovan/linux-aurora t6050-j714c-gpu-main, the
+- * t6050-j714c-usb2.dtsi of 8e551be961c7..ae65f0d3a88e): each port's apple,t6050-usb2-phy puts the
+- * usb2phy, pipe handler and dwc3 core into USB 2.0 host mode itself (the loader's
+- * usb_t6050_host_prep sequence, so no loader change is needed) and the generic xHCI platform
+- * driver runs the controller. On his J714c a stick enumerated (usb-storage). The J714s has the same
+- * ports at the same ADT addresses (DjDeveloperr's J714s DT: ATC0 left-back, ATC1 left-front,
+- * ATC2 right). Port 1 (ATC1) stays the m1n1-prepared EEM gadget.
++ * Gathered whole from edimoldovan's J714c (edimoldovan/linux-aurora t6050-j714c-gpu-main,
++ * t6050-j714c-usb2.dtsi and the apple,t6050-usb2-phy driver, 8e551be961c7..4f8b07f31d66): each
++ * port's PHY driver puts its port into host mode itself (no loader change), port 1 runs the
++ * SuperSpeed host sequence including the PHY CPU's firmware, the SN201202x controllers report
++ * cables (polled, unlock key "417J", the same for J714c and J714s), and USB 2.0-only ports are
++ * re-armed after a device leaves. On his J714c a stick enumerated on port 1 and a USB-C network
++ * adapter re-enumerated on port 0. The J714s has the same ports, controllers and ATC tunables
++ * (its ADT's atc-phy1 ATC_FABRIC / ATC_COMMON_CFG values match his node).
++ *
++ * The base tree's gadget-oriented port nodes are replaced by his.
+  */
+ 
+-&soc {
+-	usb2phy_0: phy@2a2a90000 {
+-		compatible = "apple,t6050-usb2-phy";
+-		reg = <0x2 0xa2a90000 0x0 0x4000>, <0x2 0xa2a84000 0x0 0x4000>,
+-		      <0x2 0xa2280000 0x0 0x11800>;
+-		reg-names = "usb2phy", "pipehandler", "core";
+-		#phy-cells = <0>;
+-		power-domains = <&ps_atc0_usb>;
+-	};
++/delete-node/ &dwc3_0;
++/delete-node/ &dwc3_0_dart_0;
++/delete-node/ &dwc3_0_dart_1;
++/delete-node/ &dwc3_1;
++/delete-node/ &dwc3_1_dart_0;
++/delete-node/ &dwc3_1_dart_1;
++/delete-node/ &dwc3_2;
++/delete-node/ &dwc3_2_dart_0;
++/delete-node/ &dwc3_2_dart_1;
+ 
+-	usb2phy_2: phy@382a90000 {
+-		compatible = "apple,t6050-usb2-phy";
+-		reg = <0x3 0x82a90000 0x0 0x4000>, <0x3 0x82a84000 0x0 0x4000>,
+-		      <0x3 0x82280000 0x0 0x11800>;
+-		reg-names = "usb2phy", "pipehandler", "core";
+-		#phy-cells = <0>;
+-		power-domains = <&ps_atc2_usb>;
+-	};
+-};
++#include "t6050-j714c-usb2.dtsi"
+ 
+-&dwc3_0 {
+-	compatible = "generic-xhci";
+-	reg = <0x2 0xa2280000 0x0 0x8000>;
+-	/delete-property/ dr_mode;
+-	/delete-property/ maximum-speed;
+-	/delete-property/ snps,usb2-gadget-lpm-disable;
+-	/delete-property/ snps,dis_u2_susphy_quirk;
+-	/delete-property/ snps,dis_u3_susphy_quirk;
+-	/delete-property/ snps,dis_enblslpm_quirk;
+-	power-domains = <&ps_atc0_usb>;
+-	phys = <&usb2phy_0>;
+-	phy-names = "usb2-phy";
+-	status = "okay";
+-};
+-
+-&dwc3_2 {
+-	compatible = "generic-xhci";
+-	reg = <0x3 0x82280000 0x0 0x8000>;
+-	/delete-property/ dr_mode;
+-	/delete-property/ maximum-speed;
+-	/delete-property/ snps,usb2-gadget-lpm-disable;
+-	/delete-property/ snps,dis_u2_susphy_quirk;
+-	/delete-property/ snps,dis_u3_susphy_quirk;
+-	/delete-property/ snps,dis_enblslpm_quirk;
+-	power-domains = <&ps_atc2_usb>;
+-	phys = <&usb2phy_2>;
+-	phy-names = "usb2-phy";
+-	status = "okay";
+-};
+-
+-&dwc3_0_dart_0 { power-domains = <&ps_atc0_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
+-&dwc3_0_dart_1 { power-domains = <&ps_atc0_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
+-&dwc3_2_dart_0 { power-domains = <&ps_atc2_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
+-&dwc3_2_dart_1 { power-domains = <&ps_atc2_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
+-
+-/* The ports' USB domains, which the shared tree leaves to m1n1 (it prepares only ATC1) */
++/* The ports' USB domains, which the shared tree leaves to m1n1 */
+ &ps_atc0_common { status = "okay"; };
+ &ps_atc0_usb_aon { status = "okay"; };
+ &ps_atc0_usb { status = "okay"; };
++&ps_atc1_common { status = "okay"; };
++&ps_atc1_usb_aon { status = "okay"; };
++&ps_atc1_usb { status = "okay"; };
+ &ps_atc2_common { status = "okay"; };
+ &ps_atc2_usb_aon { status = "okay"; };
+ &ps_atc2_usb { status = "okay"; };
++
++/* Our /soc has no interrupt-parent (his tree has one there) */
++&dwc3_0 { interrupt-parent = <&aic>; };
++&dwc3_0_dart_0 { interrupt-parent = <&aic>; };
++&dwc3_0_dart_1 { interrupt-parent = <&aic>; };
++&dwc3_1 { interrupt-parent = <&aic>; };
++&dwc3_1_dart_0 { interrupt-parent = <&aic>; };
++&dwc3_1_dart_1 { interrupt-parent = <&aic>; };
++&dwc3_2 { interrupt-parent = <&aic>; };
++&dwc3_2_dart_0 { interrupt-parent = <&aic>; };
++&dwc3_2_dart_1 { interrupt-parent = <&aic>; };
+-- 
+2.56.0
+

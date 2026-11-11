@@ -1,0 +1,93 @@
+From 5f8e00ebf3c1d0658dba9969f68373a52efa923f Mon Sep 17 00:00:00 2001
+From: ed <edimoldovan@gmail.com>
+Date: Sat, 7 Nov 2026 01:53:54 +0100
+Subject: [PATCH 29/31] arm64: dts: apple: t6050-j714c: Type-C controllers of
+ ports 0 and 2
+
+Ports 0 (left-back) and 2 (right) had no Type-C controller, so nothing in
+Linux tracked a cable change there. Add them as port 1's is (6cee1d7fcc48),
+from the J714c ADT: hpm0 at SPMI 0xc on nub-spmi-a0 next to hpm1, and
+nub-spmi-a1 (0x28a1a8000, its ps_nub_spmi_a1 domain) with hpm2 at 0xc.
+All apple,sn201202x, polled, with the same unlock key.
+
+Booted on the J714c: sn201202x 1-0c, 1-0a and 2-0c probe, and
+/sys/class/typec has port0, port1 and port2. After the USB-C network
+adapter in port 0 is unplugged and plugged back in, port0 shows it as a
+partner again (data host, power source). The xHCI still logs no new
+device on that replug.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit dccfab72274b03275f78dfd942533c0c440bfbcb)
+---
+ .../boot/dts/apple/t6050-j714c-usb2.dtsi      | 41 ++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+index b3541037c648..8391dace2c0e 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+@@ -25,7 +25,10 @@ aliases {
+ };
+ 
+ &soc {
+-	/* Port 1's Type-C controller only (ADT hpm1, left-front), polled. */
++	/*
++	 * The Type-C controllers, polled: ports 0 and 1 (ADT hpm0 left-back,
++	 * hpm1 left-front) on nub-spmi-a0, port 2 (hpm2, right) on nub-spmi-a1.
++	 */
+ 	nub_spmi_a0: spmi@28a188000 {
+ 		compatible = "apple,t6050-spmi", "apple,t8142-spmi";
+ 		reg = <0x2 0x8a188000 0x0 0x4000>;
+@@ -33,6 +36,20 @@ nub_spmi_a0: spmi@28a188000 {
+ 		#size-cells = <0>;
+ 		power-domains = <&ps_nub_spmi_a0>;
+ 
++		hpm0: usb-pd@c {
++			compatible = "apple,sn201202x";
++			reg = <0xc SPMI_USID>;
++			/* ADT target-type "J714c": first four characters reversed */
++			apple,unlock-key = "417J";
++
++			connector {
++				compatible = "usb-c-connector";
++				label = "USB-C port 0";
++				power-role = "dual";
++				data-role = "host";
++			};
++		};
++
+ 		hpm1: usb-pd@a {
+ 			compatible = "apple,sn201202x";
+ 			reg = <0xa SPMI_USID>;
+@@ -48,6 +65,28 @@ connector {
+ 		};
+ 	};
+ 
++	nub_spmi_a1: spmi@28a1a8000 {
++		compatible = "apple,t6050-spmi", "apple,t8142-spmi";
++		reg = <0x2 0x8a1a8000 0x0 0x4000>;
++		#address-cells = <2>;
++		#size-cells = <0>;
++		power-domains = <&ps_nub_spmi_a1>;
++
++		hpm2: usb-pd@c {
++			compatible = "apple,sn201202x";
++			reg = <0xc SPMI_USID>;
++			/* ADT target-type "J714c": first four characters reversed */
++			apple,unlock-key = "417J";
++
++			connector {
++				compatible = "usb-c-connector";
++				label = "USB-C port 2";
++				power-role = "dual";
++				data-role = "host";
++			};
++		};
++	};
++
+ 	usb2phy_0: phy@2a2a90000 {
+ 		compatible = "apple,t6050-usb2-phy";
+ 		reg = <0x2 0xa2a90000 0x0 0x4000>, <0x2 0xa2a84000 0x0 0x4000>,
+-- 
+2.56.0
+

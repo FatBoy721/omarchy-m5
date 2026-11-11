@@ -1,0 +1,73 @@
+From 72e25432a079ef3bde61fcfbfe743e0c753aae15 Mon Sep 17 00:00:00 2001
+From: ed <edimoldovan@gmail.com>
+Date: Thu, 5 Nov 2026 19:22:54 +0100
+Subject: [PATCH 28/31] usb: xhci-plat: honour wakeup-source; J714c USB
+ controllers keep their PHY across s2idle
+
+xhci-plat marks the controller wakeup-capable but never enables it, so
+on system suspend usb_phy_roothub_suspend() exits the PHYs and resume
+initialises them again. On J714c the T6050 USB 2.0 PHY init is the host
+mode flip, which resets the port: the network adapter on port 0
+disconnected after resume and did not come back, even when replugged.
+
+xhci-plat now enables wakeup when the node has wakeup-source, and the
+three J714c controllers carry it. The PHYs stay initialised, and their
+power domains (ACTIVE_WAKEUP) stay on through s2idle.
+
+Tested on J714c: the pm_test devices stage and a lid-close s2idle both
+come back with the adapter connected and 192.168.188.39 reachable.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 9f8535b38fcbea4b7292eb1a10ec6fac392facb4)
+---
+ arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi | 6 ++++++
+ drivers/usb/host/xhci-plat.c                    | 2 ++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+index 0fe31cc1fe53..b3541037c648 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+@@ -59,6 +59,8 @@ usb2phy_0: phy@2a2a90000 {
+ 
+ 	dwc3_0: usb@2a2280000 {
+ 		compatible = "generic-xhci";
++		/* Keeps the PHY set up and the domain on across s2idle. */
++		wakeup-source;
+ 		reg = <0x2 0xa2280000 0x0 0x8000>;
+ 		interrupts = <AIC_IRQ 1419 IRQ_TYPE_LEVEL_HIGH>;
+ 		iommus = <&dwc3_0_dart_0 0>, <&dwc3_0_dart_1 1>;
+@@ -315,6 +317,8 @@ usb2phy_1: phy@2aaa90000 {
+ 
+ 	dwc3_1: usb@2aa280000 {
+ 		compatible = "generic-xhci";
++		/* Keeps the PHY set up and the domain on across s2idle. */
++		wakeup-source;
+ 		reg = <0x2 0xaa280000 0x0 0x8000>;
+ 		interrupts = <AIC_IRQ 1451 IRQ_TYPE_LEVEL_HIGH>;
+ 		iommus = <&dwc3_1_dart_0 0>, <&dwc3_1_dart_1 1>;
+@@ -352,6 +356,8 @@ usb2phy_2: phy@382a90000 {
+ 
+ 	dwc3_2: usb@382280000 {
+ 		compatible = "generic-xhci";
++		/* Keeps the PHY set up and the domain on across s2idle. */
++		wakeup-source;
+ 		reg = <0x3 0x82280000 0x0 0x8000>;
+ 		interrupts = <AIC_IRQ 1483 IRQ_TYPE_LEVEL_HIGH>;
+ 		iommus = <&dwc3_2_dart_0 0>, <&dwc3_2_dart_1 1>;
+diff --git a/drivers/usb/host/xhci-plat.c b/drivers/usb/host/xhci-plat.c
+index dd1e3ef800e3..91803feaec1e 100644
+--- a/drivers/usb/host/xhci-plat.c
++++ b/drivers/usb/host/xhci-plat.c
+@@ -294,6 +294,8 @@ int xhci_plat_probe(struct platform_device *pdev, struct device *sysdev, const s
+ 	}
+ 
+ 	device_set_wakeup_capable(&pdev->dev, true);
++	if (device_property_read_bool(&pdev->dev, "wakeup-source"))
++		device_wakeup_enable(&pdev->dev);
+ 
+ 	xhci->main_hcd = hcd;
+ 
+-- 
+2.56.0
+
