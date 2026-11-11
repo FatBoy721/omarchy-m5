@@ -1,0 +1,132 @@
+From 8f72042d8d56a4b6207efd04b1798f2d497ce13f Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 21:30:22 -0500
+Subject: [PATCH] J714s developer image: one image for every J714s (GPU bins
+ from the ADT)
+
+linux-aurora 7.3.0.aurora16.j714s3-3 adds linux-aurora-n1 0010 and
+defaults to t6050-j714s-gpu-adt-simpledrm.dtb, whose GPU takes the
+chip's voltage bins from the ADT instead of one unit's table.
+m1n1-aurora 1.6.1.aurora22.j714s4 adds m1n1-installer 0005, which copies
+those ADT properties into the gpu node. Both from betizzel/omarchy-m5
+installer/recipes (3da5a934).
+---
+ .../candidate-package-manifest.json           | 24 +++++++++----------
+ image-builder/builder/stage1_qualification.py |  4 ++--
+ image-builder/test/test_candidate_set.py      |  4 ++--
+ .../test/test_stage1_qualification.py         |  4 ++--
+ 4 files changed, 18 insertions(+), 18 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index f476eea..f1c2247 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-19ca0361f04c",
++  "set": "j714s-dev-runtime-1374cba12ae8",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -66,27 +66,27 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora16.j714s3-2",
++      "version": "7.3.0.aurora16.j714s3-3",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora16.j714s3-2-aarch64.pkg.tar.zst",
+-      "sha256": "cba7f626188d8eda3354c27df3ce29dc7a1819958e2080d6469e41b6cc97a916",
++      "filename": "linux-aurora-7.3.0.aurora16.j714s3-3-aarch64.pkg.tar.zst",
++      "sha256": "3d320129e21e719065e99e1726c516f875b7dc34ec637a30cf0be37020b754c5",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "e06233b540fa41534bb2ae5cf0daf336efae9ec3"
++        "commit": "3da5a93408d08cdfb060f58b0b3bdc61952dda46"
+       },
+-      "size_bytes": 43081096
++      "size_bytes": 43055357
+     },
+     {
+       "name": "m1n1-aurora",
+-      "version": "1.6.1.aurora22.j714s3-1",
++      "version": "1.6.1.aurora22.j714s4-1",
+       "arch": "aarch64",
+-      "filename": "m1n1-aurora-1.6.1.aurora22.j714s3-1-aarch64.pkg.tar.zst",
+-      "sha256": "62c2806c55c4d237c8c2467f2e74d2156425e89c1a2ff362580fa1b1c1bcb5b0",
++      "filename": "m1n1-aurora-1.6.1.aurora22.j714s4-1-aarch64.pkg.tar.zst",
++      "sha256": "1b93d16c82281e3f0bbd76ef6bde2ec3c4dc4446420d334b2d4b3f1181733468",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "e06233b540fa41534bb2ae5cf0daf336efae9ec3"
++        "commit": "3da5a93408d08cdfb060f58b0b3bdc61952dda46"
+       },
+-      "size_bytes": 2005851
++      "size_bytes": 1999025
+     },
+     {
+       "name": "mesa-aurora",
+@@ -204,5 +204,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "19ca0361f04ccf889c9082317bed393227a12bc77bb2709063534f4b5a368a82"
++  "set_sha256": "1374cba12ae8348d804e3207a4e21de54c2a61a24b23314e6fc87e68cf74f14a"
+ }
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index b6267d5..bbe1103 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -18,8 +18,8 @@ from image_profile import select as select_image_profile
+ COMMON_STAGE1 = "esp/aurora/stage1.bin"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+-J714S_KERNEL_VERSION = "7.3.0.aurora16.j714s3-2"
+-J714S_KERNEL_RELEASE = "7.3.0-16.j714s3-2-j714s-merged-ARCH"
++J714S_KERNEL_VERSION = "7.3.0.aurora16.j714s3-3"
++J714S_KERNEL_RELEASE = "7.3.0-16.j714s3-3-j714s-merged-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
+ # What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
+ # with on bare metal, besides the budgets: PMGR domains read-only except the ones its
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index 5488a9a..e93abf8 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -113,7 +113,7 @@ class CandidateSetTest(unittest.TestCase):
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+         self.assertEqual(len(names), 15)
+-        release = "7.3.0-16.j714s3-2-j714s-merged-ARCH"
++        release = "7.3.0-16.j714s3-3-j714s-merged-ARCH"
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+         kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
+@@ -126,7 +126,7 @@ class CandidateSetTest(unittest.TestCase):
+                     package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+-                                    versions={"linux-aurora": "7.3.0.aurora16.j714s3-2"},
++                                    versions={"linux-aurora": "7.3.0.aurora16.j714s3-3"},
+                                     contents=contents, manifest_edit=developer_sources)
+         output = self.base / "j714s-15-role-import"
+         summary = c.snapshot(input_set, output, receipt, fixtures.SOURCE, trust=signer.trust)
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+index 7171c71..a5c22a2 100644
+--- a/image-builder/test/test_stage1_qualification.py
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -32,8 +32,8 @@ class Stage1QualificationTest(unittest.TestCase):
+         trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
+         policy = json.loads((trust / 'policy.json').read_text())
+         self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
+-        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora16.j714s3-2')
+-        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-16.j714s3-2-j714s-merged-ARCH')
++        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora16.j714s3-3')
++        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-16.j714s3-3-j714s-merged-ARCH')
+         self.assertEqual(policy['primary_fingerprint'], '0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1')
+         self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
+         self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
+-- 
+2.56.0
+
