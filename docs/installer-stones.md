@@ -186,6 +186,36 @@ ask for it. The `CONNECT = -95` passphrase rejection did not occur with
 NetworkManager 1.58.1 and wpa_supplicant 2.12: SAE was offloaded at the first
 attempt.
 
+## Installing the image next to a dev Linux (2026-11-10, TripleU613's unit)
+
+The developer image went onto free space made by shrinking the dev Linux root
+(p5, 120 GB to 60 GiB); the image's EFI, Boot and Root became p7, p8 and p9.
+Two traps, both hit:
+
+- **The dev Linux initramfs pins p5's exact size.** `m5-local/m5-root-select`
+  in every `m5local/*/initrd.gz` on ESP p4 refuses a root whose GPT size
+  differs ("GPT size mismatch"), so after the shrink the dev Linux would not
+  boot. Fix: rebuild each initrd with the new byte count (64425558016 here;
+  `tools/m5-remote/patch_initrd.py`), keeping the old ones as backups. Resize
+  first, then patch every initrd, before rebooting.
+- **The image's first boot is one-way.** `omarchy-mac-first-boot` encrypts
+  Root in place (LUKS2) with a throwaway key, deletes the key and leaves the
+  owner slot for `omarchy-provision-owner`. A trial boot that stops at owner
+  setup leaves a Root nothing else can open: changing anything inside it, or
+  starting over, means rewriting p8 and p9 from `boot.img` and `root.img`
+  (`unzip -p image.zip root.img | dd of=/dev/nvme0n1p9 bs=4M conv=fsync`).
+  Do any debugging edits to `root.img` *before* the first boot.
+
+Making the image the default: the stage-1 m1n1's ESP target `m5local/cpu.bin`
+was replaced by the image's `m1n1/boot.bin` plus the line
+`chosen.asahi,efi-system-partition=<new ESP PARTUUID>`, with the old target kept
+as `cpu.bin.rollback-*`. Booting the dev Linux afterwards is a RAM boot over the
+m1n1 proxy (`bmboot.sh`; payloads over ~20 MB need the 2-hop chainload through
+the installer's `m1n1.bin` first). Picking the boot volume works only from
+macOS (`bless --mount /Volumes/<name> --setBoot [--nextonly]`): Linux on this
+Mac has no NVRAM MTD, and with FileVault on, macOS needs the owner at the
+keyboard.
+
 ## Credits
 
 | Who | Work this flavor builds on |
