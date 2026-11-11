@@ -38,6 +38,11 @@ for q in t6050 j714s j714c j716s "m5 pro linux" "m5 max linux"; do
 done >> new.tsv
 # The J714 owners' thread
 gh api "repos/omacom/linux-aurora/issues/293/comments?per_page=100&since=$since" -q '.[]|"omacom/linux-aurora\t#293\t\(.id) \(.user.login)"' 2>/dev/null >> new.tsv
+# omarchyarchive.com: community posts (X, blogs) mentioning the M5 Macs
+for q in M5 "M5+Pro" "M5+Max" T6050 J714; do
+  curl -fsL "https://omarchyarchive.com/api/search.json?q=$q" 2>/dev/null |
+    python3 -c 'import json,sys; [print("omarchyarchive\tPOST\t"+h["url"]+" "+h["title"][:100]) for h in json.load(sys.stdin).get("results",[])]' 2>/dev/null
+done >> new.tsv
 sort -u new.tsv -o new.tsv
 if [ "${1:-}" != --quiet-record ]; then
   comm -23 new.tsv <(sort -u state.tsv)
