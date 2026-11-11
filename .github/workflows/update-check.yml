@@ -1,0 +1,98 @@
+# Does an installed J714s image survive `pacman -Syu` (what `omarchy update` runs)?
+#
+# Downloads a published developer image, mounts its root filesystem on an ARM runner, runs a real
+# full system upgrade inside it against the live repositories, and reports which packages changed
+# and whether the J714s's own packages (kernel, m1n1, Mesa, Hyprland, firmware) were kept. Nothing
+# is published; the upgraded copy is thrown away with the runner.
+name: update-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Developer image release tag
+        required: true
+        default: j714s-developer-image-2026.11.11-5
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE: ${{ inputs.release }}
+    steps:
+      - name: Download and check the image
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/img" && cd "$RUNNER_TEMP/img"
+          gh release download "$RELEASE" -R "$GITHUB_REPOSITORY"
+          cat *.zip.part0 *.zip.part1 > omarchy.zip
+          zip=$(awk '/\.zip$/ {print $2}' SHA256SUMS | head -1)
+          [[ $(sha256sum omarchy.zip | cut -d' ' -f1) == $(awk -v z="$zip" '$2==z {print $1}' SHA256SUMS) ]]
+          rm -f *.zip.part*
+          unzip -q omarchy.zip root.img boot.img
+          rm omarchy.zip
+          ls -la
+
+      - name: Mount the installed system
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/img"
+          sudo apt-get -qq update && sudo apt-get -qq install -y btrfs-progs >/dev/null
+          root=$(sudo losetup -fP --show root.img); boot=$(sudo losetup -fP --show boot.img)
+          echo "root device $root, boot device $boot"
+          sudo blkid "$root" "$boot" || true
+          sudo mkdir -p /mnt/sys
+          sudo mount -o subvol=@ "$root" /mnt/sys
+          sudo mount "$boot" /mnt/sys/boot || echo "boot.img not mounted at /boot"
+          for d in proc sys dev dev/pts run; do sudo mkdir -p /mnt/sys/$d; done
+          sudo mount -t proc proc /mnt/sys/proc
+          sudo mount --rbind /sys /mnt/sys/sys
+          sudo mount --rbind /dev /mnt/sys/dev
+          sudo mount -t tmpfs tmpfs /mnt/sys/run
+          sudo cp -L /etc/resolv.conf /mnt/sys/etc/resolv.conf
+          grep -nE '^\s*(IgnorePkg|IgnoreGroup|\[)' /mnt/sys/etc/pacman.conf || true
+
+      - name: Upgrade it (pacman -Syu)
+        run: |
+          set -uo pipefail
+          sudo chroot /mnt/sys pacman -Q > "$RUNNER_TEMP/before.txt"
+          sudo chroot /mnt/sys pacman -Syu --noconfirm 2>&1 | tee "$RUNNER_TEMP/upgrade.log"
+          echo "pacman exit: ${PIPESTATUS[0]}" | tee -a "$RUNNER_TEMP/upgrade.log"
+          sudo chroot /mnt/sys pacman -Q > "$RUNNER_TEMP/after.txt"
+
+      - name: Report
+        if: always()
+        run: |
+          set -uo pipefail
+          cd "$RUNNER_TEMP"
+          {
+            echo "## Update check: $RELEASE"
+            echo
+            echo '```'
+            grep -E '^pacman exit' upgrade.log || echo "pacman did not finish"
+            echo "changed packages: $(diff before.txt after.txt | grep -c '^>')"
+            echo
+            echo "J714s packages before -> after:"
+            for p in linux-aurora m1n1-aurora uboot-aurora mesa-aurora vulkan-aurora hyprland-m5 hyprland omarchy-aurora-firmware omarchy omarchy-settings omarchy-mac omarchy-mac-boot; do
+              printf '  %-26s %-40s %s\n' "$p" "$(grep "^$p " before.txt | cut -d' ' -f2 || true)" "$(grep "^$p " after.txt | cut -d' ' -f2 || echo '(absent)')"
+            done
+            echo
+            echo "warnings and errors:"
+            grep -iE 'error|warning|failed|conflict' upgrade.log | head -40
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: update-check-${{ inputs.release }}
+          path: |
+            ${{ runner.temp }}/upgrade.log
+            ${{ runner.temp }}/before.txt
+            ${{ runner.temp }}/after.txt
+          retention-days: 14
