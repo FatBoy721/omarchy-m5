@@ -3335,6 +3335,274 @@ index 000000000..94e9def55
 +		apple,dma-range = <0x100 0x4000 0x0 0xffff0000>;
 +	};
 +};
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
+new file mode 100644
+index 000000000..3e6af3d48
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
+@@ -0,0 +1,262 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * J714s audio: the six speaker amps, the headphone jack and the AOP that runs
++ * their streams, on the t6050.dtsi layout (three-cell AIC specifiers).
++ *
++ * Gathered, not measured here. The amp, codec and AOP nodes and the sound
++ * card are t6050-j716s.dts's (rolotrealanis98/m5pro-linux), whose link runs
++ * the J616s frame ("apple,j716-macaudio": -30 dB ceiling). The J714 serializer
++ * settings of edimoldovan's J714c ("apple,j714-macaudio") left this unit's
++ * i2c3 amps faulting ("bad TDM clock") and silent, as on the J716s; with the
++ * J716s link all six play with no fault. speakersafetyd's j714 profile is
++ * edimoldovan's (omarchy-mac-pkgs j714-speaker-route-volume), amp level 15 as
++ * in the ADT and in his J714c tree. The J714s ADT (TripleU613's unit) matches
++ * every value used here: amps 0x38-0x3a on i2c1 and 0x3b-0x3d on i2c3 in
++ * speakerN order LW1 RW1 LW2 RW2 LT RT, speaker-config {N, 15, 4N, 4N+2},
++ * shutdown AP GPIO 107, interrupt 106; CS42L84 0x4b on i2c2, reset 139,
++ * interrupt 134; aop, dart-aop, admac-base-ns, aop-exclave-mailbox and
++ * admac-hp-mic-ec-proxy at the J716s addresses and interrupts.
++ */
++
++&soc {
++	/* The AOP ASC's mailbox, inside [ADT] aop reg[0] (0x290600000), interrupts 578-581 */
++	aop_mbox: mailbox@290608000 {
++		compatible = "apple,t6050-asc-mailbox", "apple,asc-mailbox-v4";
++		reg = <0x2 0x90608000 0x0 0x4000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 578 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 579 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 580 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 581 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "send-empty", "send-not-empty",
++				  "recv-empty", "recv-not-empty";
++		#mbox-cells = <0>;
++	};
++
++	/* [ADT] aop-exclave-mailbox: the AOP's setup port, dart-aop stream 1 */
++	aop_setup_mbox: mailbox@2d067c000 {
++		compatible = "apple,t6050-aop-setup-mailbox",
++			     "apple,t8140-aop-setup-mailbox";
++		reg = <0x2 0xd067c000 0x0 0x4000>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 582 IRQ_TYPE_LEVEL_HIGH>,
++			     <AIC_IRQ 585 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-names = "send-empty", "recv-not-empty";
++		iommus = <&aop_dart 1>;
++		apple,dma-range = <0x200 0x0 0x10 0x0>;
++		#mbox-cells = <0>;
++	};
++
++	/*
++	 * [ADT] dart-aop, interrupt 616. iBoot locks it with inherited roots; the
++	 * T8142 compatible selects apple-dart's per-stream retained-root path.
++	 */
++	aop_dart: iommu@290fc0000 {
++		compatible = "apple,t6050-dart", "apple,t8142-dart", "apple,t8110-dart";
++		reg = <0x2 0x90fc0000 0x0 0xc000>;
++		#iommu-cells = <1>;
++		interrupt-parent = <&aic>;
++		interrupts = <AIC_IRQ 616 IRQ_TYPE_LEVEL_HIGH>;
++	};
++
++	/* [ADT] admac-base-ns, interrupt 637, 13 TX and 13 RX channels, stream 8 */
++	admac_base_ns: dma-controller@293800000 {
++		compatible = "apple,t6050-admac", "apple,t8140-admac";
++		reg = <0x2 0x93800000 0x0 0x34000>;
++		dma-channels = <13>;
++		interrupts-extended = <&aic AIC_IRQ 637 IRQ_TYPE_LEVEL_HIGH>,
++				      <0>, <0>, <0>;
++		#dma-cells = <1>;
++		iommus = <&aop_dart 8>;
++		apple,dma-range = <0x110 0x00000000 0x0 0x10000000>;
++	};
++
++	/* [ADT] admac-hp-mic-ec-proxy (LEAP-S), interrupt 638, stream 11 */
++	admac_leap_s: dma-controller@2d3200000 {
++		compatible = "apple,t6050-admac", "apple,t8140-admac";
++		reg = <0x2 0xd3200000 0x0 0x34000>;
++		dma-channels = <9>;
++		interrupts-extended = <&aic AIC_IRQ 638 IRQ_TYPE_LEVEL_HIGH>,
++				      <0>, <0>, <0>;
++		#dma-cells = <1>;
++		iommus = <&aop_dart 11>;
++		apple,dma-range = <0x110 0x00000000 0x0 0x10000000>;
++	};
++
++	/* [ADT] aop: its SRAM window (reg[2]) and ASC (reg[0]), left halted by iBoot */
++	aop: aop@290c00000 {
++		compatible = "apple,t6050-aop", "apple,t8152-aop";
++		reg = <0x2 0x90c00000 0x0 0x1e0000>,
++		      <0x2 0x90600000 0x0 0x4000>;
++		reg-names = "mmio", "asc";
++		mboxes = <&aop_mbox>, <&aop_setup_mbox>;
++		mbox-names = "mbox", "setup";
++		iommus = <&aop_dart 0>;
++		apple,dma-range = <0x110 0x0 0x10 0x0>;
++
++		/*
++		 * [ADT] iop-audio-controller: spkr on base-ns TX0 with the amps' V/I
++		 * sense on RX0, cout/cin (the jack) on TX2/RX2, the microphone
++		 * array on LEAP-S RX0 (Linux channel 2N for TX N, 2N+1 for RX N).
++		 */
++		aop_audio: audio {
++			compatible = "apple,t6050-aop-audio";
++			dmas = <&admac_base_ns 0>, <&admac_base_ns 1>,
++			       <&admac_base_ns 4>, <&admac_base_ns 5>,
++			       <&admac_leap_s 1>;
++			dma-names = "spkr", "spkr-sense", "cout", "cin", "hpai";
++			#sound-dai-cells = <1>;
++			apple,chassis-name = "J714";
++			apple,machine-kind = "MacBook Pro";
++		};
++	};
++};
++
++/ {
++	sound {
++		compatible = "apple,j716-macaudio", "apple,macaudio";
++		model = "MacBook Pro J714";
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		dai-link@0 {
++			reg = <0>;
++			link-name = "Headphone Jack";
++
++			cpu {
++				sound-dai = <&aop_audio 0>;
++			};
++
++			codec {
++				sound-dai = <&jack_codec>;
++			};
++		};
++
++		dai-link@1 {
++			reg = <1>;
++			link-name = "Speakers";
++			dai-tdm-idle-mode-0 = "zero";
++			dai-tdm-idle-mode-1 = "zero";
++			dai-tdm-slot-tx-idle-mask-0 = <0xf0f0f0>;
++			dai-tdm-slot-tx-idle-mask-1 = <0x0f0f0f>;
++
++			cpu {
++				sound-dai = <&aop_audio 4>;
++			};
++
++			codec {
++				sound-dai = <&speaker_lw1>, <&speaker_rw1>,
++					    <&speaker_lw2>, <&speaker_rw2>,
++					    <&speaker_lt>, <&speaker_rt>;
++			};
++		};
++	};
++};
++
++&i2c1 {
++	status = "okay";
++
++	speaker_lw1: codec@38 {
++		compatible = "ti,sn012776", "ti,tas2764";
++		reg = <0x38>;
++		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Left Woofer 1";
++		ti,imon-slot-no = <0>;
++		ti,vmon-slot-no = <2>;
++		apple,speaker-config = [00 0f 00 02];
++		apple,deferred-shutdown;
++	};
++
++	speaker_lw2: codec@39 {
++		compatible = "ti,sn012776", "ti,tas2764";
++		reg = <0x39>;
++		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Left Woofer 2";
++		ti,imon-slot-no = <8>;
++		ti,vmon-slot-no = <10>;
++		apple,speaker-config = [02 0f 08 0a];
++		apple,deferred-shutdown;
++	};
++
++	speaker_lt: codec@3a {
++		compatible = "ti,sn012776", "ti,tas2764";
++		reg = <0x3a>;
++		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Left Tweeter";
++		ti,imon-slot-no = <16>;
++		ti,vmon-slot-no = <18>;
++		apple,speaker-config = [04 0f 10 12];
++		apple,deferred-shutdown;
++	};
++};
++
++&i2c2 {
++	status = "okay";
++
++	jack_codec: codec@4b {
++		compatible = "cirrus,cs42l84";
++		reg = <0x4b>;
++		reset-gpios = <&pinctrl_ap 139 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 134 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Jack";
++	};
++};
++
++&i2c3 {
++	status = "okay";
++
++	speaker_rw1: codec@3b {
++		compatible = "ti,sn012776", "ti,tas2764";
++		reg = <0x3b>;
++		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Right Woofer 1";
++		ti,imon-slot-no = <4>;
++		ti,vmon-slot-no = <6>;
++		apple,speaker-config = [01 0f 04 06];
++		apple,deferred-shutdown;
++	};
++
++	speaker_rw2: codec@3c {
++		compatible = "ti,sn012776", "ti,tas2764";
++		reg = <0x3c>;
++		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Right Woofer 2";
++		ti,imon-slot-no = <12>;
++		ti,vmon-slot-no = <14>;
++		apple,speaker-config = [03 0f 0c 0e];
++		apple,deferred-shutdown;
++	};
++
++	speaker_rt: codec@3d {
++		compatible = "ti,sn012776", "ti,tas2764";
++		reg = <0x3d>;
++		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
++		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
++		#sound-dai-cells = <0>;
++		sound-name-prefix = "Right Tweeter";
++		ti,imon-slot-no = <20>;
++		ti,vmon-slot-no = <22>;
++		apple,speaker-config = [05 0f 14 16];
++		apple,deferred-shutdown;
++	};
++};
++
++/*
++ * Pin 112 takes an SError when read, so only named pins are exposed: 80
++ * (PCIe port 0's PERST#, see t6050-j714s-n1.dtsi), 106 and 107 (the amps'
++ * interrupt and shutdown line), 134 and 139 (the jack codec's).
++ */
++&pinctrl_ap {
++	gpio-reserved-ranges = <0 80>, <81 25>, <108 26>, <135 4>, <140 81>;
++};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts
 new file mode 100644
 index 000000000..074bacb00
@@ -3794,10 +4062,10 @@ index 000000000..c9d54d141
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
 new file mode 100644
-index 000000000..2eb27d975
+index 000000000..b2aa48521
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-@@ -0,0 +1,139 @@
+@@ -0,0 +1,153 @@
 +// SPDX-License-Identifier: GPL-2.0+ OR MIT
 +/*
 + * Apple MacBook Pro (14-inch, M5 Pro, 2026)
@@ -3893,8 +4161,20 @@ index 000000000..2eb27d975
 +};
 +
 +&mtp_hid {
++	/*
++	 * The trackpad AFE reset, as edimoldovan's J714c
++	 * (edimoldovan/linux-aurora t6050-j714c: "comes up on every boot"):
++	 * [ADT] multi-touch function-afe-reset = pKW8('pcIO', 0x10000,
++	 * 0x11c0000), the same on this J714s, which gpio-macsmc's J714s pcIO
++	 * line 28 writes (within macsmc.m5_pcio_budget). Left to the MTP
++	 * firmware (6320.86.1, which takes power method 2 as on the J716s),
++	 * the AFE sometimes never answered ("No HINT_L").
++	 */
++	apple,afe-reset-gpios = <&smc_gpio 28 GPIO_ACTIVE_HIGH>;
++
 +	multi-touch {
 +		firmware-name = "apple/tpmtfw-j714s.bin";
++		apple,power-method = <2>;
 +	};
 +
 +	keyboard: keyboard {
@@ -3937,6 +4217,8 @@ index 000000000..2eb27d975
 +		apple,fan-mode = "F1md";
 +	};
 +};
++
++#include "t6050-j714s-audio.dtsi"
 diff --git a/arch/arm64/boot/dts/apple/t6050-j716c.dts b/arch/arm64/boot/dts/apple/t6050-j716c.dts
 new file mode 100644
 index 000000000..da061edcb
@@ -13149,10 +13431,19 @@ index 404758261..c44a567dd 100644
  }
  
 diff --git a/drivers/hid/dockchannel-hid/dockchannel-hid.c b/drivers/hid/dockchannel-hid/dockchannel-hid.c
-index da0f2ab14..e1d8f3ca8 100644
+index da0f2ab14..5d110c5f1 100644
 --- a/drivers/hid/dockchannel-hid/dockchannel-hid.c
 +++ b/drivers/hid/dockchannel-hid/dockchannel-hid.c
-@@ -535,7 +535,8 @@ static int dchid_register_ring(struct dockchannel_hid *dchid)
+@@ -28,6 +28,8 @@
+ 
+ #define COMMAND_TIMEOUT_MS 1000
+ #define START_TIMEOUT_MS 2000
++/* Starts of an interface whose firmware never reports it ready, per open. */
++#define START_ATTEMPTS 3
+ 
+ #define MAX_INTERFACES 16
+ 
+@@ -535,7 +537,8 @@ static int dchid_register_ring(struct dockchannel_hid *dchid)
  /*
   * Power method 2: announce the transition, drive the AFE reset line to the
   * new state and confirm the transition. The reset is asserted for a power-off
@@ -13162,7 +13453,7 @@ index da0f2ab14..e1d8f3ca8 100644
   */
  static int dchid_pm2_set_power(struct dchid_iface *iface, u8 state)
  {
-@@ -553,12 +554,23 @@ static int dchid_pm2_set_power(struct dchid_iface *iface, u8 state)
+@@ -553,12 +556,23 @@ static int dchid_pm2_set_power(struct dchid_iface *iface, u8 state)
  		if (state == DCHID_POWER_STATE_ON)
  			fsleep(50 * USEC_PER_MSEC);
  	} else {
@@ -13191,6 +13482,51 @@ index da0f2ab14..e1d8f3ca8 100644
  	}
  
  	dchid_pm2_command(iface->index, state, true, msg);
+@@ -798,20 +812,41 @@ static void dchid_stop(struct hid_device *hdev)
+ static int dchid_open(struct hid_device *hdev)
+ {
+ 	struct dchid_iface *iface = hdev->driver_data;
+-	int ret;
++	int attempt, ret;
+ 
+ 	if (READ_ONCE(iface->dchid->stopping))
+ 		return -ESHUTDOWN;
+ 
+-	if (!completion_done(&iface->ready)) {
++	for (attempt = 1; !completion_done(&iface->ready); attempt++) {
+ 		ret = dchid_start_interface(iface);
+ 		if (ret < 0)
+ 			return ret;
+ 
+-		if (!wait_for_completion_timeout(&iface->ready, msecs_to_jiffies(START_TIMEOUT_MS))) {
++		if (wait_for_completion_timeout(&iface->ready, msecs_to_jiffies(START_TIMEOUT_MS)))
++			break;
++
++		/*
++		 * The MTP firmware can fail to boot the trackpad's AFE ("No
++		 * HINT_L") and then never reports the interface ready. Left
++		 * marked as starting, the interface refused every later open
++		 * until reboot. Power it off and start it again, firmware
++		 * upload included. Only where that power-off is a plain MTP
++		 * command: the SMC AFE sequence has a per-boot write budget.
++		 */
++		if (attempt >= START_ATTEMPTS ||
++		    (iface->dchid->afe_smc && iface->index == 1) ||
++		    iface->power_method != DCHID_POWER_METHOD_1) {
+ 			dev_err(iface->dchid->dev, "iface %s start timed out\n", iface->name);
++			iface->starting = false;
+ 			return -ETIMEDOUT;
+ 		}
++		dev_warn(iface->dchid->dev, "iface %s start timed out, retrying (%d/%d)\n",
++			 iface->name, attempt + 1, START_ATTEMPTS);
++		ret = dchid_reset_interface(iface, DCHID_POWER_STATE_OFF);
++		iface->starting = false;
++		if (ret < 0)
++			return ret;
++		msleep(100);
+ 	}
+ 
+ 	/* Pairs with the acquire in dchid_handle_report(); publishes iface->hid. */
 diff --git a/drivers/hwmon/macsmc-hwmon.c b/drivers/hwmon/macsmc-hwmon.c
 index fb1a68959..80a7a0823 100644
 --- a/drivers/hwmon/macsmc-hwmon.c

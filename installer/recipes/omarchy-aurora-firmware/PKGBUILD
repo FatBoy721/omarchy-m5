@@ -1,17 +1,19 @@
 pkgname=omarchy-aurora-firmware
-pkgver=20261014.j714s2
+pkgver=20261014.j714s3
 pkgrel=1
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
-license=('MIT')
+license=('MIT' 'GPL-2.0-only')
 backup=('etc/mkinitcpio.conf.d/95-aurora-vendor-order.conf')
 url='https://github.com/aurora-silicon/omarchy-mac'
 source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         aurora-peripheral-firmware.service aurora-vendor-order.install
         95-aurora-vendor-order.conf aurora-vendor-order-cryptsetup.conf
         20-aurora-vendor-order.conf aurora-regdom-fallback
-        aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules)
+        aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules
+        # J714 audio: edimoldovan/omarchy-mac-pkgs j714-speaker-route-volume 0a00f7a88711
+        speakersafetyd-j714.conf j714-speakers.json j714-mic.json wireplumber-j714-speakers.conf wireplumber-j714-mic.conf)
 sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'abd1fd7f2c40561311356c5748f964687e45771ad461ef7786fbdbda2aff530d'
             '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31'
@@ -21,7 +23,12 @@ sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             '1fd65d9741abf433d768a2a10a9b80e5f691e53540d200343cfb47b9d8e4d474'
             'f2bcb10ee622bce438932f7c53443b4f4fb436e6a9b3391bdd285657cd3d5bd5'
             '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c'
-            '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8')
+            '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8'
+            'b04fdc5d16a87439c28fc0932762d655dd607324e5b25f2e61a9b00a151e2668'
+            '1ee05ccf8937081661dd8be77cbaf55329677b43ccf064d8494e9c6c2ba33956'
+            '2ed01ea6fc1139f5c24bde4385fd5c7ec2f7dcd1fa53d056f5afe40d148d93d8'
+            '39b866d847f9ed569abe36ddf2301d0cee75f27e96c709afc11febb400938c2e'
+            'b6a234e472009913a4b44203fb3a1834f3e5904d67ccd949b2f840307279180b')
 package() {
   # These services run on the target system; packaging only installs files.
   depends=('bash' 'iw' 'kmod' 'omarchy-mac-boot' 'wireless-regdb' 'linux-aurora>=7.1.12.aurora5')
@@ -35,4 +42,15 @@ package() {
   install -Dm755 aurora-regdom-fallback "$pkgdir/usr/lib/omarchy/aurora-regdom-fallback"
   install -Dm644 aurora-regdom-fallback.service "$pkgdir/usr/lib/systemd/system/aurora-regdom-fallback.service"
   install -Dm644 86-aurora-regdom-fallback.rules "$pkgdir/usr/lib/udev/rules.d/86-aurora-regdom-fallback.rules"
+
+  # J714 (MacBook Pro 14", M5) audio, edimoldovan's (omarchy-mac-pkgs branch
+  # j714-speaker-route-volume, 0a00f7a88711): speakersafetyd's j714 profile
+  # (GPL-2.0-only, from speakersafetyd's j316.conf and m5pro-linux's J716
+  # thermal model), the speaker graph (asahi-audio's J314 filters in J714
+  # channel order) and the microphone graph, wired up by WirePlumber.
+  install -Dm644 speakersafetyd-j714.conf "$pkgdir/usr/share/speakersafetyd/apple/j714.conf"
+  install -Dm644 j714-speakers.json "$pkgdir/usr/share/omarchy-mac/j714/speakers.json"
+  install -Dm644 j714-mic.json "$pkgdir/usr/share/omarchy-mac/j714/mic.json"
+  install -Dm644 wireplumber-j714-speakers.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/j714-speakers.conf"
+  install -Dm644 wireplumber-j714-mic.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/j714-mic.conf"
 }
