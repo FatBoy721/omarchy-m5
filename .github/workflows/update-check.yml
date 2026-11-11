@@ -57,6 +57,16 @@ jobs:
           sudo rm -f /mnt/sys/etc/resolv.conf && sudo cp -L /etc/resolv.conf /mnt/sys/etc/resolv.conf
           grep -nE '^\s*(IgnorePkg|IgnoreGroup|\[)' /mnt/sys/etc/pacman.conf || true
 
+      - name: First boot's keyring (the image ships none, each Mac makes its own)
+        run: |
+          set -uo pipefail
+          echo "Units and scripts in the image that initialise the pacman keyring:"
+          sudo grep -rlsE 'pacman-key --(init|populate)' /mnt/sys/usr/lib/systemd /mnt/sys/etc/systemd \
+            /mnt/sys/usr/bin /mnt/sys/usr/lib/omarchy* /mnt/sys/usr/share/omarchy* 2>/dev/null | head -20 \
+            | tee "$RUNNER_TEMP/keyring-units.txt"
+          sudo chroot /mnt/sys pacman-key --init
+          sudo chroot /mnt/sys pacman-key --populate
+
       - name: Upgrade it (pacman -Syu)
         run: |
           set -uo pipefail
@@ -82,6 +92,8 @@ jobs:
               printf '  %-26s %-40s %s\n' "$p" "$(grep "^$p " before.txt | cut -d' ' -f2 || true)" "$(grep "^$p " after.txt | cut -d' ' -f2 || echo '(absent)')"
             done
             echo
+            echo "first-boot keyring setup found in: $(tr "\n" " " < keyring-units.txt 2>/dev/null)"
+            echo
             echo "warnings and errors:"
             grep -iE 'error|warning|failed|conflict' upgrade.log | head -40
             echo '```'
@@ -95,4 +107,5 @@ jobs:
             ${{ runner.temp }}/upgrade.log
             ${{ runner.temp }}/before.txt
             ${{ runner.temp }}/after.txt
+            ${{ runner.temp }}/keyring-units.txt
           retention-days: 14
