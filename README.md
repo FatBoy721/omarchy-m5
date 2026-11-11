@@ -24,7 +24,7 @@ test it on a real J714s, and say who made each part.
 | Lid angle sensor | ✅ in the image | DjDeveloperr |
 | Ambient light sensor | 🟡 in the image; needs this Mac's calibration, saved once from macOS with [`tools/als-calibration/save-als-cal.py`](tools/als-calibration/save-als-cal.py) | DjDeveloperr, aurora-silicon |
 | Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
-| USB host on all three USB-C ports | ✅ next image (a USB stick mounts on TripleU613's J714s; USB 3 on the left-front port not tried yet) | edimoldovan |
+| USB host on all three USB-C ports | ✅ in the image (a USB stick mounts on TripleU613's J714s; USB 3 on the left-front port not tried yet) | edimoldovan |
 | USB 3, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
 | Camera, Touch ID | ❌ not yet | |
@@ -48,8 +48,8 @@ Steps:
    follow [`docs/bringup.md`](docs/bringup.md). This is the only fiddly part.
 2. **Download the image** on your PC:
    ```sh
-   gh release download j714s-developer-image-2026.11.11-5 -R betizzel/omarchy-m5
-   cat omarchy-2026.11.11-5-*.zip.part0 omarchy-2026.11.11-5-*.zip.part1 \
+   gh release download j714s-developer-image-2026.11.11-6 -R betizzel/omarchy-m5
+   cat omarchy-2026.11.11-6-*.zip.part0 omarchy-2026.11.11-6-*.zip.part1 \
      > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
    sha256sum -c SHA256SUMS --ignore-missing
    ```
