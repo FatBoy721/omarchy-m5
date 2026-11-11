@@ -1,5 +1,5 @@
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index 18f2e943b..2d75f696d 100644
+index 18f2e943bfb2..2d75f696d8df 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
 @@ -552,6 +552,13 @@ Kernel parameters
@@ -17,7 +17,7 @@ index 18f2e943b..2d75f696d 100644
  			Format: { "0" | "1" }
  			See security/apparmor/Kconfig help text
 diff --git a/Documentation/devicetree/bindings/arm/apple.yaml b/Documentation/devicetree/bindings/arm/apple.yaml
-index f0061e05a..97bba03c2 100644
+index f0061e05acbe..97bba03c272f 100644
 --- a/Documentation/devicetree/bindings/arm/apple.yaml
 +++ b/Documentation/devicetree/bindings/arm/apple.yaml
 @@ -472,6 +472,20 @@ properties:
@@ -42,7 +42,7 @@ index f0061e05a..97bba03c2 100644
      type: boolean
      description:
 diff --git a/Documentation/devicetree/bindings/cpufreq/apple,cluster-cpufreq.yaml b/Documentation/devicetree/bindings/cpufreq/apple,cluster-cpufreq.yaml
-index 84e5ce265..2a4d01f24 100644
+index 84e5ce2657dc..2a4d01f24fa6 100644
 --- a/Documentation/devicetree/bindings/cpufreq/apple,cluster-cpufreq.yaml
 +++ b/Documentation/devicetree/bindings/cpufreq/apple,cluster-cpufreq.yaml
 @@ -1,4 +1,4 @@
@@ -94,7 +94,7 @@ index 84e5ce265..2a4d01f24 100644
  
  examples:
 diff --git a/Documentation/devicetree/bindings/display/apple,dcp.yaml b/Documentation/devicetree/bindings/display/apple,dcp.yaml
-index 533ec7aac..49e5df741 100644
+index 533ec7aac7b3..49e5df741440 100644
 --- a/Documentation/devicetree/bindings/display/apple,dcp.yaml
 +++ b/Documentation/devicetree/bindings/display/apple,dcp.yaml
 @@ -466,10 +466,23 @@ allOf:
@@ -126,7 +126,7 @@ index 533ec7aac..49e5df741 100644
        properties:
          clocks:
 diff --git a/Documentation/devicetree/bindings/interrupt-controller/apple,aic2.yaml b/Documentation/devicetree/bindings/interrupt-controller/apple,aic2.yaml
-index f8ea93599..d118f35b2 100644
+index f8ea935999a1..d118f35b28ff 100644
 --- a/Documentation/devicetree/bindings/interrupt-controller/apple,aic2.yaml
 +++ b/Documentation/devicetree/bindings/interrupt-controller/apple,aic2.yaml
 @@ -47,6 +47,7 @@ properties:
@@ -146,7 +146,7 @@ index f8ea93599..d118f35b2 100644
        properties:
          '#interrupt-cells':
 diff --git a/Documentation/devicetree/bindings/iommu/apple,dart.yaml b/Documentation/devicetree/bindings/iommu/apple,dart.yaml
-index a5455e4ea..6d2687ffc 100644
+index a5455e4eac35..6d2687ffcc47 100644
 --- a/Documentation/devicetree/bindings/iommu/apple,dart.yaml
 +++ b/Documentation/devicetree/bindings/iommu/apple,dart.yaml
 @@ -43,6 +43,7 @@ properties:
@@ -172,7 +172,7 @@ index a5455e4ea..6d2687ffc 100644
      $ref: /schemas/types.yaml#/definitions/uint32-matrix
      items:
 diff --git a/Documentation/devicetree/bindings/iommu/apple,sart.yaml b/Documentation/devicetree/bindings/iommu/apple,sart.yaml
-index e6482453d..19ffe1bf1 100644
+index e6482453d6da..19ffe1bf167f 100644
 --- a/Documentation/devicetree/bindings/iommu/apple,sart.yaml
 +++ b/Documentation/devicetree/bindings/iommu/apple,sart.yaml
 @@ -26,6 +26,9 @@ description:
@@ -194,7 +194,7 @@ index e6482453d..19ffe1bf1 100644
            - apple,t8103-sart
  
 diff --git a/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml b/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml
-index cd19124e7..add726470 100644
+index cd19124e724c..add726470307 100644
 --- a/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml
 +++ b/Documentation/devicetree/bindings/mailbox/apple,mailbox.yaml
 @@ -44,6 +44,7 @@ properties:
@@ -206,7 +206,7 @@ index cd19124e7..add726470 100644
  
        - description:
 diff --git a/Documentation/devicetree/bindings/mfd/apple,smc.yaml b/Documentation/devicetree/bindings/mfd/apple,smc.yaml
-index 8641aaeb4..72429b1c3 100644
+index 8641aaeb432e..72429b1c3379 100644
 --- a/Documentation/devicetree/bindings/mfd/apple,smc.yaml
 +++ b/Documentation/devicetree/bindings/mfd/apple,smc.yaml
 @@ -18,6 +18,8 @@ properties:
@@ -220,7 +220,7 @@ index 8641aaeb4..72429b1c3 100644
                - apple,t6020-smc
 diff --git a/Documentation/devicetree/bindings/net/bluetooth/apple,centauri.yaml b/Documentation/devicetree/bindings/net/bluetooth/apple,centauri.yaml
 new file mode 100644
-index 000000000..6b1a33cac
+index 000000000000..6b1a33cac7aa
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/net/bluetooth/apple,centauri.yaml
 @@ -0,0 +1,48 @@
@@ -274,7 +274,7 @@ index 000000000..6b1a33cac
 +additionalProperties: false
 diff --git a/Documentation/devicetree/bindings/net/wireless/apple,centauri.yaml b/Documentation/devicetree/bindings/net/wireless/apple,centauri.yaml
 new file mode 100644
-index 000000000..f73dd9afc
+index 000000000000..f73dd9afceca
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/net/wireless/apple,centauri.yaml
 @@ -0,0 +1,50 @@
@@ -329,7 +329,7 @@ index 000000000..f73dd9afc
 +
 +additionalProperties: false
 diff --git a/Documentation/devicetree/bindings/nvme/apple,nvme-ans.yaml b/Documentation/devicetree/bindings/nvme/apple,nvme-ans.yaml
-index a6dafcf59..3c1b4e345 100644
+index a6dafcf59428..3c1b4e34563d 100644
 --- a/Documentation/devicetree/bindings/nvme/apple,nvme-ans.yaml
 +++ b/Documentation/devicetree/bindings/nvme/apple,nvme-ans.yaml
 @@ -14,6 +14,7 @@ properties:
@@ -390,7 +390,7 @@ index a6dafcf59..3c1b4e345 100644
    - interrupts
    - apple,sart
 diff --git a/Documentation/devicetree/bindings/pci/apple,pcie.yaml b/Documentation/devicetree/bindings/pci/apple,pcie.yaml
-index fcd5d9f7d..e7f53124e 100644
+index fcd5d9f7d08a..e7f53124ecd7 100644
 --- a/Documentation/devicetree/bindings/pci/apple,pcie.yaml
 +++ b/Documentation/devicetree/bindings/pci/apple,pcie.yaml
 @@ -46,6 +46,19 @@ $defs:
@@ -640,7 +640,7 @@ index fcd5d9f7d..e7f53124e 100644
    - |
 diff --git a/Documentation/devicetree/bindings/phy/apple,t6050-dp-phy.yaml b/Documentation/devicetree/bindings/phy/apple,t6050-dp-phy.yaml
 new file mode 100644
-index 000000000..8cbfe94b6
+index 000000000000..8cbfe94b62ec
 --- /dev/null
 +++ b/Documentation/devicetree/bindings/phy/apple,t6050-dp-phy.yaml
 @@ -0,0 +1,235 @@
@@ -880,7 +880,7 @@ index 000000000..8cbfe94b6
 +
 +additionalProperties: false
 diff --git a/Documentation/devicetree/bindings/reset/apple,t8103-cio-reset.yaml b/Documentation/devicetree/bindings/reset/apple,t8103-cio-reset.yaml
-index 21ed54f3e..39275d349 100644
+index 21ed54f3e015..39275d349584 100644
 --- a/Documentation/devicetree/bindings/reset/apple,t8103-cio-reset.yaml
 +++ b/Documentation/devicetree/bindings/reset/apple,t8103-cio-reset.yaml
 @@ -20,7 +20,8 @@ description: |
@@ -902,7 +902,7 @@ index 21ed54f3e..39275d349 100644
            - const: apple,t8112-cio-reset
            - const: apple,t8103-cio-reset
 diff --git a/Documentation/devicetree/bindings/sound/apple,macaudio.yaml b/Documentation/devicetree/bindings/sound/apple,macaudio.yaml
-index 78cd6910d..874bc2390 100644
+index 78cd6910dfba..874bc2390e18 100644
 --- a/Documentation/devicetree/bindings/sound/apple,macaudio.yaml
 +++ b/Documentation/devicetree/bindings/sound/apple,macaudio.yaml
 @@ -40,6 +40,7 @@ properties:
@@ -914,7 +914,7 @@ index 78cd6910d..874bc2390 100644
        - description:
            Machines that share the speaker and jack layout of an earlier
 diff --git a/Documentation/devicetree/bindings/spi/apple,qspi.yaml b/Documentation/devicetree/bindings/spi/apple,qspi.yaml
-index 40d08a827..b8472b2df 100644
+index 40d08a827371..b8472b2df734 100644
 --- a/Documentation/devicetree/bindings/spi/apple,qspi.yaml
 +++ b/Documentation/devicetree/bindings/spi/apple,qspi.yaml
 @@ -26,7 +26,9 @@ properties:
@@ -929,7 +929,7 @@ index 40d08a827..b8472b2df 100644
  
    reg:
 diff --git a/Documentation/devicetree/bindings/usb/apple,dwc3.yaml b/Documentation/devicetree/bindings/usb/apple,dwc3.yaml
-index d68a4b68d..9593dd89c 100644
+index d68a4b68d77c..9593dd89c7a6 100644
 --- a/Documentation/devicetree/bindings/usb/apple,dwc3.yaml
 +++ b/Documentation/devicetree/bindings/usb/apple,dwc3.yaml
 @@ -24,6 +24,23 @@ allOf:
@@ -1015,7 +1015,7 @@ index d68a4b68d..9593dd89c 100644
    - compatible
    - reg
 diff --git a/Documentation/devicetree/bindings/watchdog/apple,wdt.yaml b/Documentation/devicetree/bindings/watchdog/apple,wdt.yaml
-index 00b0f2ec2..d09fb81bd 100644
+index 00b0f2ec2bdb..d09fb81bd506 100644
 --- a/Documentation/devicetree/bindings/watchdog/apple,wdt.yaml
 +++ b/Documentation/devicetree/bindings/watchdog/apple,wdt.yaml
 @@ -21,6 +21,7 @@ properties:
@@ -1027,7 +1027,7 @@ index 00b0f2ec2..d09fb81bd 100644
                - apple,t8132-wdt
                - apple,t8140-wdt
 diff --git a/arch/arm64/Kconfig.debug b/arch/arm64/Kconfig.debug
-index c0ef0498f..1c0d31194 100644
+index c0ef0498f143..1c0d31194e7b 100644
 --- a/arch/arm64/Kconfig.debug
 +++ b/arch/arm64/Kconfig.debug
 @@ -22,6 +22,41 @@ config ARM64_RELOC_TEST
@@ -1073,7 +1073,7 @@ index c0ef0498f..1c0d31194 100644
  	bool "Experimental mixed-granule userspace"
  	select ARCH_HAS_MM_PGTABLE
 diff --git a/arch/arm64/boot/dts/apple/Makefile b/arch/arm64/boot/dts/apple/Makefile
-index 52b15f4bd..bedc9d99f 100644
+index 52b15f4bdb8c..bedc9d99f385 100644
 --- a/arch/arm64/boot/dts/apple/Makefile
 +++ b/arch/arm64/boot/dts/apple/Makefile
 @@ -98,6 +98,18 @@ dtb-$(CONFIG_ARCH_APPLE) += t6040-j614s.dtb
@@ -1102,7 +1102,7 @@ index 52b15f4bd..bedc9d99f 100644
 +
 diff --git a/arch/arm64/boot/dts/apple/t6050-base.dtsi b/arch/arm64/boot/dts/apple/t6050-base.dtsi
 new file mode 100644
-index 000000000..6ee171b9a
+index 000000000000..6ee171b9a390
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-base.dtsi
 @@ -0,0 +1,294 @@
@@ -1402,7 +1402,7 @@ index 000000000..6ee171b9a
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi b/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi
 new file mode 100644
-index 000000000..4bafacef0
+index 000000000000..4bafacef07b4
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-cpufreq.dtsi
 @@ -0,0 +1,424 @@
@@ -1832,7 +1832,7 @@ index 000000000..4bafacef0
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-dcp.dtsi b/arch/arm64/boot/dts/apple/t6050-dcp.dtsi
 new file mode 100644
-index 000000000..459368ee6
+index 000000000000..459368ee6e7b
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-dcp.dtsi
 @@ -0,0 +1,179 @@
@@ -2017,7 +2017,7 @@ index 000000000..459368ee6
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-die0.dtsi b/arch/arm64/boot/dts/apple/t6050-die0.dtsi
 new file mode 100644
-index 000000000..fd2991f2c
+index 000000000000..fd2991f2cca9
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-die0.dtsi
 @@ -0,0 +1,1025 @@
@@ -3048,7 +3048,7 @@ index 000000000..fd2991f2c
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-dieX.dtsi b/arch/arm64/boot/dts/apple/t6050-dieX.dtsi
 new file mode 100644
-index 000000000..94e9def55
+index 000000000000..94e9def5533f
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-dieX.dtsi
 @@ -0,0 +1,283 @@
@@ -3337,7 +3337,7 @@ index 000000000..94e9def55
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
 new file mode 100644
-index 000000000..3e6af3d48
+index 000000000000..3e6af3d48991
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
 @@ -0,0 +1,262 @@
@@ -3605,7 +3605,7 @@ index 000000000..3e6af3d48
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts
 new file mode 100644
-index 000000000..074bacb00
+index 000000000000..074bacb00cda
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts
 @@ -0,0 +1,7 @@
@@ -3618,7 +3618,7 @@ index 000000000..074bacb00
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
 new file mode 100644
-index 000000000..54d7dd974
+index 000000000000..54d7dd974d19
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
 @@ -0,0 +1,39 @@
@@ -3663,7 +3663,7 @@ index 000000000..54d7dd974
 +&dwc3_2_dart_1 { status = "disabled"; };
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dts
 new file mode 100644
-index 000000000..4bb2f0edb
+index 000000000000..4bb2f0edb603
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1-simpledrm.dts
 @@ -0,0 +1,7 @@
@@ -3676,7 +3676,7 @@ index 000000000..4bb2f0edb
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts
 new file mode 100644
-index 000000000..618164839
+index 000000000000..6181648394b7
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-n1.dts
 @@ -0,0 +1,11 @@
@@ -3693,7 +3693,7 @@ index 000000000..618164839
 +#include "t6050-j714s-n1-host.dtsi"
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dts
 new file mode 100644
-index 000000000..91d5603d6
+index 000000000000..91d5603d672c
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-simpledrm.dts
 @@ -0,0 +1,12 @@
@@ -3711,7 +3711,7 @@ index 000000000..91d5603d6
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu-simpledrm.dts
 new file mode 100644
-index 000000000..ff73dded8
+index 000000000000..ff73dded8f11
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu-simpledrm.dts
 @@ -0,0 +1,7 @@
@@ -3724,7 +3724,7 @@ index 000000000..ff73dded8
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
 new file mode 100644
-index 000000000..f8da99aff
+index 000000000000..f8da99affb70
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-tripleu.dts
 @@ -0,0 +1,11 @@
@@ -3741,7 +3741,7 @@ index 000000000..f8da99aff
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts
 new file mode 100644
-index 000000000..2d3054aa4
+index 000000000000..2d3054aa40ac
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu.dts
 @@ -0,0 +1,102 @@
@@ -3849,7 +3849,7 @@ index 000000000..2d3054aa4
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi
 new file mode 100644
-index 000000000..60815f8b6
+index 000000000000..60815f8b6d7f
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-n1-host.dtsi
 @@ -0,0 +1,45 @@
@@ -3900,7 +3900,7 @@ index 000000000..60815f8b6
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi
 new file mode 100644
-index 000000000..c9d54d141
+index 000000000000..c9d54d141a40
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-n1.dtsi
 @@ -0,0 +1,156 @@
@@ -4062,7 +4062,7 @@ index 000000000..c9d54d141
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
 new file mode 100644
-index 000000000..b2aa48521
+index 000000000000..b2aa48521d0c
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
 @@ -0,0 +1,153 @@
@@ -4221,7 +4221,7 @@ index 000000000..b2aa48521
 +#include "t6050-j714s-audio.dtsi"
 diff --git a/arch/arm64/boot/dts/apple/t6050-j716c.dts b/arch/arm64/boot/dts/apple/t6050-j716c.dts
 new file mode 100644
-index 000000000..da061edcb
+index 000000000000..da061edcb7b2
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j716c.dts
 @@ -0,0 +1,223 @@
@@ -4450,7 +4450,7 @@ index 000000000..da061edcb
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j716s.dts b/arch/arm64/boot/dts/apple/t6050-j716s.dts
 new file mode 100644
-index 000000000..7035fd101
+index 000000000000..7035fd1012d2
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j716s.dts
 @@ -0,0 +1,960 @@
@@ -5416,7 +5416,7 @@ index 000000000..7035fd101
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j775d.dts b/arch/arm64/boot/dts/apple/t6050-j775d.dts
 new file mode 100644
-index 000000000..5c0b238dc
+index 000000000000..5c0b238dc096
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j775d.dts
 @@ -0,0 +1,701 @@
@@ -6123,7 +6123,7 @@ index 000000000..5c0b238dc
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-jxxx.dtsi b/arch/arm64/boot/dts/apple/t6050-jxxx.dtsi
 new file mode 100644
-index 000000000..3440b6202
+index 000000000000..3440b6202acf
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-jxxx.dtsi
 @@ -0,0 +1,49 @@
@@ -6178,7 +6178,7 @@ index 000000000..3440b6202
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-max.dtsi b/arch/arm64/boot/dts/apple/t6050-max.dtsi
 new file mode 100644
-index 000000000..d3b0a1f7b
+index 000000000000..d3b0a1f7b80a
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-max.dtsi
 @@ -0,0 +1,117 @@
@@ -6301,7 +6301,7 @@ index 000000000..d3b0a1f7b
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi b/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi
 new file mode 100644
-index 000000000..6abc62787
+index 000000000000..6abc6278739e
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi
 @@ -0,0 +1,2498 @@
@@ -8805,7 +8805,7 @@ index 000000000..6abc62787
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-smc.dtsi b/arch/arm64/boot/dts/apple/t6050-smc.dtsi
 new file mode 100644
-index 000000000..462e27c9b
+index 000000000000..462e27c9b768
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-smc.dtsi
 @@ -0,0 +1,178 @@
@@ -8989,7 +8989,7 @@ index 000000000..462e27c9b
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
 new file mode 100644
-index 000000000..cc84182b6
+index 000000000000..cc84182b67a6
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-storage-net.dtsi
 @@ -0,0 +1,196 @@
@@ -9191,7 +9191,7 @@ index 000000000..cc84182b6
 +&ps_atc2_phymxwrap { status = "disabled"; };
 diff --git a/arch/arm64/boot/dts/apple/t6050-ultra.dtsi b/arch/arm64/boot/dts/apple/t6050-ultra.dtsi
 new file mode 100644
-index 000000000..fae562126
+index 000000000000..fae5621266fb
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-ultra.dtsi
 @@ -0,0 +1,502 @@
@@ -9699,7 +9699,7 @@ index 000000000..fae562126
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050.dtsi b/arch/arm64/boot/dts/apple/t6050.dtsi
 new file mode 100644
-index 000000000..762ac39d1
+index 000000000000..762ac39d1d94
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050.dtsi
 @@ -0,0 +1,629 @@
@@ -10334,7 +10334,7 @@ index 000000000..762ac39d1
 +#include "t6050-smc.dtsi"
 diff --git a/arch/arm64/configs/j714s-gpu-local.config b/arch/arm64/configs/j714s-gpu-local.config
 new file mode 100644
-index 000000000..4eab29b47
+index 000000000000..4eab29b47d43
 --- /dev/null
 +++ b/arch/arm64/configs/j714s-gpu-local.config
 @@ -0,0 +1,100 @@
@@ -10440,7 +10440,7 @@ index 000000000..4eab29b47
 +CONFIG_IP6_NF_MATCH_RT=y
 diff --git a/arch/arm64/configs/j716s-gpu.config b/arch/arm64/configs/j716s-gpu.config
 new file mode 100644
-index 000000000..87ef36ed2
+index 000000000000..87ef36ed2f9e
 --- /dev/null
 +++ b/arch/arm64/configs/j716s-gpu.config
 @@ -0,0 +1,15 @@
@@ -10461,7 +10461,7 @@ index 000000000..87ef36ed2
 +CONFIG_MTD_PHRAM=y
 diff --git a/arch/arm64/configs/j716s.config b/arch/arm64/configs/j716s.config
 new file mode 100644
-index 000000000..d011225f5
+index 000000000000..d011225f5d69
 --- /dev/null
 +++ b/arch/arm64/configs/j716s.config
 @@ -0,0 +1,226 @@
@@ -10693,7 +10693,7 @@ index 000000000..d011225f5
 +CONFIG_VETH=y
 diff --git a/arch/arm64/include/asm/omarchy_fbmarker.h b/arch/arm64/include/asm/omarchy_fbmarker.h
 new file mode 100644
-index 000000000..74fe96cea
+index 000000000000..74fe96cea38a
 --- /dev/null
 +++ b/arch/arm64/include/asm/omarchy_fbmarker.h
 @@ -0,0 +1,58 @@
@@ -10756,7 +10756,7 @@ index 000000000..74fe96cea
 +
 +#endif /* __ASM_OMARCHY_FBMARKER_H */
 diff --git a/arch/arm64/kernel/Makefile b/arch/arm64/kernel/Makefile
-index cac465111..bdc66981f 100644
+index cac465111055..bdc66981fc24 100644
 --- a/arch/arm64/kernel/Makefile
 +++ b/arch/arm64/kernel/Makefile
 @@ -94,3 +94,4 @@ endif
@@ -10765,7 +10765,7 @@ index cac465111..bdc66981f 100644
  subdir- += vdso vdso32
 +obj-$(CONFIG_OMARCHY_FB_MARKERS)	+= omarchy_fbmarker.o
 diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
-index 87a822e5c..80e575f5f 100644
+index 87a822e5c4ca..80e575f5faa6 100644
 --- a/arch/arm64/kernel/head.S
 +++ b/arch/arm64/kernel/head.S
 @@ -35,6 +35,7 @@
@@ -10807,7 +10807,7 @@ index 87a822e5c..80e575f5f 100644
  	mov	sp, x1
  	mov	x29, xzr
 diff --git a/arch/arm64/kernel/idle.c b/arch/arm64/kernel/idle.c
-index 267677adc..0d76030f7 100644
+index 267677adc220..0d76030f7820 100644
 --- a/arch/arm64/kernel/idle.c
 +++ b/arch/arm64/kernel/idle.c
 @@ -50,6 +50,18 @@ early_param("idle", setup_idle);
@@ -10855,7 +10855,7 @@ index 267677adc..0d76030f7 100644
  
 diff --git a/arch/arm64/kernel/omarchy_fbmarker.c b/arch/arm64/kernel/omarchy_fbmarker.c
 new file mode 100644
-index 000000000..183d3f8f1
+index 000000000000..183d3f8f1585
 --- /dev/null
 +++ b/arch/arm64/kernel/omarchy_fbmarker.c
 @@ -0,0 +1,104 @@
@@ -10964,7 +10964,7 @@ index 000000000..183d3f8f1
 +}
 +arch_initcall(omarchy_fb_earlycon_hide);
 diff --git a/arch/arm64/kernel/setup.c b/arch/arm64/kernel/setup.c
-index f6f87f250..4b98939a4 100644
+index f6f87f250e16..4b98939a4fd0 100644
 --- a/arch/arm64/kernel/setup.c
 +++ b/arch/arm64/kernel/setup.c
 @@ -51,6 +51,7 @@
@@ -11016,7 +11016,7 @@ index f6f87f250..4b98939a4 100644
  
  	/* Parse the ACPI tables for possible boot-time configuration */
 diff --git a/drivers/bluetooth/Kconfig b/drivers/bluetooth/Kconfig
-index 832e2d301..47d8014da 100644
+index 832e2d3019ec..47d8014da3c8 100644
 --- a/drivers/bluetooth/Kconfig
 +++ b/drivers/bluetooth/Kconfig
 @@ -507,17 +507,13 @@ config BT_INTEL_PCIE
@@ -11045,7 +11045,7 @@ index 832e2d301..47d8014da 100644
  
  endmenu
 diff --git a/drivers/bluetooth/Makefile b/drivers/bluetooth/Makefile
-index 74c3834c2..634e01029 100644
+index 74c3834c2c4a..634e01029768 100644
 --- a/drivers/bluetooth/Makefile
 +++ b/drivers/bluetooth/Makefile
 @@ -54,4 +54,4 @@ hci_uart-$(CONFIG_BT_HCIUART_AG6XX)	+= hci_ag6xx.o
@@ -11055,7 +11055,7 @@ index 74c3834c2..634e01029 100644
 -obj-$(CONFIG_BT_CENTAURI)		+= btcentauri.o
 +obj-$(CONFIG_BT_HCICENTAURI) += btcentauri.o
 diff --git a/drivers/bluetooth/btcentauri.c b/drivers/bluetooth/btcentauri.c
-index 5830c8b22..9e0e2d786 100644
+index 5830c8b2285e..9e0e2d786356 100644
 --- a/drivers/bluetooth/btcentauri.c
 +++ b/drivers/bluetooth/btcentauri.c
 @@ -1,25 +1,18 @@
@@ -12090,7 +12090,7 @@ index 5830c8b22..9e0e2d786 100644
 -MODULE_DESCRIPTION("Apple N1 Beta HCI command/event transport for J813 and J873 bring-up");
 +MODULE_DESCRIPTION("Apple N1 protocol-27 Bluetooth transport");
 diff --git a/drivers/cpufreq/apple-soc-cpufreq.c b/drivers/cpufreq/apple-soc-cpufreq.c
-index 85e592faa..0ec4bcedd 100644
+index 85e592faa053..0ec4bcedd9cb 100644
 --- a/drivers/cpufreq/apple-soc-cpufreq.c
 +++ b/drivers/cpufreq/apple-soc-cpufreq.c
 @@ -206,6 +206,7 @@ struct apple_soc_cpufreq_info {
@@ -12157,7 +12157,7 @@ index 85e592faa..0ec4bcedd 100644
  	if (ret < 0) {
  		dev_err(cpu_dev, "%s: failed to add OPP table: %d\n", __func__, ret);
 diff --git a/drivers/gpio/gpio-macsmc.c b/drivers/gpio/gpio-macsmc.c
-index b9500afad..2ccce3053 100644
+index b9500afad3ce..2ccce30534f5 100644
 --- a/drivers/gpio/gpio-macsmc.c
 +++ b/drivers/gpio/gpio-macsmc.c
 @@ -38,7 +38,9 @@
@@ -12225,7 +12225,7 @@ index b9500afad..2ccce3053 100644
  
  	smcgp->first_index = macsmc_gpio_find_first_gpio_index(smcgp);
 diff --git a/drivers/gpu/drm/apple/apple_drv.c b/drivers/gpu/drm/apple/apple_drv.c
-index 8d4399c3e..c5ebbd8a6 100644
+index 8d4399c3ef51..c5ebbd8a6856 100644
 --- a/drivers/gpu/drm/apple/apple_drv.c
 +++ b/drivers/gpu/drm/apple/apple_drv.c
 @@ -170,11 +170,13 @@ static int apple_drm_fbdev_probe(struct drm_fb_helper *helper,
@@ -12271,7 +12271,7 @@ index 8d4399c3e..c5ebbd8a6 100644
  							supports_premultiplied);
  		}
 diff --git a/drivers/gpu/drm/apple/dcp-internal.h b/drivers/gpu/drm/apple/dcp-internal.h
-index ba5e0574c..f491e8414 100644
+index ba5e0574ca2b..f491e8414366 100644
 --- a/drivers/gpu/drm/apple/dcp-internal.h
 +++ b/drivers/gpu/drm/apple/dcp-internal.h
 @@ -452,6 +452,8 @@ struct apple_dcp {
@@ -12316,7 +12316,7 @@ index ba5e0574c..f491e8414 100644
   * Whether @pa, a physical address the DCP firmware placed a buffer at, can be
   * DRAM. On Apple SoCs every device register window lies below DRAM, so an
 diff --git a/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc b/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc
-index 33def11c7..ac69ba33a 100644
+index 33def11c752e..ac69ba33ac55 100644
 --- a/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc
 +++ b/drivers/gpu/drm/apple/dcp-peer-probe-v27.inc
 @@ -46,7 +46,7 @@ static ssize_t peer_setup_test_store(struct device *dev,
@@ -12329,7 +12329,7 @@ index 33def11c7..ac69ba33a 100644
  		    (dcp->connector && dcp->connector->connected) ||
  		    dcp->ch_cmd.depth || dcp->ch_cb.depth || dcp->ch_async.depth ||
 diff --git a/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc b/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc
-index b1f99d6dd..953b32a41 100644
+index b1f99d6ddd65..953b32a41c99 100644
 --- a/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc
 +++ b/drivers/gpu/drm/apple/dcp-peer-runtime-v27.inc
 @@ -2,7 +2,7 @@
@@ -12351,7 +12351,7 @@ index b1f99d6dd..953b32a41 100644
  	if (timing > U32_MAX - 10000 || color > U32_MAX - 10000)
  		return -EINVAL;
 diff --git a/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc b/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc
-index f6c8ced43..1c3964fec 100644
+index f6c8ced4317e..1c3964fecd7a 100644
 --- a/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc
 +++ b/drivers/gpu/drm/apple/dcp-peer-swap-probe-v27.inc
 @@ -183,8 +183,8 @@ static ssize_t peer_swap_test_store(struct device *dev,
@@ -12377,7 +12377,7 @@ index f6c8ced43..1c3964fec 100644
  			ret = -EBUSY;
  			goto out;
 diff --git a/drivers/gpu/drm/apple/dcp-peer-v27.inc b/drivers/gpu/drm/apple/dcp-peer-v27.inc
-index 9bae0594b..34adc538c 100644
+index 9bae0594b584..34adc538cee8 100644
 --- a/drivers/gpu/drm/apple/dcp-peer-v27.inc
 +++ b/drivers/gpu/drm/apple/dcp-peer-v27.inc
 @@ -5,7 +5,7 @@
@@ -12408,7 +12408,7 @@ index 9bae0594b..34adc538c 100644
  			    p->dptxport[0].caps.width < port->caps.width ||
  			    p->dptxport[0].caps.total_rate < port->caps.total_rate ||
 diff --git a/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc b/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc
-index 24c985a91..26635567b 100644
+index 24c985a91195..26635567bc58 100644
 --- a/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc
 +++ b/drivers/gpu/drm/apple/dcp-peer-video-probe-v27.inc
 @@ -193,8 +193,8 @@ static ssize_t peer_video_test_store(struct device *dev,
@@ -12423,7 +12423,7 @@ index 24c985a91..26635567b 100644
  			ret = -EBUSY;
  			goto unlock;
 diff --git a/drivers/gpu/drm/apple/dcp.c b/drivers/gpu/drm/apple/dcp.c
-index d6fd74fd7..dda0ef9df 100644
+index d6fd74fd7413..dda0ef9dfa6c 100644
 --- a/drivers/gpu/drm/apple/dcp.c
 +++ b/drivers/gpu/drm/apple/dcp.c
 @@ -4949,8 +4949,11 @@ static enum dcp_firmware_version dcp_check_firmware_version(struct device *dev)
@@ -12455,7 +12455,7 @@ index d6fd74fd7..dda0ef9df 100644
  	 * Probe-lifetime like the desktop state: component bind opens a devres
  	 * group on this device and releases it on failure or unbind.
 diff --git a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
-index c2a681328..bf9b8a787 100644
+index c2a681328c10..bf9b8a787575 100644
 --- a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
 +++ b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
 @@ -60,6 +60,7 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
@@ -12499,7 +12499,7 @@ index c2a681328..bf9b8a787 100644
  		 dcp_peer_submitted, owner);
  	if (READ_ONCE(peer->crashed))
 diff --git a/drivers/gpu/drm/apple/iomfb_template.c b/drivers/gpu/drm/apple/iomfb_template.c
-index 165d864ff..673ba5206 100644
+index 165d864ff330..781fed18cff8 100644
 --- a/drivers/gpu/drm/apple/iomfb_template.c
 +++ b/drivers/gpu/drm/apple/iomfb_template.c
 @@ -362,6 +362,7 @@ static void dcp_swap_submit(struct apple_dcp *dcp, bool oob,
@@ -12537,8 +12537,39 @@ index 165d864ff..673ba5206 100644
  		 sizeof(struct dcp_swap_submit_resp_h17p), (void *)data, cb, cookie);
  }
  #else
+@@ -3813,8 +3805,12 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
+ 	};
+ 	dcp->output_pq = dcp->pq_requested && mode->pq.score >= 0;
+ 
+-	/* Built-in ProMotion panels require timestamps even in fixed-120 mode. */
+-	dcp->use_timestamps = mode->vrr && dcp->main_display;
++	/*
++	 * Built-in ProMotion panels require timestamps even in fixed-120 mode:
++	 * a 120 Hz panel timing without an adaptive-sync range (vrr false)
++	 * still needs them, or the firmware completes one swap per 16.7 ms.
++	 */
++	dcp->use_timestamps = mode->needs_timestamps && dcp->main_display;
+ 
+ 	cookie = kzalloc(sizeof(*cookie), GFP_KERNEL);
+ 	if (!cookie) {
+@@ -4089,6 +4085,15 @@ void DCP_FW_NAME(iomfb_flush)(struct apple_dcp *dcp, struct drm_crtc *crtc, stru
+ 		 */
+ 		if (!submit_timestamp)
+ 			submit_timestamp = timestamp;
++#if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
++		/*
++		 * Firmware 27 never completes a swap stamped with counter
++		 * values, as desktop 26.x: send its presentation deadline
++		 * long past, which asks for the next refresh.
++		 */
++		timestamp = dcp_desktop_present_deadline(true, true);
++		submit_timestamp = timestamp;
++#endif
+ 
+ 		/* Firmware 12.x/13.x requires timestamp types 1, 2, and 7. */
+ 		req->swap.timestamp[0] = timestamp;
 diff --git a/drivers/gpu/drm/apple/iomfb_v27.c b/drivers/gpu/drm/apple/iomfb_v27.c
-index c6df81bf8..27cb37fbc 100644
+index c6df81bf8abd..27cb37fbc0ec 100644
 --- a/drivers/gpu/drm/apple/iomfb_v27.c
 +++ b/drivers/gpu/drm/apple/iomfb_v27.c
 @@ -12,8 +12,15 @@
@@ -12772,7 +12803,7 @@ index c6df81bf8..27cb37fbc 100644
  #define iomfb_flush_h17p iomfb_flush_v27
  #define iomfb_poweron_h17p iomfb_poweron_v27
 diff --git a/drivers/gpu/drm/apple/iomfb_v27.h b/drivers/gpu/drm/apple/iomfb_v27.h
-index ac1ded5eb..54f31f57f 100644
+index ac1ded5eb047..54f31f57ffdb 100644
 --- a/drivers/gpu/drm/apple/iomfb_v27.h
 +++ b/drivers/gpu/drm/apple/iomfb_v27.h
 @@ -77,9 +77,148 @@ static_assert(offsetof(struct dcp_swap_submit_req_v27, surf_iova) == 0xf90);
@@ -12927,7 +12958,7 @@ index ac1ded5eb..54f31f57f 100644
  void iomfb_firmware_state_cleanup_v27(void *data);
  int iomfb_modeset_v27(struct apple_dcp *dcp, struct drm_crtc_state *state);
 diff --git a/drivers/gpu/drm/asahi/driver.rs b/drivers/gpu/drm/asahi/driver.rs
-index ef1534619..c8006dbe4 100644
+index ef1534619ff9..c8006dbe488c 100644
 --- a/drivers/gpu/drm/asahi/driver.rs
 +++ b/drivers/gpu/drm/asahi/driver.rs
 @@ -3,7 +3,7 @@
@@ -13020,7 +13051,7 @@ index ef1534619..c8006dbe4 100644
      }
  
 diff --git a/drivers/gpu/drm/asahi/fwid.rs b/drivers/gpu/drm/asahi/fwid.rs
-index 254063e51..bfb0df03c 100644
+index 254063e51962..bfb0df03cddf 100644
 --- a/drivers/gpu/drm/asahi/fwid.rs
 +++ b/drivers/gpu/drm/asahi/fwid.rs
 @@ -499,6 +499,7 @@ fn t6050_admits_only_its_pinned_image() {
@@ -13032,7 +13063,7 @@ index 254063e51..bfb0df03c 100644
              let crate::g17::fw::variant::Firmware::Identified(builds) = cfg.firmware else {
                  panic!("an M5 board on bare metal must identify its loaded firmware");
 diff --git a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
-index 68c828d1b..59c62d705 100644
+index 68c828d1b5e1..59c62d70562b 100644
 --- a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
 +++ b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
 @@ -1581,6 +1581,16 @@ fn write_relocated_words(
@@ -13315,7 +13346,7 @@ index 68c828d1b..59c62d705 100644
 +    }
 +}
 diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
-index 76d1b7f16..7d42375f2 100644
+index 76d1b7f16fa9..7d42375f2160 100644
 --- a/drivers/gpu/drm/asahi/hw/t6050.rs
 +++ b/drivers/gpu/drm/asahi/hw/t6050.rs
 @@ -123,8 +123,8 @@
@@ -13392,7 +13423,7 @@ index 76d1b7f16..7d42375f2 100644
      [&CONFIG, &CONFIG_MAX, &CONFIG_ULTRA].into_iter().find(|cfg| id.family == cfg.identity.family
          && id.variant == cfg.identity.variant && id.num_dies == cfg.identity.num_dies)
 diff --git a/drivers/gpu/drm/sysfb/simpledrm.c b/drivers/gpu/drm/sysfb/simpledrm.c
-index 404758261..c44a567dd 100644
+index 404758261a49..c44a567dd894 100644
 --- a/drivers/gpu/drm/sysfb/simpledrm.c
 +++ b/drivers/gpu/drm/sysfb/simpledrm.c
 @@ -23,6 +23,9 @@
@@ -13431,7 +13462,7 @@ index 404758261..c44a567dd 100644
  }
  
 diff --git a/drivers/hid/dockchannel-hid/dockchannel-hid.c b/drivers/hid/dockchannel-hid/dockchannel-hid.c
-index da0f2ab14..5d110c5f1 100644
+index da0f2ab1403d..5d110c5f1265 100644
 --- a/drivers/hid/dockchannel-hid/dockchannel-hid.c
 +++ b/drivers/hid/dockchannel-hid/dockchannel-hid.c
 @@ -28,6 +28,8 @@
@@ -13528,7 +13559,7 @@ index da0f2ab14..5d110c5f1 100644
  
  	/* Pairs with the acquire in dchid_handle_report(); publishes iface->hid. */
 diff --git a/drivers/hwmon/macsmc-hwmon.c b/drivers/hwmon/macsmc-hwmon.c
-index fb1a68959..80a7a0823 100644
+index fb1a6895967b..80a7a0823b5a 100644
 --- a/drivers/hwmon/macsmc-hwmon.c
 +++ b/drivers/hwmon/macsmc-hwmon.c
 @@ -1062,37 +1062,43 @@ static int macsmc_hwmon_create_fan(struct device *dev, struct apple_smc *smc,
@@ -13595,7 +13626,7 @@ index fb1a68959..80a7a0823 100644
  		if (fan->mode.macsmc_key && (fan->attrs & HWMON_F_TARGET))
  			fan->manual_control = true;
 diff --git a/drivers/input/misc/macsmc-input.c b/drivers/input/misc/macsmc-input.c
-index 853dfa73b..56fe12165 100644
+index 853dfa73b7b8..56fe12165807 100644
 --- a/drivers/input/misc/macsmc-input.c
 +++ b/drivers/input/misc/macsmc-input.c
 @@ -11,23 +11,37 @@
@@ -13741,7 +13772,7 @@ index 853dfa73b..56fe12165 100644
  
  static const struct dev_pm_ops macsmc_input_pm_ops = {
 diff --git a/drivers/iommu/apple-dart.c b/drivers/iommu/apple-dart.c
-index f47de28dd..5bfb12eb7 100644
+index f47de28dd610..d46cf899fada 100644
 --- a/drivers/iommu/apple-dart.c
 +++ b/drivers/iommu/apple-dart.c
 @@ -4358,6 +4358,43 @@ static void apple_dart_free_irq(struct apple_dart *dart)
@@ -13799,8 +13830,59 @@ index f47de28dd..5bfb12eb7 100644
  	dart = kzalloc(sizeof(*dart), GFP_KERNEL);
  	if (!dart)
  		return -ENOMEM;
+@@ -5468,7 +5509,49 @@ static __maybe_unused int apple_dart_resume(struct device *dev)
+ 	return ret;
+ }
+ 
+-static DEFINE_RUNTIME_DEV_PM_OPS(apple_dart_pm_ops, apple_dart_suspend, apple_dart_resume, NULL);
++/*
++ * On Apple T6050 dwc3 stays live across system sleep (see dwc3_plat_suspend),
++ * so the DARTs in front of it have to stay live too: force-suspending them
++ * under the running controller resets the machine (J714s, found by aborting
++ * pm_test=devices at each device in turn). The default names the two USB-C
++ * DARTs of the J714s device tree. Read-only at runtime so suspend and resume
++ * always take the same path.
++ */
++static char *t6050_keep_live = "2aaf80000.iommu,2aaf00000.iommu";
++module_param(t6050_keep_live, charp, 0444);
++MODULE_PARM_DESC(t6050_keep_live, "On Apple T6050, DARTs (comma-separated device names) left alone across system sleep");
++
++static bool apple_dart_keep_live(struct device *dev)
++{
++	const char *list = READ_ONCE(t6050_keep_live), *p;
++	size_t n = strlen(dev_name(dev));
++
++	if (!list || !of_machine_is_compatible("apple,t6050"))
++		return false;
++	for (p = list; (p = strstr(p, dev_name(dev))); p += n)
++		if ((p == list || p[-1] == ',') && (p[n] == ',' || p[n] == '\0'))
++			return true;
++	return false;
++}
++
++static int apple_dart_sys_suspend(struct device *dev)
++{
++	if (apple_dart_keep_live(dev))
++		return 0;
++	return pm_runtime_force_suspend(dev);
++}
++
++static int apple_dart_sys_resume(struct device *dev)
++{
++	if (apple_dart_keep_live(dev))
++		return 0;
++	return pm_runtime_force_resume(dev);
++}
++
++static const struct dev_pm_ops apple_dart_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(apple_dart_sys_suspend, apple_dart_sys_resume)
++	RUNTIME_PM_OPS(apple_dart_suspend, apple_dart_resume, NULL)
++};
+ 
+ static const struct of_device_id apple_dart_of_match[] = {
+ 	{ .compatible = "apple,t8103-dart", .data = &apple_dart_hw_t8103 },
 diff --git a/drivers/irqchip/irq-apple-aic.c b/drivers/irqchip/irq-apple-aic.c
-index 112500813..82cad3116 100644
+index 1125008130ef..82cad31161b5 100644
 --- a/drivers/irqchip/irq-apple-aic.c
 +++ b/drivers/irqchip/irq-apple-aic.c
 @@ -352,6 +352,14 @@ static const struct of_device_id aic_info_match[] = {
@@ -13819,7 +13901,7 @@ index 112500813..82cad3116 100644
  		.compatible = "apple,t8103-aic",
  		.data = &aic1_local_fipi_info,
 diff --git a/drivers/mfd/macsmc.c b/drivers/mfd/macsmc.c
-index 546e5cdbb..10047659b 100644
+index 546e5cdbb72a..10047659b5ca 100644
 --- a/drivers/mfd/macsmc.c
 +++ b/drivers/mfd/macsmc.c
 @@ -68,10 +68,59 @@ static const struct mfd_cell apple_smc_telemetry_devs[] = {
@@ -14006,7 +14088,7 @@ index 546e5cdbb..10047659b 100644
  	{ .compatible = "apple,smc" },
  	{},
 diff --git a/drivers/net/wireless/apple/Kconfig b/drivers/net/wireless/apple/Kconfig
-index d3ead4d92..d0e8db197 100644
+index d3ead4d9259e..d0e8db197ca3 100644
 --- a/drivers/net/wireless/apple/Kconfig
 +++ b/drivers/net/wireless/apple/Kconfig
 @@ -2,24 +2,27 @@
@@ -14051,7 +14133,7 @@ index d3ead4d92..d0e8db197 100644
 +	  Radio firmware and calibration remain external inputs.
  endif
 diff --git a/drivers/net/wireless/apple/centauri/Makefile b/drivers/net/wireless/apple/centauri/Makefile
-index 1a17e5283..ddd250199 100644
+index 1a17e5283e22..ddd250199888 100644
 --- a/drivers/net/wireless/apple/centauri/Makefile
 +++ b/drivers/net/wireless/apple/centauri/Makefile
 @@ -1,3 +1,4 @@
@@ -14061,7 +14143,7 @@ index 1a17e5283..ddd250199 100644
 +apple_centauri-y := centauri_pci.o centauri_ipc.o
 +apple_centauri-$(CONFIG_APPLE_CENTAURI_WIFI) += centauri_wifi.o
 diff --git a/drivers/net/wireless/apple/centauri/centauri.h b/drivers/net/wireless/apple/centauri/centauri.h
-index 330b9e1a2..55106d4ef 100644
+index 330b9e1a207d..55106d4ef079 100644
 --- a/drivers/net/wireless/apple/centauri/centauri.h
 +++ b/drivers/net/wireless/apple/centauri/centauri.h
 @@ -1,96 +1,87 @@
@@ -14210,7 +14292,7 @@ index 330b9e1a2..55106d4ef 100644
 +#endif
  #endif
 diff --git a/drivers/net/wireless/apple/centauri/centauri_ipc.c b/drivers/net/wireless/apple/centauri/centauri_ipc.c
-index 4c26c7085..6b0954392 100644
+index 4c26c7085381..6b0954392974 100644
 --- a/drivers/net/wireless/apple/centauri/centauri_ipc.c
 +++ b/drivers/net/wireless/apple/centauri/centauri_ipc.c
 @@ -1,14 +1,10 @@
@@ -14732,7 +14814,7 @@ index 4c26c7085..6b0954392 100644
 -	return 0;
 -}
 diff --git a/drivers/net/wireless/apple/centauri/centauri_pci.c b/drivers/net/wireless/apple/centauri/centauri_pci.c
-index 86ad99c48..b1984fa8e 100644
+index 86ad99c48db2..b1984fa8eb3a 100644
 --- a/drivers/net/wireless/apple/centauri/centauri_pci.c
 +++ b/drivers/net/wireless/apple/centauri/centauri_pci.c
 @@ -1,9 +1,7 @@
@@ -15324,7 +15406,7 @@ index 86ad99c48..b1984fa8e 100644
 +MODULE_DESCRIPTION("Apple N1 Centauri PCI firmware and ACIPC transport");
 diff --git a/drivers/net/wireless/apple/centauri/centauri_port.c b/drivers/net/wireless/apple/centauri/centauri_port.c
 deleted file mode 100644
-index 59eadc3f8..000000000
+index 59eadc3f8521..000000000000
 --- a/drivers/net/wireless/apple/centauri/centauri_port.c
 +++ /dev/null
 @@ -1,220 +0,0 @@
@@ -15549,7 +15631,7 @@ index 59eadc3f8..000000000
 -	return ret;
 -}
 diff --git a/drivers/net/wireless/apple/centauri/centauri_wifi.c b/drivers/net/wireless/apple/centauri/centauri_wifi.c
-index 1c854cb45..6bfdb61fb 100644
+index 1c854cb45902..6bfdb61fba4a 100644
 --- a/drivers/net/wireless/apple/centauri/centauri_wifi.c
 +++ b/drivers/net/wireless/apple/centauri/centauri_wifi.c
 @@ -1,14 +1,12 @@
@@ -19148,10 +19230,18 @@ index 1c854cb45..6bfdb61fb 100644
 -	c->wifi = NULL;
  }
 diff --git a/drivers/nvme/host/apple.c b/drivers/nvme/host/apple.c
-index e4c9a1ccd..ef52797a0 100644
+index e4c9a1ccd38a..c412facdd38f 100644
 --- a/drivers/nvme/host/apple.c
 +++ b/drivers/nvme/host/apple.c
-@@ -208,6 +208,8 @@ struct apple_nvme_hw {
+@@ -38,6 +38,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/pm_domain.h>
+ #include <linux/soc/apple/rtkit.h>
++#include <linux/suspend.h>
+ #include <linux/soc/apple/sart.h>
+ #include <linux/reset.h>
+ #include <linux/time64.h>
+@@ -208,6 +209,8 @@ struct apple_nvme_hw {
  	bool needs_ioq_registers;
  	/* T8132 needs a PMGR reset when starting a stopped coprocessor. */
  	bool cold_reset;
@@ -19160,7 +19250,7 @@ index e4c9a1ccd..ef52797a0 100644
  	u32 max_queue_depth;
  	unsigned long quirks;
  };
-@@ -2393,7 +2395,9 @@ static struct apple_nvme *apple_nvme_alloc(struct platform_device *pdev)
+@@ -2393,7 +2396,9 @@ static struct apple_nvme *apple_nvme_alloc(struct platform_device *pdev)
  		goto out_detach_genpd;
  	}
  
@@ -19171,7 +19261,37 @@ index e4c9a1ccd..ef52797a0 100644
  	if (IS_ERR(anv->reset)) {
  		ret = dev_err_probe(dev, PTR_ERR(anv->reset),
  				    "Failed to get reset control");
-@@ -2754,8 +2758,26 @@ static const struct apple_nvme_hw apple_nvme_t6040_hw = {
+@@ -2654,11 +2659,29 @@ static void apple_nvme_keep_link_powered(struct apple_nvme *anv)
+ 		device_set_awake_path(anv->pd_dev[i]);
+ }
+ 
++/*
++ * On post-M4 ANS (needs_ioq_registers), disabling and rebuilding the controller
++ * across system sleep resets the machine (J714s, found by aborting
++ * pm_test=devices at each device in turn). For suspend-to-idle the controller
++ * can stay live: user space is frozen and keep_link_powered() holds its power
++ * domains on. Resume needs no change: anv->suspended stays false, so it
++ * returns early.
++ */
++static bool t6050_keep_live = true;
++module_param(t6050_keep_live, bool, 0644);
++MODULE_PARM_DESC(t6050_keep_live, "Keep post-M4 ANS NVMe live across suspend-to-idle (no controller disable/rebuild)");
++
+ static int apple_nvme_suspend(struct device *dev)
+ {
+ 	struct apple_nvme *anv = dev_get_drvdata(dev);
+ 	int ret;
+ 
++	if (anv->hw->needs_ioq_registers && READ_ONCE(t6050_keep_live) &&
++	    !pm_suspend_via_firmware()) {
++		apple_nvme_keep_link_powered(anv);
++		return 0;
++	}
++
+ 	if (anv->hw->needs_ioq_registers) {
+ 		if (!nvme_change_ctrl_state(&anv->ctrl, NVME_CTRL_RESETTING))
+ 			return -EBUSY;
+@@ -2754,8 +2777,26 @@ static const struct apple_nvme_hw apple_nvme_t6040_hw = {
  	.quirks = NVME_QUIRK_NO_APST,
  };
  
@@ -19199,7 +19319,7 @@ index e4c9a1ccd..ef52797a0 100644
  	{ .compatible = "apple,t8103-nvme-ans2", .data = &apple_nvme_t8103_hw },
  	{ .compatible = "apple,t8132-nvme-ans2", .data = &apple_nvme_t8132_hw },
 diff --git a/drivers/pci/controller/pcie-apple.c b/drivers/pci/controller/pcie-apple.c
-index 48453fd72..35cb20593 100644
+index 48453fd72e46..35cb20593940 100644
 --- a/drivers/pci/controller/pcie-apple.c
 +++ b/drivers/pci/controller/pcie-apple.c
 @@ -183,6 +183,20 @@ MODULE_PARM_DESC(link_up_timeout, "PCIe link training timeout in milliseconds");
@@ -20635,7 +20755,7 @@ index 48453fd72..35cb20593 100644
  		.name			= "pcie-apple",
  		.of_match_table		= apple_pcie_of_match,
 diff --git a/drivers/pci/probe.c b/drivers/pci/probe.c
-index 27008e2ea..d625dd5e7 100644
+index 27008e2ea5af..d625dd5e778a 100644
 --- a/drivers/pci/probe.c
 +++ b/drivers/pci/probe.c
 @@ -3517,6 +3517,13 @@ void pci_lock_rescan_remove(void)
@@ -20653,7 +20773,7 @@ index 27008e2ea..d625dd5e7 100644
  {
  	mutex_unlock(&pci_rescan_remove_lock);
 diff --git a/drivers/phy/apple/Kconfig b/drivers/phy/apple/Kconfig
-index 5348987cf..36ed85b79 100644
+index 5348987cf1dc..36ed85b7935f 100644
 --- a/drivers/phy/apple/Kconfig
 +++ b/drivers/phy/apple/Kconfig
 @@ -62,3 +62,16 @@ config PHY_APPLE_DPTX
@@ -20674,7 +20794,7 @@ index 5348987cf..36ed85b79 100644
 +	  One owner coordinates the shared PHY, firmware, PIPE and USB2 state.
 +	  Requires named register banks, power domains and firmware tunables.
 diff --git a/drivers/phy/apple/Makefile b/drivers/phy/apple/Makefile
-index e7156408e..e0b94bb1d 100644
+index e7156408e792..e0b94bb1dcaa 100644
 --- a/drivers/phy/apple/Makefile
 +++ b/drivers/phy/apple/Makefile
 @@ -8,3 +8,5 @@ phy-apple-t6040-usb2-y			:= t6040-usb2.o
@@ -20685,7 +20805,7 @@ index e7156408e..e0b94bb1d 100644
 +obj-$(CONFIG_PHY_APPLE_T6050_DP) += atc-t6050-dp.o
 diff --git a/drivers/phy/apple/atc-t6050-combo.h b/drivers/phy/apple/atc-t6050-combo.h
 new file mode 100644
-index 000000000..1da782c4f
+index 000000000000..1da782c4f9de
 --- /dev/null
 +++ b/drivers/phy/apple/atc-t6050-combo.h
 @@ -0,0 +1,442 @@
@@ -21133,7 +21253,7 @@ index 000000000..1da782c4f
 +}
 diff --git a/drivers/phy/apple/atc-t6050-dp.c b/drivers/phy/apple/atc-t6050-dp.c
 new file mode 100644
-index 000000000..eb74b1e50
+index 000000000000..eb74b1e50181
 --- /dev/null
 +++ b/drivers/phy/apple/atc-t6050-dp.c
 @@ -0,0 +1,830 @@
@@ -21969,7 +22089,7 @@ index 000000000..eb74b1e50
 +MODULE_DESCRIPTION("Apple T6050 DisplayPort and Type-C USB combo PHY");
 diff --git a/drivers/phy/apple/atc-t6050-typec-data.h b/drivers/phy/apple/atc-t6050-typec-data.h
 new file mode 100644
-index 000000000..096307b65
+index 000000000000..096307b657c0
 --- /dev/null
 +++ b/drivers/phy/apple/atc-t6050-typec-data.h
 @@ -0,0 +1,700 @@
@@ -22675,7 +22795,7 @@ index 000000000..096307b65
 +};
 diff --git a/drivers/phy/apple/usb-t6050/apple_t6050_usb2_reset.h b/drivers/phy/apple/usb-t6050/apple_t6050_usb2_reset.h
 new file mode 100644
-index 000000000..503cbb537
+index 000000000000..503cbb537f86
 --- /dev/null
 +++ b/drivers/phy/apple/usb-t6050/apple_t6050_usb2_reset.h
 @@ -0,0 +1,23 @@
@@ -22704,7 +22824,7 @@ index 000000000..503cbb537
 +#endif
 diff --git a/drivers/phy/apple/usb-t6050/apple_t6050_usb3_bist.h b/drivers/phy/apple/usb-t6050/apple_t6050_usb3_bist.h
 new file mode 100644
-index 000000000..3af8fcf2a
+index 000000000000..3af8fcf2a3a1
 --- /dev/null
 +++ b/drivers/phy/apple/usb-t6050/apple_t6050_usb3_bist.h
 @@ -0,0 +1,59 @@
@@ -22769,7 +22889,7 @@ index 000000000..3af8fcf2a
 +#endif
 diff --git a/drivers/phy/apple/usb-t6050/apple_t6050_usb3_pipe.h b/drivers/phy/apple/usb-t6050/apple_t6050_usb3_pipe.h
 new file mode 100644
-index 000000000..f59621524
+index 000000000000..f5962152444b
 --- /dev/null
 +++ b/drivers/phy/apple/usb-t6050/apple_t6050_usb3_pipe.h
 @@ -0,0 +1,145 @@
@@ -22920,7 +23040,7 @@ index 000000000..f59621524
 +#endif
 diff --git a/drivers/phy/apple/usb-t6050/apple_t6050_usb_phy.h b/drivers/phy/apple/usb-t6050/apple_t6050_usb_phy.h
 new file mode 100644
-index 000000000..5c96da7d8
+index 000000000000..5c96da7d82c2
 --- /dev/null
 +++ b/drivers/phy/apple/usb-t6050/apple_t6050_usb_phy.h
 @@ -0,0 +1,286 @@
@@ -23211,7 +23331,7 @@ index 000000000..5c96da7d8
 +}
 +#endif
 diff --git a/drivers/pinctrl/pinctrl-apple-gpio.c b/drivers/pinctrl/pinctrl-apple-gpio.c
-index 767934704..d3c482fa4 100644
+index 7679347046a1..d3c482fa4234 100644
 --- a/drivers/pinctrl/pinctrl-apple-gpio.c
 +++ b/drivers/pinctrl/pinctrl-apple-gpio.c
 @@ -633,6 +633,7 @@ static int apple_gpio_pinctrl_probe(struct platform_device *pdev)
@@ -23223,7 +23343,7 @@ index 767934704..d3c482fa4 100644
  	{ .compatible = "apple,pinctrl", },
  	{ }
 diff --git a/drivers/pmdomain/apple/pmgr-pwrstate.c b/drivers/pmdomain/apple/pmgr-pwrstate.c
-index 5be473160..c47d9518e 100644
+index 5be4731606d9..c47d9518e7bd 100644
 --- a/drivers/pmdomain/apple/pmgr-pwrstate.c
 +++ b/drivers/pmdomain/apple/pmgr-pwrstate.c
 @@ -69,6 +69,44 @@ struct apple_pmgr_ps {
@@ -23341,7 +23461,7 @@ index 5be473160..c47d9518e 100644
  	ret = pm_genpd_init(&ps->genpd, NULL, !active);
  	if (ret < 0) {
 diff --git a/drivers/pmdomain/core.c b/drivers/pmdomain/core.c
-index a721a9363..c1398ecb3 100644
+index a721a936357d..c1398ecb3e21 100644
 --- a/drivers/pmdomain/core.c
 +++ b/drivers/pmdomain/core.c
 @@ -3735,7 +3735,9 @@ void of_genpd_sync_state(struct device_node *np)
@@ -23366,7 +23486,7 @@ index a721a9363..c1398ecb3 100644
  		break;
  
 diff --git a/drivers/power/supply/macsmc-power.c b/drivers/power/supply/macsmc-power.c
-index 1bc237036..71529f1d7 100644
+index 1bc23703654a..71529f1d7792 100644
 --- a/drivers/power/supply/macsmc-power.c
 +++ b/drivers/power/supply/macsmc-power.c
 @@ -11,7 +11,6 @@
@@ -23509,7 +23629,7 @@ index 1bc237036..71529f1d7 100644
  
  static const struct platform_device_id macsmc_power_id[] = {
 diff --git a/drivers/reset/reset-apple-cio.c b/drivers/reset/reset-apple-cio.c
-index af299473a..68734df45 100644
+index af299473a6c8..68734df4528f 100644
 --- a/drivers/reset/reset-apple-cio.c
 +++ b/drivers/reset/reset-apple-cio.c
 @@ -66,6 +66,7 @@
@@ -23588,7 +23708,7 @@ index af299473a..68734df45 100644
  		.compatible = "apple,t8103-cio-reset",
  		.data = &apple_t8103_cio_reset,
 diff --git a/drivers/soc/apple/aop.rs b/drivers/soc/apple/aop.rs
-index 20e78e2b5..df960b05f 100644
+index 20e78e2b542c..df960b05f5e5 100644
 --- a/drivers/soc/apple/aop.rs
 +++ b/drivers/soc/apple/aop.rs
 @@ -37,6 +37,7 @@
@@ -23988,7 +24108,7 @@ index 20e78e2b5..df960b05f 100644
                      data.start_afk()
                  })
 diff --git a/drivers/soc/apple/rtkit.c b/drivers/soc/apple/rtkit.c
-index 536ba515f..7f5572c58 100644
+index 536ba515f826..7f5572c588a0 100644
 --- a/drivers/soc/apple/rtkit.c
 +++ b/drivers/soc/apple/rtkit.c
 @@ -148,6 +148,12 @@ static bool apple_rtkit_coproc_places_buffers(struct apple_rtkit *rtk)
@@ -24047,7 +24167,7 @@ index 536ba515f..7f5572c58 100644
  		return t;
  	else if (t == 0)
 diff --git a/drivers/soc/apple/sart.c b/drivers/soc/apple/sart.c
-index 6cedcb867..d1f964888 100644
+index 6cedcb867c61..d1f96488814f 100644
 --- a/drivers/soc/apple/sart.c
 +++ b/drivers/soc/apple/sart.c
 @@ -63,6 +63,18 @@
@@ -24115,8 +24235,60 @@ index 6cedcb867..d1f964888 100644
  	{
  		.compatible = "apple,t8103-sart",
  		.data = &sart_ops_v2,
+diff --git a/drivers/usb/dwc3/core.c b/drivers/usb/dwc3/core.c
+index 7f68eba95e1f..90682c1e3249 100644
+--- a/drivers/usb/dwc3/core.c
++++ b/drivers/usb/dwc3/core.c
+@@ -2917,23 +2917,47 @@ int dwc3_pm_prepare(struct dwc3 *dwc)
+ }
+ EXPORT_SYMBOL_GPL(dwc3_pm_prepare);
+ 
++/*
++ * On Apple T6050 the generic dwc3 runs a controller the bootloader left
++ * initialised, with no PHY, reset or power-domain description. Its system
++ * suspend (dwc3_core_exit/init) resets the machine (J714s, found by aborting
++ * pm_test=devices at each device in turn), so leave it alone across sleep.
++ * Read-only at runtime so suspend and resume always take the same path.
++ */
++static bool t6050_skip_sleep = true;
++module_param(t6050_skip_sleep, bool, 0444);
++MODULE_PARM_DESC(t6050_skip_sleep, "On Apple T6050, skip the dwc3 system suspend/resume");
++
++static bool dwc3_plat_skip_sleep(void)
++{
++	return READ_ONCE(t6050_skip_sleep) && of_machine_is_compatible("apple,t6050");
++}
++
+ static int dwc3_plat_suspend(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return 0;
+ 	return dwc3_pm_suspend(dev_get_drvdata(dev));
+ }
+ 
+ static int dwc3_plat_resume(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return 0;
+ 	return dwc3_pm_resume(dev_get_drvdata(dev));
+ }
+ 
+ static void dwc3_plat_complete(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return;
+ 	dwc3_pm_complete(dev_get_drvdata(dev));
+ }
+ 
+ static int dwc3_plat_prepare(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return 0;
+ 	return dwc3_pm_prepare(dev_get_drvdata(dev));
+ }
+ #else
 diff --git a/drivers/usb/dwc3/dwc3-apple.c b/drivers/usb/dwc3/dwc3-apple.c
-index 349faf22f..8bf5811b9 100644
+index 349faf22f522..8bf5811b9547 100644
 --- a/drivers/usb/dwc3/dwc3-apple.c
 +++ b/drivers/usb/dwc3/dwc3-apple.c
 @@ -99,7 +99,8 @@
@@ -24315,7 +24487,7 @@ index 349faf22f..8bf5811b9 100644
  	case DWC3_APPLE_DEVICE:
  		ret = dwc3_gadget_init(&appledwc->dwc);
 diff --git a/drivers/video/fbdev/core/fbcon.c b/drivers/video/fbdev/core/fbcon.c
-index 01715873e..05cbab5d6 100644
+index 01715873ea49..05cbab5d60e0 100644
 --- a/drivers/video/fbdev/core/fbcon.c
 +++ b/drivers/video/fbdev/core/fbcon.c
 @@ -73,6 +73,9 @@
@@ -24343,7 +24515,7 @@ index 01715873e..05cbab5d6 100644
  		for (i = first_fb_vc; i <= last_fb_vc; i++)
  			con2fb_map[i] = -1;
 diff --git a/include/linux/pci.h b/include/linux/pci.h
-index 5cec6d838..c0d76d93a 100644
+index 5cec6d838b3f..c0d76d93a78f 100644
 --- a/include/linux/pci.h
 +++ b/include/linux/pci.h
 @@ -1559,6 +1559,7 @@ void set_pcie_hotplug_bridge(struct pci_dev *pdev);
@@ -24355,7 +24527,7 @@ index 5cec6d838..c0d76d93a 100644
  
  /* Vital Product Data routines */
 diff --git a/include/linux/soc/apple/dart.h b/include/linux/soc/apple/dart.h
-index 2c166c70d..0ef830106 100644
+index 2c166c70dfc6..0ef830106917 100644
 --- a/include/linux/soc/apple/dart.h
 +++ b/include/linux/soc/apple/dart.h
 @@ -8,6 +8,7 @@
@@ -24379,7 +24551,7 @@ index 2c166c70d..0ef830106 100644
 +
  #endif
 diff --git a/include/linux/soc/apple/rtkit.h b/include/linux/soc/apple/rtkit.h
-index 35508001f..edf4cecbc 100644
+index 35508001fbea..edf4cecbcffd 100644
 --- a/include/linux/soc/apple/rtkit.h
 +++ b/include/linux/soc/apple/rtkit.h
 @@ -67,6 +67,13 @@ struct apple_rtkit_inherited_buffer {
@@ -24397,7 +24569,7 @@ index 35508001f..edf4cecbc 100644
   * Struct to represent implementation-specific RTKit operations.
   *
 diff --git a/include/net/bluetooth/hci_core.h b/include/net/bluetooth/hci_core.h
-index 68ff959be..050232842 100644
+index 68ff959be8ca..0502328425df 100644
 --- a/include/net/bluetooth/hci_core.h
 +++ b/include/net/bluetooth/hci_core.h
 @@ -666,6 +666,8 @@ struct hci_dev {
@@ -24410,7 +24582,7 @@ index 68ff959be..050232842 100644
  
  #define hci_set_quirk(hdev, nr) set_bit((nr), (hdev)->quirk_flags)
 diff --git a/init/main.c b/init/main.c
-index 31f2bf549..2106e2244 100644
+index 31f2bf54976a..2106e22446d3 100644
 --- a/init/main.c
 +++ b/init/main.c
 @@ -112,6 +112,9 @@
@@ -24453,7 +24625,7 @@ index 31f2bf549..2106e2244 100644
  		ret = run_init_process(ramdisk_execute_command);
  		if (!ret)
 diff --git a/net/bluetooth/hci_sync.c b/net/bluetooth/hci_sync.c
-index 0b4dfda2b..34027b509 100644
+index 0b4dfda2bbed..34027b50941a 100644
 --- a/net/bluetooth/hci_sync.c
 +++ b/net/bluetooth/hci_sync.c
 @@ -2306,6 +2306,15 @@ static int hci_le_set_scan_enable_sync(struct hci_dev *hdev, u8 val,
@@ -24473,7 +24645,7 @@ index 0b4dfda2b..34027b509 100644
  		return hci_le_set_ext_scan_enable_sync(hdev, val, filter_dup);
  
 diff --git a/rust/bindings/bindings_helper.h b/rust/bindings/bindings_helper.h
-index b7d6e19cc..47477984e 100644
+index b7d6e19cc22a..47477984ed56 100644
 --- a/rust/bindings/bindings_helper.h
 +++ b/rust/bindings/bindings_helper.h
 @@ -160,10 +160,12 @@ const u32 RUST_CONST_HELPER_APPLE_RTKIT_COPROC_PLACES_BUFFERS = APPLE_RTKIT_COPR
@@ -24490,7 +24662,7 @@ index b7d6e19cc..47477984e 100644
  const snd_ctl_elem_iface_t BINDINGS_SNDRV_CTL_ELEM_IFACE_MIXER = SNDRV_CTL_ELEM_IFACE_MIXER;
  
 diff --git a/rust/kernel/soc/apple/rtkit.rs b/rust/kernel/soc/apple/rtkit.rs
-index ac9d7ab50..e8a134ee0 100644
+index ac9d7ab5032b..e8a134ee07b2 100644
 --- a/rust/kernel/soc/apple/rtkit.rs
 +++ b/rust/kernel/soc/apple/rtkit.rs
 @@ -250,6 +250,13 @@ impl<T: Operations> RtKit<T> {
@@ -24541,7 +24713,7 @@ index ac9d7ab50..e8a134ee0 100644
      pub fn boot(self: Pin<&mut Self>) -> Result {
          // SAFETY: `rtk` is valid per the type invariant.
 diff --git a/sound/soc/apple/aop_audio.rs b/sound/soc/apple/aop_audio.rs
-index 4326ea6e0..7c069482b 100644
+index 4326ea6e0d3c..7c069482b4a2 100644
 --- a/sound/soc/apple/aop_audio.rs
 +++ b/sound/soc/apple/aop_audio.rs
 @@ -1063,14 +1063,15 @@ unsafe impl Sync for SndSocAopDriver {}
@@ -24586,7 +24758,7 @@ index 4326ea6e0..7c069482b 100644
      }
  
 diff --git a/sound/soc/apple/aop_t8140.rs b/sound/soc/apple/aop_t8140.rs
-index 263f60248..aebabce95 100644
+index 263f60248ac0..aebabce956e1 100644
 --- a/sound/soc/apple/aop_t8140.rs
 +++ b/sound/soc/apple/aop_t8140.rs
 @@ -119,6 +119,216 @@
@@ -26287,7 +26459,7 @@ index 263f60248..aebabce95 100644
                  spkr_start_work <- new_work!("SndSocT8140AopData::spkr_start_work"),
                  hpai_start_work <- new_work!("SndSocT8140AopData::hpai_start_work"),
 diff --git a/sound/soc/apple/macaudio.c b/sound/soc/apple/macaudio.c
-index ba04b1eec..b1701a536 100644
+index ba04b1eec614..b1701a5364c6 100644
 --- a/sound/soc/apple/macaudio.c
 +++ b/sound/soc/apple/macaudio.c
 @@ -94,6 +94,12 @@ struct macaudio_platform_cfg {

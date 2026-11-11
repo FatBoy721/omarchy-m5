@@ -1,0 +1,76 @@
+From 46e45fdef6db93e0eb74877e38128a2d29a4488d Mon Sep 17 00:00:00 2001
+From: FatBoy721 <203330788+FatBoy721@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 21:05:32 -0500
+Subject: [PATCH 15/16] usb: dwc3: Skip system sleep on Apple T6050
+
+With the NVMe fix in place, the next reset in the same bisection was
+the dwc3 system suspend. On T6050 the generic dwc3 runs a controller the
+bootloader left initialised, with no PHY, reset or power-domain
+description, and dwc3_core_exit()/dwc3_core_init() across sleep resets
+the machine.
+
+Leave the controller alone across system sleep on T6050: prepare,
+suspend, resume and complete return early. The t6050_skip_sleep
+parameter (default on) turns this off from the kernel command line. It
+is read-only at runtime, so suspend and resume always agree.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/usb/dwc3/core.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/drivers/usb/dwc3/core.c b/drivers/usb/dwc3/core.c
+index 7f68eba95e1f..90682c1e3249 100644
+--- a/drivers/usb/dwc3/core.c
++++ b/drivers/usb/dwc3/core.c
+@@ -2917,23 +2917,47 @@ int dwc3_pm_prepare(struct dwc3 *dwc)
+ }
+ EXPORT_SYMBOL_GPL(dwc3_pm_prepare);
+ 
++/*
++ * On Apple T6050 the generic dwc3 runs a controller the bootloader left
++ * initialised, with no PHY, reset or power-domain description. Its system
++ * suspend (dwc3_core_exit/init) resets the machine (J714s, found by aborting
++ * pm_test=devices at each device in turn), so leave it alone across sleep.
++ * Read-only at runtime so suspend and resume always take the same path.
++ */
++static bool t6050_skip_sleep = true;
++module_param(t6050_skip_sleep, bool, 0444);
++MODULE_PARM_DESC(t6050_skip_sleep, "On Apple T6050, skip the dwc3 system suspend/resume");
++
++static bool dwc3_plat_skip_sleep(void)
++{
++	return READ_ONCE(t6050_skip_sleep) && of_machine_is_compatible("apple,t6050");
++}
++
+ static int dwc3_plat_suspend(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return 0;
+ 	return dwc3_pm_suspend(dev_get_drvdata(dev));
+ }
+ 
+ static int dwc3_plat_resume(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return 0;
+ 	return dwc3_pm_resume(dev_get_drvdata(dev));
+ }
+ 
+ static void dwc3_plat_complete(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return;
+ 	dwc3_pm_complete(dev_get_drvdata(dev));
+ }
+ 
+ static int dwc3_plat_prepare(struct device *dev)
+ {
++	if (dwc3_plat_skip_sleep())
++		return 0;
+ 	return dwc3_pm_prepare(dev_get_drvdata(dev));
+ }
+ #else
+-- 
+2.56.0
+

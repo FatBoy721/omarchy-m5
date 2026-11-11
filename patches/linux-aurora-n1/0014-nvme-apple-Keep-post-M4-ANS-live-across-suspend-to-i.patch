@@ -1,0 +1,69 @@
+From d83de6bba50761370767170fdb46b67fec507d60 Mon Sep 17 00:00:00 2001
+From: FatBoy721 <203330788+FatBoy721@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 21:05:32 -0500
+Subject: [PATCH 14/16] nvme: apple: Keep post-M4 ANS live across
+ suspend-to-idle
+
+On the J714s (M5 Pro), closing the lid reset the machine. Aborting
+pm_test=devices at each device in turn pinned the first reset on the
+NVMe suspend: disabling the post-M4 ANS controller and rebuilding its
+queues across system sleep takes the machine down.
+
+For suspend-to-idle the controller does not need to go down at all:
+user space is frozen and keep_link_powered() already holds its power
+domains on. Return early there, before the controller is moved to
+RESETTING. anv->suspended stays false, so resume returns early too.
+
+Sleep through firmware (pm_suspend_via_firmware()) keeps the old path.
+t6050_keep_live=0 restores it for suspend-to-idle as well.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/nvme/host/apple.c | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/drivers/nvme/host/apple.c b/drivers/nvme/host/apple.c
+index ef52797a0e3e..c412facdd38f 100644
+--- a/drivers/nvme/host/apple.c
++++ b/drivers/nvme/host/apple.c
+@@ -38,6 +38,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/pm_domain.h>
+ #include <linux/soc/apple/rtkit.h>
++#include <linux/suspend.h>
+ #include <linux/soc/apple/sart.h>
+ #include <linux/reset.h>
+ #include <linux/time64.h>
+@@ -2658,11 +2659,29 @@ static void apple_nvme_keep_link_powered(struct apple_nvme *anv)
+ 		device_set_awake_path(anv->pd_dev[i]);
+ }
+ 
++/*
++ * On post-M4 ANS (needs_ioq_registers), disabling and rebuilding the controller
++ * across system sleep resets the machine (J714s, found by aborting
++ * pm_test=devices at each device in turn). For suspend-to-idle the controller
++ * can stay live: user space is frozen and keep_link_powered() holds its power
++ * domains on. Resume needs no change: anv->suspended stays false, so it
++ * returns early.
++ */
++static bool t6050_keep_live = true;
++module_param(t6050_keep_live, bool, 0644);
++MODULE_PARM_DESC(t6050_keep_live, "Keep post-M4 ANS NVMe live across suspend-to-idle (no controller disable/rebuild)");
++
+ static int apple_nvme_suspend(struct device *dev)
+ {
+ 	struct apple_nvme *anv = dev_get_drvdata(dev);
+ 	int ret;
+ 
++	if (anv->hw->needs_ioq_registers && READ_ONCE(t6050_keep_live) &&
++	    !pm_suspend_via_firmware()) {
++		apple_nvme_keep_link_powered(anv);
++		return 0;
++	}
++
+ 	if (anv->hw->needs_ioq_registers) {
+ 		if (!nvme_change_ctrl_state(&anv->ctrl, NVME_CTRL_RESETTING))
+ 			return -EBUSY;
+-- 
+2.56.0
+
