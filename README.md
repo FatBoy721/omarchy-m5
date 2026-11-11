@@ -21,8 +21,8 @@ test it on a real J714s, and say who made each part.
 | GPU (Vulkan, and the desktop renders on it) | ✅ | TripleU613, betizzel, DjDeveloperr, rolotrealanis98 |
 | Screen: full panel incl. the notch, 3024x1964 at 120 Hz | ✅ in the image | FatBoy721, edimoldovan, rolotrealanis98, betizzel |
 | Hardware video decode (H.264/H.265) | ✅ in the image | DjDeveloperr |
-| Lid angle sensor | ✅ next image | DjDeveloperr |
-| Ambient light sensor | 🟡 next image; needs this Mac's calibration, saved once from macOS with [`tools/als-calibration/save-als-cal.py`](tools/als-calibration/save-als-cal.py) | DjDeveloperr, aurora-silicon |
+| Lid angle sensor | ✅ in the image | DjDeveloperr |
+| Ambient light sensor | 🟡 in the image; needs this Mac's calibration, saved once from macOS with [`tools/als-calibration/save-als-cal.py`](tools/als-calibration/save-als-cal.py) | DjDeveloperr, aurora-silicon |
 | Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
 | USB-C ports, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
@@ -47,8 +47,8 @@ Steps:
    follow [`docs/bringup.md`](docs/bringup.md). This is the only fiddly part.
 2. **Download the image** on your PC:
    ```sh
-   gh release download j714s-developer-image-2026.11.11-3 -R betizzel/omarchy-m5
-   cat omarchy-2026.11.11-3-*.zip.part0 omarchy-2026.11.11-3-*.zip.part1 \
+   gh release download j714s-developer-image-2026.11.11-4 -R betizzel/omarchy-m5
+   cat omarchy-2026.11.11-4-*.zip.part0 omarchy-2026.11.11-4-*.zip.part1 \
      > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
    sha256sum -c SHA256SUMS --ignore-missing
    ```
