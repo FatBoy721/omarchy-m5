@@ -27,6 +27,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0008 | kernel pkgrel 2 (aurora-n1 0009: the t6050 NVMe compatible U-Boot needs) and the gcc-built `uboot-aurora` (the cross build's arm64 `image_size` was refused by m1n1) |
 | 0009 | one image for every J714s: kernel pkgrel 3 (aurora-n1 0010, default DTB `t6050-j714s-gpu-adt-simpledrm.dtb`: GPU voltage bins from the ADT) and m1n1-aurora `j714s4` (m1n1-installer 0005 passes them) |
 | 0010 | speakers, microphones, headphone jack and an always-on trackpad: kernel pkgrel 4 (aurora-n1 0011-0012, AOP audio drivers) and `omarchy-aurora-firmware` `j714s3` (edimoldovan's J714 speaker-safety profile and graphs) |
+| 0011 | lid sleep, quiet idle clocks, N1 6 GHz: kernel pkgrel 5 (aurora-n1 0013-0016 from FatBoy721 and rolotrealanis98, `UCLAMP_TASK`) and `omarchy-aurora-firmware` `j714s4` (edimoldovan's realtime uclamp sysctl and N1 iwd default) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
