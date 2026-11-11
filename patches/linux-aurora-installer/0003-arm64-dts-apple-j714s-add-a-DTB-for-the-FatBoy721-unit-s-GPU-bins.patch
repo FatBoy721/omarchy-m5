@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: FatBoy721 <203330788+FatBoy721@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 22:36:53 -0500
+Subject: [PATCH] arm64: dts: apple: j714s: add a DTB for the FatBoy721 unit's GPU bins
+
+t6050-j714s-fatboy721.dtb is the installer J714s tree (0001 + 0002) with
+the GPU node naming this unit's bins ("apple,j714s-gpu-fatboy721",
+linux-aurora-n1/0014), the same way t6050-j714s-gpu-tripleu.dts names
+TripleU613's. Nothing else changes: the installer m1n1 already fills the
+GPU hand-off on this tree, and a kernel without 0014 matches only
+"apple,agx-g17s" and refuses the GPU as before.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/apple/Makefile                   |  1 +
+ arch/arm64/boot/dts/apple/t6050-j714s-fatboy721.dts | 11 +++++++++++
+ 2 files changed, 12 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/Makefile b/arch/arm64/boot/dts/apple/Makefile
+--- a/arch/arm64/boot/dts/apple/Makefile
++++ b/arch/arm64/boot/dts/apple/Makefile
+@@ -125,3 +125,4 @@
+ # Explicit cold-ANE lead test; never select as the production board DTB.
+ 
+ dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s.dtb
++dtb-$(CONFIG_ARCH_APPLE) += t6050-j714s-fatboy721.dtb
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-fatboy721.dts b/arch/arm64/boot/dts/apple/t6050-j714s-fatboy721.dts
+new file mode 100644
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-fatboy721.dts
+@@ -0,0 +1,11 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * FatBoy721's J714s unit: the installer board tree (with 0002's DCP nodes) and
++ * this unit's own fused GPU voltage bins, J714S_FATBOY721 in linux-aurora-n1/0014
++ * (ioreg sgx capture ed8f9ece...). GPU bins are per chip; boot this only on that unit.
++ */
++#include "t6050-j714s.dts"
++
++&gpu {
++	compatible = "apple,j714s-gpu-fatboy721", "apple,agx-g17s";
++};
+-- 
+2.47.0

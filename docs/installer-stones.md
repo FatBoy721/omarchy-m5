@@ -214,7 +214,7 @@ LUKS2 root. No tethering and no hypervisor.
 | DTB | the installer tree (0001) + [`linux-aurora-installer/0002`](../patches/linux-aurora-installer/) (internal DCP nodes, all disabled until the loader hands over) |
 | boot.bin config | `chosen.asahi,t6050-display=1` |
 | U-Boot | unchanged from the installer image (the native build that boots this unit) |
-| Kernel | `aurora-n1` (0001-0008) + [`linux-aurora-n1/0010`](../patches/linux-aurora-n1/) + `CONFIG_DRM_APPLE=y` (sleep: + 0011-0013, `CONFIG_INPUT_MACSMC_INPUT=m`) |
+| Kernel | `aurora-n1` (0001-0008) + [`linux-aurora-n1/0010`](../patches/linux-aurora-n1/) + `CONFIG_DRM_APPLE=y` (sleep: + 0011-0013, `CONFIG_INPUT_MACSMC_INPUT=m`; GPU: + 0014, `CONFIG_DRM_ASAHI=m`; battery: `CONFIG_MACSMC_POWER=m`) |
 | Hyprland | 0.57.1 + [`patches/hyprland/0001`](../patches/hyprland/) (Omarchy's PKGBUILD, same build ID, so the titlebars plugin still loads) |
 
 Tests, one change per boot:
@@ -265,5 +265,38 @@ yet: this kernel has no battery driver (`/sys/class/power_supply` is empty),
 and the NVMe, dwc3 and the two DARTs now stay powered. Wi-Fi once failed to
 get an IP after a `platform`-level test resume, and not after a real sleep since.
 
-Still open on this unit: GPU is off (no per-unit `apple,j714s-gpu*` bins yet for
-this chip), so rendering is on llvmpipe. LUKS asks for the password on a text console, not Plymouth.
+**GPU on this unit.** Its bins differ from both carried J714s units, so they were read
+from its own ADT in macOS 27.3 beta 1 (`ioreg -l -w0 -p IODeviceTree -r -n sgx`, plus the
+nodes with `afr-perf-states` / `cs-perf-states`) and added as `J714S_FATBOY721`
+([`linux-aurora-n1/0014`](../patches/linux-aurora-n1/)), selected by
+`apple,j714s-gpu-fatboy721` in `t6050-j714s-fatboy721.dtb`
+([`linux-aurora-installer/0003`](../patches/linux-aurora-installer/); identical to the
+installer + 0002 tree except that compatible). The installer m1n1 fills the hand-off as
+it is; nothing in boot.bin changes but the DTB.
+
+| Check | Result |
+| --- | --- |
+| Probe | `GPU firmware build: 26C5035r for T6050 G17S, primary then secondary`, both initdata acknowledged, `[drm] Initialized aurora`, `renderD128`, no errors |
+| Mesa (`mesa-aurora` 043a4c5, `ASAHI_M5_BRINGUP=1`) | `Apple M5 Pro (G17S B1)` native, and zink on `AURORA_BOREALIS` Vulkan |
+| Hyprland (DCP scanout on `card1`, render on the GPU) | `CDRMRenderer(drm): Using device /dev/dri/card0`; es2gears 118.5-119.2 FPS (78 on llvmpipe); Hyprland ~4 % CPU (was ~1260 %) |
+| Battery | ~12-13 W at the desktop (was ~30 W on llvmpipe) |
+
+Things that bit, for the next unit:
+
+- **The SDDM greeter runs its own Hyprland as user `sddm`**, outside the user
+  `environment.d` where `mesa-aurora` sets `ASAHI_M5_BRINGUP=1`. With the GPU loaded,
+  Mesa refuses it there ("Apple G17S uses the HAL300 command stream, which this driver
+  does not implement"), the greeter's Hyprland aborts, and log-out leaves a black
+  screen. Fix: an `/etc/sddm.conf.d/` drop-in with
+  `CompositorCommand=env ASAHI_M5_BRINGUP=1 start-hyprland -- --config /usr/share/sddm/hyprland.lua`.
+- **Load the GPU before the session starts** (`/etc/modules-load.d/aurora.conf`). A
+  Hyprland started without a render node stays on llvmpipe, and so do its clients.
+- Leave the `kms` hook out of the UKI (`mkinitcpio -S kms`): `DRM_APPLE` is built in, so
+  the initramfs needs no DRM modules and the image stays small enough for the 500 MB ESP.
+- **Plymouth works with the DCP**: with the normal `quiet splash` command line the
+  Omarchy password screen shows on `apple-drm` at boot (the GPU module is not in the
+  initramfs, so Plymouth never picks the render-only `aurora` card).
+- **Battery**: `CONFIG_MACSMC_POWER=m` was off in this config; with it `macsmc-battery`
+  and `macsmc-ac` read correctly (capacity, health, power, time to empty).
+
+Still open on this unit: power drawn while asleep is not measured yet.

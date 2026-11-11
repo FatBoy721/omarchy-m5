@@ -1,0 +1,143 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: FatBoy721 <203330788+FatBoy721@users.noreply.github.com>
+Date: Tue, 10 Nov 2026 22:36:22 -0500
+Subject: [PATCH] drm/asahi: g17: add the J714s GPU bins of a third unit (FatBoy721)
+
+GPU voltage bins are fused per chip, and this J714s's differ from both
+units already carried (betizzel's J714S, TripleU613's J714S_TRIPLEU) in
+almost every active state. Add its tables as J714S_FATBOY721, selected
+only by the "apple,j714s-gpu-fatboy721" GPU compatible, exactly as the
+TripleU613 unit is (G17J714s probe, so the fuse-mask guard applies).
+
+The tables come from that Mac's own ADT, read in macOS 27.3 beta 1
+(26C5035r) with `ioreg -l -w0 -p IODeviceTree -r -n sgx` and the
+afr-perf-states / cs-perf-states nodes:
+- perf-states holds table 0 then table 1 (= perf-states1); the SRAM
+  tables likewise. 14 states, 0..1620 MHz, top state 1045/1025 mV.
+- afr-perf-states == cs-perf-states (u64 uV/Hz, min SRAM 775000 uV);
+  auxiliary SRAM = max(775 mV, core), as for the other units.
+
+Tested on that unit (stub mBoot-20457.60.65.0.1, DCP at 120 Hz):
+"GPU firmware build: 26C5035r for T6050 G17S", both initdata
+acknowledged, [drm] Initialized aurora, renderD128. Hyprland renders on
+it (CDRMRenderer card0, scanout on apple-drm): es2gears 118.5-119.2 FPS
+(78 on llvmpipe), Hyprland ~4% CPU (was ~1260%), ~12-13 W on battery
+(was ~30 W), no GPU errors.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+  drivers/gpu/drm/asahi/driver.rs             |  4 +++
+  drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs | 51 +++++++++++++++++++++++++++++
+  drivers/gpu/drm/asahi/hw/t6050.rs           |  6 ++++
+  3 files changed, 61 insertions(+)
+
+diff --git a/drivers/gpu/drm/asahi/driver.rs b/drivers/gpu/drm/asahi/driver.rs
+index f3a1ce8a8..9b9584640 100644
+--- a/drivers/gpu/drm/asahi/driver.rs
++++ b/drivers/gpu/drm/asahi/driver.rs
+@@ -183,6 +183,10 @@ macro_rules! asahi_of_device_table {
+                     of::DeviceId::new(c"apple,j714s-gpu-tripleu"),
+                     ProbeConfig::G17J714s(&hw::t6050::CONFIG_J714S_TRIPLEU)
+                 ),
++                (
++                    of::DeviceId::new(c"apple,j714s-gpu-fatboy721"),
++                    ProbeConfig::G17J714s(&hw::t6050::CONFIG_J714S_FATBOY721)
++                ),
+                 (
+                     of::DeviceId::new(c"gpu,t6050"),
+                     ProbeConfig::G17M5
+diff --git a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
+index ca92d7e60..bf53de1a9 100644
+--- a/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
++++ b/drivers/gpu/drm/asahi/g17/fw/m5/initdata.rs
+@@ -1639,6 +1639,27 @@ fn write_relocated_words(
+     (1620, 985, 985),
+ ]);
+ 
++// FatBoy721's J714s unit: ioreg -p IODeviceTree sgx node, macOS 27.3 beta 1 (26C5035r),
++// capture SHA256 ed8f9ece8c72295d7f9325982d1c1cad3cfa9abcc51c94d00c724ee75eb64901.
++// afr-perf-states and cs-perf-states, which are identical (u64 uV/Hz, min SRAM 775000 uV).
++// Auxiliary SRAM follows that 775000 uV floor and the max(floor, core) rule.
++pub(crate) const J714S_FATBOY721_AUX_PERF_STATES: [M5AuxPerfState; 14] = one_lane([
++    (24, 125, 775),
++    (338, 590, 775),
++    (486, 620, 775),
++    (636, 645, 775),
++    (796, 695, 775),
++    (888, 715, 775),
++    (988, 760, 775),
++    (1084, 780, 780),
++    (1182, 795, 795),
++    (1278, 835, 835),
++    (1374, 860, 860),
++    (1470, 900, 900),
++    (1578, 975, 975),
++    (1620, 1005, 1005),
++]);
++
+ /// An auxiliary-domain performance state: MHz, then core and SRAM mV of each of its two voltage
+ /// lanes. A one-lane board leaves the second lane 0.
+ pub(crate) type M5AuxPerfState = (u32, [u32; 2], [u32; 2]);
+@@ -2317,6 +2338,16 @@ pub(crate) struct Board {
+     ..J716S
+ };
+ 
++/// FatBoy721's J714s unit (capture ed8f9ece...): its own fused bins. Selected only by the
++/// "apple,j714s-gpu-fatboy721" GPU compatible. All other fields retain J716S's existing
++/// assumptions, as for the other J714s units.
++pub(crate) const J714S_FATBOY721: Board = Board {
++    perf_states: &J714S_FATBOY721_GPU_PERF_STATES,
++    aux_perf_states: &J714S_FATBOY721_AUX_PERF_STATES,
++    relative_frequency: relative_frequency(&J714S_FATBOY721_GPU_PERF_STATES, 1),
++    ..J716S
++};
++
+ /// J775D's performance controllers run from P3.
+ const J775D_PERF_FLOOR: usize = 3;
+ 
+@@ -2711,6 +2742,26 @@ pub(crate) fn relayout_m5_policy(
+     (1620, 1025, 1010, 1025, 1010),
+ ]);
+ 
++// FatBoy721's J714s unit: ioreg -p IODeviceTree sgx node, macOS 27.3 beta 1 (26C5035r),
++// capture SHA256 ed8f9ece8c72295d7f9325982d1c1cad3cfa9abcc51c94d00c724ee75eb64901.
++// perf-states (table 0, then table 1 = perf-states1) and perf-states-sram / perf-states-sram1, mV.
++pub(crate) const J714S_FATBOY721_GPU_PERF_STATES: [M5PerfState; 14] = two_tables([
++    (0, 125, 125, 775, 775),
++    (338, 590, 605, 775, 775),
++    (486, 635, 635, 775, 775),
++    (636, 670, 670, 775, 775),
++    (796, 720, 720, 775, 775),
++    (888, 735, 730, 775, 775),
++    (988, 765, 760, 775, 775),
++    (1084, 790, 785, 790, 785),
++    (1182, 805, 800, 805, 800),
++    (1278, 845, 840, 845, 840),
++    (1374, 885, 880, 885, 880),
++    (1470, 930, 925, 930, 925),
++    (1578, 1005, 1000, 1005, 1000),
++    (1620, 1045, 1025, 1045, 1025),
++]);
++
+ /// Four-table states (MHz, four core-voltage tables, four SRAM-voltage tables), the rest 0.
+ const fn four_tables(states: [(u32, [u32; 4], [u32; 4]); 14]) -> [M5PerfState; 14] {
+     let mut out = [(0, [0; M5_PERF_LANES], [0; M5_PERF_LANES]); 14];
+diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
+index e89b59497..f7c41f99f 100644
+--- a/drivers/gpu/drm/asahi/hw/t6050.rs
++++ b/drivers/gpu/drm/asahi/hw/t6050.rs
+@@ -155,6 +155,12 @@
+     ..CONFIG
+ };
+ 
++/// FatBoy721's J714s unit (capture ed8f9ece...). Selected only by "apple,j714s-gpu-fatboy721".
++pub(crate) const CONFIG_J714S_FATBOY721: Config = Config {
++    m5: Some(&crate::g17::fw::m5::initdata::J714S_FATBOY721),
++    ..CONFIG
++};
++
+ /// Require actual nonzero fuse masks before starting firmware on the owner J714s.
+ /// The ID describes two clusters of ten physical slots; enabled cores come from the masks.
+ pub(crate) fn j714s_core_masks_valid(id: &G17Id) -> bool {
+-- 
+2.47.0
