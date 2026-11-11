@@ -10,7 +10,9 @@ with the reason and what would bring it back. The 30-minute watch
 | USB4 / Thunderbolt and external displays | DjDeveloperr (#1515), erikwb | Needs the aurora-silicon base above | With the base switch |
 | SD card reader | DjDeveloperr (#1570) | Needs upstream's kernel-trained PCIe port 1 (#1182); open PR, no card read yet | #1570 merges and the base switch |
 | CLPC DRAM floor after idle (memory latency 300 → 110 ns) | DjDeveloperr (#1555, #1556) | Needs upstream's T6050 CLPC driver (#1324); ours has none | With the base switch |
-| Speakers through the AOP (upstream's own audio stack) | DjDeveloperr (#1521, #1554), mic #1557 | Not audible yet by the author's own report; our gathered J716s-style audio already plays | #1554 reports audible playback |
+| Speakers through the AOP (upstream's own audio stack) | DjDeveloperr (#1521, #1554 merged 2026-11-11, mic #1557) | Audible on his J714s now, but it is upstream's T8152 AOP audio driver and speakerguardd on the aurora-silicon base; our gathered J716s-style audio already plays on our base | With the base switch |
+| Touch ID | DjDeveloperr (#1587, on the T6050 SEP profile #1325) | Enrols and verifies on his J714s, but needs the Secure Enclave, which our base has no driver for and which Aura hands over | With the base switch |
+| ProRes engine | DjDeveloperr (#1586, on #1260) | Open, stacked; upstream base | #1586 merges and the base switch |
 | Keyboard backlight off when idle | danielfernau (omacom/omarchy #12558), IronsideXXVI (#18177) | Patches the Omarchy package itself; the image ships stock Omarchy | Either PR merges into omacom/omarchy |
 | Deep sleep (suspend-to-RAM) | IronsideXXVI (J604, M4) | Not working on his own Mac yet; lid sleep (s2idle) already works here | He reports a completed s2r cycle |
 | P-cluster drop to the slowest state when all cores idle | IronsideXXVI (J604 0223/0224/0228) | On the J714s's default schedutil governor idle clusters already sit at their minimum (measured 1.3 GHz); only matters under the performance governor | If we make "performance" a default |
