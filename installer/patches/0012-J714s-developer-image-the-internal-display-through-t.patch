@@ -1,0 +1,265 @@
+From 99c4e71bdbc05c3744d926d17d90c431c4494b2b Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 13:36:25 -0500
+Subject: [PATCH] J714s developer image: the internal display through the DCP
+ at full panel height, GPU-rendered desktop
+
+m1n1-aurora 1.6.1.aurora22.j714s5 hands the DCP over by default and keeps the
+notch rows (betizzel/omarchy-m5 m1n1 0006-0007); linux-aurora
+7.3.0.aurora16.j714s3-6 gives the boot loaders the DCP device tree;
+omarchy-aurora-firmware 20261014.j714s5 sets up the two-card Hyprland
+session; hyprland-m5 0.57.2-2 (a new support package filling the hyprland
+role) is Omarchy's Hyprland with the M5 DCP patches. The runtime installs
+hyprland-m5 as a target, so stock hyprland never installs. All from
+betizzel/omarchy-m5 (650b22d1).
+---
+ .../candidate-package-manifest.json           | 46 ++++++++++++-------
+ .../tools/finish-inputs.py                    |  8 ++--
+ image-builder/bin/build-mac-image             |  5 ++
+ .../candidate-trust/policy.json               |  3 +-
+ image-builder/builder/stage1_qualification.py |  4 +-
+ .../builder/verify_installed_system.py        |  2 +
+ image-builder/test/test_candidate_set.py      |  8 ++--
+ .../test/test_stage1_qualification.py         |  4 +-
+ 8 files changed, 50 insertions(+), 30 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index 33492bb..93f6032 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-c8720b0397b2",
++  "set": "j714s-dev-runtime-a325d529d822",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -51,6 +51,18 @@
+       },
+       "size_bytes": 382511
+     },
++    {
++      "name": "hyprland-m5",
++      "version": "0.57.2-2",
++      "arch": "aarch64",
++      "filename": "hyprland-m5-0.57.2-2-aarch64.pkg.tar.zst",
++      "sha256": "12e46eb0bb1a956307a3459f05bed5e97500bc8ae802fd44aa5dc383d9edab9d",
++      "source": {
++        "repository": "betizzel/omarchy-m5",
++        "commit": "650b22d1b78b03bf0cdbdb28f7670fa9760828f3"
++      },
++      "size_bytes": 53014468
++    },
+     {
+       "name": "limine-mkinitcpio-hook",
+       "version": "1.40.0-3",
+@@ -66,27 +78,27 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora16.j714s3-5",
++      "version": "7.3.0.aurora16.j714s3-6",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora16.j714s3-5-aarch64.pkg.tar.zst",
+-      "sha256": "5fd1bc3360f24eb1ef4bd95ca97463facbe655c3af81be5f0214b1db997a1702",
++      "filename": "linux-aurora-7.3.0.aurora16.j714s3-6-aarch64.pkg.tar.zst",
++      "sha256": "0f2645f3c62f812300f5cb0cfbacc5c67a84ce32812b7243872b5a265d9c371c",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "ba988ac2a86d172eecb55d22d046c89e2f9fa5b0"
++        "commit": "650b22d1b78b03bf0cdbdb28f7670fa9760828f3"
+       },
+-      "size_bytes": 43195285
++      "size_bytes": 43196642
+     },
+     {
+       "name": "m1n1-aurora",
+-      "version": "1.6.1.aurora22.j714s4-1",
++      "version": "1.6.1.aurora22.j714s5-1",
+       "arch": "aarch64",
+-      "filename": "m1n1-aurora-1.6.1.aurora22.j714s4-1-aarch64.pkg.tar.zst",
+-      "sha256": "1b93d16c82281e3f0bbd76ef6bde2ec3c4dc4446420d334b2d4b3f1181733468",
++      "filename": "m1n1-aurora-1.6.1.aurora22.j714s5-1-aarch64.pkg.tar.zst",
++      "sha256": "e1c39643e0d4a4e4fbadaa7ffa7445e191fe1316b36ff5c5b94325f7dd965364",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "3da5a93408d08cdfb060f58b0b3bdc61952dda46"
++        "commit": "650b22d1b78b03bf0cdbdb28f7670fa9760828f3"
+       },
+-      "size_bytes": 1999025
++      "size_bytes": 1999764
+     },
+     {
+       "name": "mesa-aurora",
+@@ -114,15 +126,15 @@
+     },
+     {
+       "name": "omarchy-aurora-firmware",
+-      "version": "20261014.j714s4-1",
++      "version": "20261014.j714s5-1",
+       "arch": "aarch64",
+-      "filename": "omarchy-aurora-firmware-20261014.j714s4-1-aarch64.pkg.tar.zst",
+-      "sha256": "f3da713e36e223345e3c524614d7e1398c2b72662e5390fb64850304e5e2b2f5",
++      "filename": "omarchy-aurora-firmware-20261014.j714s5-1-aarch64.pkg.tar.zst",
++      "sha256": "b67fe7833740a0c781473c42c35bb909101397a689af66035701d5232b091136",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "ba988ac2a86d172eecb55d22d046c89e2f9fa5b0"
++        "commit": "650b22d1b78b03bf0cdbdb28f7670fa9760828f3"
+       },
+-      "size_bytes": 21822
++      "size_bytes": 23053
+     },
+     {
+       "name": "omarchy-mac",
+@@ -204,5 +216,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "c8720b0397b2eb0799a298cb497cbb9f0056c493945135fdc5790d5e9be72260"
++  "set_sha256": "a325d529d8226826efbe0860a1863a7d716c2f6b0536faab147ae35838575ade"
+ }
+diff --git a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+index f6df51b..054ccf0 100644
+--- a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
++++ b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+@@ -157,8 +157,10 @@ def main() -> int:
+                 raise ValueError(f'{name} archive must be a regular file')
+             if candidate.member(path, candidate.REVISION_FILES[name]).decode().strip() != runtime_source['commit']:
+                 raise ValueError(f'{name} does not record the pinned runtime source')
+-        if len(records) != 15 or len({row['name'] for row in records}) != 15:
+-            raise ValueError('candidate set must contain the checked-in 15-package manifest')
++        # One package per role the developer profile names (16 since hyprland-m5)
++        roles = len(policy['runtime_packages'] + policy['boot_packages'] + policy['support_packages'])
++        if len(records) != roles or len({row['name'] for row in records}) != roles:
++            raise ValueError(f'candidate set must contain the checked-in {roles}-package manifest')
+         if candidate.digest(trust / 'public.asc') != policy['public_key_sha256']:
+             raise ValueError('profile public-key fingerprint differs from the policy')
+         validate_signer(args.signing_home, policy)
+@@ -195,7 +197,7 @@ def main() -> int:
+         environment = {**os.environ, 'CANDIDATE_SIGNING_GNUPGHOME': str(args.signing_home)}
+         run('bash', str(tool), 'sign', str(manifest_path), str(candidate_dir), env=environment)
+         summary = candidate.describe(candidate_dir, profile=args.profile)
+-        if len(summary['packages']) != 15 or summary['signer'] != policy['primary_fingerprint'].upper():
++        if len(summary['packages']) != roles or summary['signer'] != policy['primary_fingerprint'].upper():
+             raise ValueError('signed set did not pass developer profile admission')
+ 
+         validate_recovery(args.recovery, recovery['inventory_sha256'])
+diff --git a/image-builder/bin/build-mac-image b/image-builder/bin/build-mac-image
+index f2dcbd6..c9e7d45 100755
+--- a/image-builder/bin/build-mac-image
++++ b/image-builder/bin/build-mac-image
+@@ -846,6 +846,9 @@ available_base() {
+   unavailable=()
+   local output
+   while read -r name; do
++    # A J714s set's hyprland-m5 (Omarchy's Hyprland with the M5 DCP patches) fills the
++    # hyprland role; install_runtime makes it a target, so stock hyprland never installs.
++    [[ $name == hyprland && -n $(candidate_archive hyprland-m5) ]] && continue
+     request=$(qualified "$name")
+     if output=$(target_pacman -Sp --print-format x "$request" 2>&1); then
+       base_names+=("$request")
+@@ -1002,6 +1005,8 @@ install_runtime() {
+   # desktop's mesa dependency, so stock mesa never installs. The Apple set
+   # cannot replace it later without answering a conflict prompt.
+   mapfile -t graphics < <(qualified mesa-aurora vulkan-aurora)
++  # hyprland-m5 likewise satisfies the desktop's hyprland dependency (J714s DCP)
++  [[ -z $(candidate_archive hyprland-m5) ]] || graphics+=("$(qualified hyprland-m5)")
+   mount_api
+   target_pacman -S "$(qualified omarchy)" "${base_names[@]}" "${graphics[@]}" >>"$logs/install.log" 2>&1 ||
+     fail "could not install the runtime (logs/install.log)"
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+index 690223c..f430312 100644
+--- a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
++++ b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+@@ -86,8 +86,7 @@
+     "omarchy-aurora-firmware",
+     "mesa-aurora",
+     "vulkan-aurora",
+-    "aurora-bless"
+-  ],
++    "aurora-bless", "hyprland-m5"],
+   "device_trees": [
+     "t6000-j314s",
+     "t6000-j316s",
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index 8ae21db..7735f21 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -18,8 +18,8 @@ from image_profile import select as select_image_profile
+ COMMON_STAGE1 = "esp/aurora/stage1.bin"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+-J714S_KERNEL_VERSION = "7.3.0.aurora16.j714s3-5"
+-J714S_KERNEL_RELEASE = "7.3.0-16.j714s3-5-j714s-merged-ARCH"
++J714S_KERNEL_VERSION = "7.3.0.aurora16.j714s3-6"
++J714S_KERNEL_RELEASE = "7.3.0-16.j714s3-6-j714s-merged-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
+ # What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
+ # with on bare metal, besides the budgets: PMGR domains read-only except the ones its
+diff --git a/image-builder/builder/verify_installed_system.py b/image-builder/builder/verify_installed_system.py
+index 4a5b19a..bf028d9 100755
+--- a/image-builder/builder/verify_installed_system.py
++++ b/image-builder/builder/verify_installed_system.py
+@@ -246,6 +246,8 @@ AURORA_REPLACEMENTS = {
+     "aurora-bless": {"asahi-bless"},
+     "aurora-audio": {"asahi-audio"},
+     "alsa-ucm-conf-aurora": {"alsa-ucm-conf-asahi"},
++    # Omarchy's Hyprland with the M5 DCP patches (alpha-only primary plane, direct-scanout latch)
++    "hyprland-m5": {"hyprland"},
+ }
+ 
+ 
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index 1597285..d2991eb 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -102,7 +102,7 @@ class CandidateSetTest(unittest.TestCase):
+         summary = self.verify()
+         self.assertIn("uboot-aurora", {p["name"] for p in summary["packages"]})
+ 
+-    def test_j714s_developer_profile_accepts_its_exact_15_roles(self):
++    def test_j714s_developer_profile_accepts_its_exact_16_roles(self):
+         from image_profile import select
+ 
+         signer = fixtures.Signer(self.base / "j714s-signer")
+@@ -112,8 +112,8 @@ class CandidateSetTest(unittest.TestCase):
+                        public_key_sha256=c.digest(signer.trust / "public.asc"))
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+-        self.assertEqual(len(names), 15)
+-        release = "7.3.0-16.j714s3-5-j714s-merged-ARCH"
++        self.assertEqual(len(names), 16)
++        release = "7.3.0-16.j714s3-6-j714s-merged-ARCH"
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+         kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
+@@ -126,7 +126,7 @@ class CandidateSetTest(unittest.TestCase):
+                     package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+-                                    versions={"linux-aurora": "7.3.0.aurora16.j714s3-5"},
++                                    versions={"linux-aurora": "7.3.0.aurora16.j714s3-6", "hyprland-m5": "0.57.2-2"},
+                                     contents=contents, manifest_edit=developer_sources)
+         output = self.base / "j714s-15-role-import"
+         summary = c.snapshot(input_set, output, receipt, fixtures.SOURCE, trust=signer.trust)
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+index b1b434c..8eda362 100644
+--- a/image-builder/test/test_stage1_qualification.py
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -32,8 +32,8 @@ class Stage1QualificationTest(unittest.TestCase):
+         trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
+         policy = json.loads((trust / 'policy.json').read_text())
+         self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
+-        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora16.j714s3-5')
+-        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-16.j714s3-5-j714s-merged-ARCH')
++        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora16.j714s3-6')
++        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-16.j714s3-6-j714s-merged-ARCH')
+         self.assertEqual(policy['primary_fingerprint'], '0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1')
+         self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
+         self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
+-- 
+2.56.0
+
