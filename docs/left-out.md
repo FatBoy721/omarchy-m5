@@ -13,7 +13,7 @@ with the reason and what would bring it back. The 30-minute watch
 | Speakers through the AOP (upstream's own audio stack) | DjDeveloperr (#1521, #1554 merged 2026-11-11, mic #1557) | Audible on his J714s now, but it is upstream's T8152 AOP audio driver and speakerguardd on the aurora-silicon base; our gathered J716s-style audio already plays on our base | With the base switch |
 | Touch ID | DjDeveloperr (#1587, on the T6050 SEP profile #1325) | Enrols and verifies on his J714s, but needs the Secure Enclave, which our base has no driver for and which Aura hands over | With the base switch |
 | ProRes engine | DjDeveloperr (#1586, on #1260) | Open, stacked; upstream base | #1586 merges and the base switch |
-| Neural Engine (ANE) | DjDeveloperr (linux #1595, aura #168/#169) | Open PRs on the aurora-silicon base and Aura (firmware preload handoff) | They merge and the base switch |
+| Neural Engine (ANE) | DjDeveloperr (linux #1595 merged 2026-11-11, aura #168/#169) | In integration/aurora now, enabled on the J714s; Aura's preload hand-off still open; comes with the upstream base image | The upstream-base image, then aura #169 |
 | Hardware video encode (AVE) | DjDeveloperr (linux #1597, aura #171 merged) | Needs Aura's encoder firmware preload handoff and the aurora-silicon base | #1597 merges and the base switch |
 | Keyboard backlight off when idle | danielfernau (omacom/omarchy #12558), IronsideXXVI (#18177) | Patches the Omarchy package itself; the image ships stock Omarchy | Either PR merges into omacom/omarchy |
 | Deep sleep (suspend-to-RAM) | IronsideXXVI (J604, M4) | Not working on his own Mac yet; lid sleep (s2idle) already works here | He reports a completed s2r cycle |
