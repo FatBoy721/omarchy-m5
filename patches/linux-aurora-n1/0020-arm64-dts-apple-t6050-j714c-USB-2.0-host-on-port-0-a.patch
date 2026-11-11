@@ -1,0 +1,77 @@
+From ee3df02509a1c8f2b260f3883ff3347d194e7629 Mon Sep 17 00:00:00 2001
+From: ed <edimoldovan@gmail.com>
+Date: Mon, 26 Oct 2026 19:07:40 +0100
+Subject: [PATCH 20/23] arm64: dts: apple: t6050-j714c: USB 2.0 host on port 0
+ as on port 2
+
+generic-xhci at usb-drd0 0x2a2280000 (AIC 1419) with its two DARTs at
+0x2a2f00000/0x2a2f80000 (AIC 1423) in ps_atc0_usb, alias usb0.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+(cherry picked from commit 0f8dad35f446e23072698fdd5784784a296113ab)
+---
+ .../boot/dts/apple/t6050-j714c-usb2.dtsi      | 34 +++++++++++++++++--
+ 1 file changed, 31 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+index 5081ad673a69..5ad08d47c184 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+@@ -1,23 +1,51 @@
+ // SPDX-License-Identifier: GPL-2.0+ OR MIT
+ /*
+- * USB 2.0 host on USB-C port 2 of the MacBook Pro 14" (M5 Max, J714c).
++ * USB 2.0 host on USB-C ports 0 and 2 of the MacBook Pro 14" (M5 Max, J714c).
+  *
+  * The T6050 Type-C PHY has no Linux driver yet (see t6050-j714c-usb.dtsi).
+  * The loader leaves the port's usb2phy in USB 2.0 host mode before starting
+  * the kernel (usb_t6050_host_prep) with the controller already flipped to
+  * host, so only the xHCI registers are described, for the generic xHCI
+  * platform driver. Addresses from
+- * the ADT: usb-drd2 0x382280000, dart-usb2 0x382f00000/0x382f80000.
+- * Port 0 follows the same pattern; port 1 is the proxy cable.
++ * the ADT: usb-drd0 0x2a2280000, dart-usb0 0x2a2f00000/0x2a2f80000,
++ * usb-drd2 0x382280000, dart-usb2 0x382f00000/0x382f80000.
++ * Port 1 is the proxy cable.
+  */
+ 
+ / {
+ 	aliases {
++		usb0 = &dwc3_0;
+ 		usb2 = &dwc3_2;
+ 	};
+ };
+ 
+ &soc {
++	dwc3_0: usb@2a2280000 {
++		compatible = "generic-xhci";
++		reg = <0x2 0xa2280000 0x0 0x8000>;
++		interrupts = <AIC_IRQ 1419 IRQ_TYPE_LEVEL_HIGH>;
++		iommus = <&dwc3_0_dart_0 0>, <&dwc3_0_dart_1 1>;
++		power-domains = <&ps_atc0_usb>;
++	};
++
++	dwc3_0_dart_0: iommu@2a2f00000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x2 0xa2f00000 0x0 0xc000>;
++		interrupts = <AIC_IRQ 1423 IRQ_TYPE_LEVEL_HIGH>;
++		power-domains = <&ps_atc0_usb>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x4000 0 0xffff0000>;
++	};
++
++	dwc3_0_dart_1: iommu@2a2f80000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x2 0xa2f80000 0x0 0xc000>;
++		interrupts = <AIC_IRQ 1423 IRQ_TYPE_LEVEL_HIGH>;
++		power-domains = <&ps_atc0_usb>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x4000 0 0xffff0000>;
++	};
++
+ 	dwc3_2: usb@382280000 {
+ 		/*
+ 		 * The loader leaves the controller in host mode with the USB2
+-- 
+2.56.0
+

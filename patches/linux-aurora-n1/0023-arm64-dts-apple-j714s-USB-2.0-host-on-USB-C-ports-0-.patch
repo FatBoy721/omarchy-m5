@@ -1,0 +1,120 @@
+From 88811ee05612194fe5a856b5ee5cbf02b5d4a62e Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 14:55:24 -0500
+Subject: [PATCH 23/23] arm64: dts: apple: j714s: USB 2.0 host on USB-C ports 0
+ and 2 (gathered)
+
+edimoldovan's J714c USB 2.0 host (t6050-j714c-usb2.dtsi, the
+apple,t6050-usb2-phy driver cherry-picked before this) on the J714s, whose
+ports match the J714c's (DjDeveloperr's J714s DT): ATC0 left-back and ATC2
+right become generic xHCI behind their usb2 PHY with the ATC0/ATC2 USB
+domains on; ATC1 stays the m1n1-prepared EEM gadget.
+
+On TripleU613's J714s: both PHYs reach USB 2.0 host mode ('PORTSC 0x2a0
+after 3 flip(s)'), xhci-hcd registers buses 1-4 with their root hubs;
+display, sound, video decode and Wi-Fi unchanged. A device in a port is
+still to be plugged in here (edimoldovan's stick enumerated on his J714c).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ .../boot/dts/apple/t6050-j714s-gpu-adt.dts    |  3 +
+ .../boot/dts/apple/t6050-j714s-usb2.dtsi      | 75 +++++++++++++++++++
+ 2 files changed, 78 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
+index 54d7dd974d19..a15ca3c499dc 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt.dts
+@@ -37,3 +37,6 @@ &gpu {
+ &dwc3_2 { status = "disabled"; };
+ &dwc3_2_dart_0 { status = "disabled"; };
+ &dwc3_2_dart_1 { status = "disabled"; };
++
++/* USB 2.0 host on ports 0 and 2 (edimoldovan J714c); after the disables above */
++#include "t6050-j714s-usb2.dtsi"
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi
+new file mode 100644
+index 000000000000..57708c21d2b5
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-usb2.dtsi
+@@ -0,0 +1,75 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * USB 2.0 host on the J714s's left-back (port 0, ATC0) and right (port 2, ATC2) USB-C ports.
++ *
++ * Gathered from edimoldovan's J714c (edimoldovan/linux-aurora t6050-j714c-gpu-main, the
++ * t6050-j714c-usb2.dtsi of 8e551be961c7..ae65f0d3a88e): each port's apple,t6050-usb2-phy puts the
++ * usb2phy, pipe handler and dwc3 core into USB 2.0 host mode itself (the loader's
++ * usb_t6050_host_prep sequence, so no loader change is needed) and the generic xHCI platform
++ * driver runs the controller. On his J714c a stick enumerated (usb-storage). The J714s has the same
++ * ports at the same ADT addresses (DjDeveloperr's J714s DT: ATC0 left-back, ATC1 left-front,
++ * ATC2 right). Port 1 (ATC1) stays the m1n1-prepared EEM gadget.
++ */
++
++&soc {
++	usb2phy_0: phy@2a2a90000 {
++		compatible = "apple,t6050-usb2-phy";
++		reg = <0x2 0xa2a90000 0x0 0x4000>, <0x2 0xa2a84000 0x0 0x4000>,
++		      <0x2 0xa2280000 0x0 0x11800>;
++		reg-names = "usb2phy", "pipehandler", "core";
++		#phy-cells = <0>;
++		power-domains = <&ps_atc0_usb>;
++	};
++
++	usb2phy_2: phy@382a90000 {
++		compatible = "apple,t6050-usb2-phy";
++		reg = <0x3 0x82a90000 0x0 0x4000>, <0x3 0x82a84000 0x0 0x4000>,
++		      <0x3 0x82280000 0x0 0x11800>;
++		reg-names = "usb2phy", "pipehandler", "core";
++		#phy-cells = <0>;
++		power-domains = <&ps_atc2_usb>;
++	};
++};
++
++&dwc3_0 {
++	compatible = "generic-xhci";
++	reg = <0x2 0xa2280000 0x0 0x8000>;
++	/delete-property/ dr_mode;
++	/delete-property/ maximum-speed;
++	/delete-property/ snps,usb2-gadget-lpm-disable;
++	/delete-property/ snps,dis_u2_susphy_quirk;
++	/delete-property/ snps,dis_u3_susphy_quirk;
++	/delete-property/ snps,dis_enblslpm_quirk;
++	power-domains = <&ps_atc0_usb>;
++	phys = <&usb2phy_0>;
++	phy-names = "usb2-phy";
++	status = "okay";
++};
++
++&dwc3_2 {
++	compatible = "generic-xhci";
++	reg = <0x3 0x82280000 0x0 0x8000>;
++	/delete-property/ dr_mode;
++	/delete-property/ maximum-speed;
++	/delete-property/ snps,usb2-gadget-lpm-disable;
++	/delete-property/ snps,dis_u2_susphy_quirk;
++	/delete-property/ snps,dis_u3_susphy_quirk;
++	/delete-property/ snps,dis_enblslpm_quirk;
++	power-domains = <&ps_atc2_usb>;
++	phys = <&usb2phy_2>;
++	phy-names = "usb2-phy";
++	status = "okay";
++};
++
++&dwc3_0_dart_0 { power-domains = <&ps_atc0_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
++&dwc3_0_dart_1 { power-domains = <&ps_atc0_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
++&dwc3_2_dart_0 { power-domains = <&ps_atc2_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
++&dwc3_2_dart_1 { power-domains = <&ps_atc2_usb>; apple,dma-range = <0x100 0x4000 0 0xffff0000>; status = "okay"; };
++
++/* The ports' USB domains, which the shared tree leaves to m1n1 (it prepares only ATC1) */
++&ps_atc0_common { status = "okay"; };
++&ps_atc0_usb_aon { status = "okay"; };
++&ps_atc0_usb { status = "okay"; };
++&ps_atc2_common { status = "okay"; };
++&ps_atc2_usb_aon { status = "okay"; };
++&ps_atc2_usb { status = "okay"; };
+-- 
+2.56.0
+

@@ -1,0 +1,147 @@
+From e58daf44fd3416c7909689c555512bf5705f1c59 Mon Sep 17 00:00:00 2001
+From: ed <edimoldovan@gmail.com>
+Date: Mon, 26 Oct 2026 18:04:46 +0100
+Subject: [PATCH 19/23] arm64: apple: t6050: USB 2.0 host on port 2 behind the
+ loader's PHY setup
+
+The T6050 Type-C PHY has no Linux driver yet, so the loader leaves the
+free ports' usb2phy in host mode and flips the controller to host
+(usb_t6050_host_prep); the kernel drives only the xHCI registers with
+the generic xHCI platform driver (t6050-j714c-usb2.dtsi, port 2, two
+DARTs). The kernel's boot-time power-on of the four ports' CIO domains
+and atc3_common breaks the parked PHY (the xHCI reset never completes),
+so those five are firmware-owned for now; USB4 will need them driven in
+sequence with the PHY later.
+
+pmgr-pwrstate.c gains t6050_peek= (words printed with the monitor) and
+t6050_hcrst= (a timed xHCI reset early and late in boot), the tools that
+found this.
+
+Verified on J714c: xHCI reset and ready, buses 1 and 2 registered, USB
+3.1 root hub; device enumeration on the port still open.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+(cherry picked from commit 8e551be961c70593c07a0bf312d33c6950ba1ed0)
+---
+ .../boot/dts/apple/t6050-j714c-usb2.dtsi      | 51 +++++++++++++++++++
+ arch/arm64/boot/dts/apple/t6050-pmgr.dtsi     | 11 ++++
+ 2 files changed, 62 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+new file mode 100644
+index 000000000000..5081ad673a69
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714c-usb2.dtsi
+@@ -0,0 +1,51 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * USB 2.0 host on USB-C port 2 of the MacBook Pro 14" (M5 Max, J714c).
++ *
++ * The T6050 Type-C PHY has no Linux driver yet (see t6050-j714c-usb.dtsi).
++ * The loader leaves the port's usb2phy in USB 2.0 host mode before starting
++ * the kernel (usb_t6050_host_prep) with the controller already flipped to
++ * host, so only the xHCI registers are described, for the generic xHCI
++ * platform driver. Addresses from
++ * the ADT: usb-drd2 0x382280000, dart-usb2 0x382f00000/0x382f80000.
++ * Port 0 follows the same pattern; port 1 is the proxy cable.
++ */
++
++/ {
++	aliases {
++		usb2 = &dwc3_2;
++	};
++};
++
++&soc {
++	dwc3_2: usb@382280000 {
++		/*
++		 * The loader leaves the controller in host mode with the USB2
++		 * PHY running (usb_t6050_host_prep); only the xHCI host registers
++		 * are driven here, by the generic xHCI platform driver.
++		 */
++		compatible = "generic-xhci";
++		reg = <0x3 0x82280000 0x0 0x8000>;
++		interrupts = <AIC_IRQ 1483 IRQ_TYPE_LEVEL_HIGH>;
++		iommus = <&dwc3_2_dart_0 0>, <&dwc3_2_dart_1 1>;
++		power-domains = <&ps_atc2_usb>;
++	};
++
++	dwc3_2_dart_0: iommu@382f00000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x3 0x82f00000 0x0 0xc000>;
++		interrupts = <AIC_IRQ 1487 IRQ_TYPE_LEVEL_HIGH>;
++		power-domains = <&ps_atc2_usb>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x4000 0 0xffff0000>;
++	};
++
++	dwc3_2_dart_1: iommu@382f80000 {
++		compatible = "apple,t6050-dart", "apple,t8110-dart";
++		reg = <0x3 0x82f80000 0x0 0xc000>;
++		interrupts = <AIC_IRQ 1487 IRQ_TYPE_LEVEL_HIGH>;
++		power-domains = <&ps_atc2_usb>;
++		#iommu-cells = <1>;
++		apple,dma-range = <0x100 0x4000 0 0xffff0000>;
++	};
++};
+diff --git a/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi b/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi
+index 6abc6278739e..281e2a8b86b5 100644
+--- a/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-pmgr.dtsi
+@@ -290,6 +290,7 @@ ps_atc3_common: power-controller@240 {
+ 		#reset-cells = <0>;
+ 		label = "atc3_common";
+ 		power-domains = <&ps_fab5_soc>;
++		apple,firmware-owned;
+ 	};
+ 
+ 	ps_auss: power-controller@248 {
+@@ -352,6 +353,12 @@ ps_dispext0_cpu: power-controller@278 {
+ 		power-domains = <&ps_dispext0_fe>;
+ 	};
+ 
++/*
++ * atc0-3_cio and atc3_common are left to the firmware for now: the kernel's
++ * boot-time power-on of these domains (2026-10-26, J714c) breaks the USB 2.0
++ * host on the parked Type-C PHY (the xHCI reset never completes). USB4 needs
++ * them driven in sequence with the PHY, by the PHY driver, later.
++ */
+ 	ps_atc0_cio: power-controller@280 {
+ 		compatible = "apple,t6050-pmgr-pwrstate", "apple,t8103-pmgr-pwrstate";
+ 		reg = <0x280 4>;
+@@ -359,6 +366,7 @@ ps_atc0_cio: power-controller@280 {
+ 		#reset-cells = <0>;
+ 		label = "atc0_cio";
+ 		power-domains = <&ps_atc0_common>;
++		apple,firmware-owned;
+ 	};
+ 
+ 	ps_atc0_pcie: power-controller@288 {
+@@ -377,6 +385,7 @@ ps_atc1_cio: power-controller@290 {
+ 		#reset-cells = <0>;
+ 		label = "atc1_cio";
+ 		power-domains = <&ps_atc1_common>;
++		apple,firmware-owned;
+ 	};
+ 
+ 	ps_atc1_pcie: power-controller@298 {
+@@ -476,6 +485,7 @@ ps_atc2_cio: power-controller@2e8 {
+ 		#reset-cells = <0>;
+ 		label = "atc2_cio";
+ 		power-domains = <&ps_atc2_common>;
++		apple,firmware-owned;
+ 	};
+ 
+ 	ps_atc2_pcie: power-controller@2f0 {
+@@ -494,6 +504,7 @@ ps_atc3_cio: power-controller@2f8 {
+ 		#reset-cells = <0>;
+ 		label = "atc3_cio";
+ 		power-domains = <&ps_atc3_common>;
++		apple,firmware-owned;
+ 	};
+ 
+ 	ps_atc3_pcie: power-controller@300 {
+-- 
+2.56.0
+
