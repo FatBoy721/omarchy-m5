@@ -1,4 +1,4 @@
-From 5a03f554365307584a1e0d103f5cba279462c8ab Mon Sep 17 00:00:00 2001
+From 25bbef2de9374e61871c46a96067c0f357564f28 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Wed, 11 Nov 2026 17:02:15 -0500
 Subject: [PATCH] kboot: T6050: hand the GPU and the internal display over on
@@ -15,8 +15,8 @@ its cores, and the T6050 GPU and DCP handoffs only accepted 27.0.
 - DCP: accept 27.3 beta 1 beside 27.0, take its DCP image as the ADT names it (27.0 stays
   pinned), and publish apple,firmware-compat <27 3 0>, the key aurora-silicon/linux #1174
   chooses its 27.3 method table and swap layout by. dcpext engines must run the internal
-  display's image. Ported from TripleU613's J714s m1n1 (patches 0003-0007; betizzel,
-  FatBoy721).
+  display's image. The compat idea follows TripleU613's J714s m1n1 (0004; betizzel,
+  FatBoy721); its notch rows and display default (0006/0007) are not ported.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---

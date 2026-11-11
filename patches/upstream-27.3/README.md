@@ -16,7 +16,7 @@ under `/usr` instead.
 | `0002-aura-t6050-27.3-gpu-dcp-handoff.patch` | aurora-silicon Aura 1669cad0 | Aura knows 27.2 and 27.3 beta 1; its T6050 GPU handoff admits the 27.0, 27.2 and 27.3 beta 1 GPU builds (digests and boot-filled ranges from #1173); its T6050 DCP handoff accepts 27.3 beta 1, takes the DCP image the ADT names and publishes `apple,firmware-compat <27 3 0>` (what #1174 keys its 27.3 table by). Only the firmware gate, image check and compat key are changed; our m1n1's notch rows and display-default handling (m1n1-installer 0006/0007) are not ported, so the full 3024x1964 panel is unverified. |
 
 Kernel branch: `build/linux-up` branch `up-273` (merges 0929f4f5c93b, 8a0eb8647062, fix
-e0516e36058b). Aura branch: `~/m5/work/up/aura` `up-273` (5a03f554).
+e0516e36058b). Aura branch: `~/m5/work/up/aura` `up-273` (25bbef2d).
 
 Still to check on the Mac: GPU firmware up, DCP modeset 3024x1964@120 with the notch rows,
 Wi-Fi (`CONFIG_APPLE_CENTAURI_T6050=m`), trackpad, NVMe.
