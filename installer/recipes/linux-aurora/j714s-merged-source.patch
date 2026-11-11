@@ -3337,10 +3337,10 @@ index 000000000000..94e9def5533f
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
 new file mode 100644
-index 000000000000..3e6af3d48991
+index 000000000000..f611ff967566
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,276 @@
 +// SPDX-License-Identifier: GPL-2.0+ OR MIT
 +/*
 + * J714s audio: the six speaker amps, the headphone jack and the AOP that runs
@@ -3442,6 +3442,20 @@ index 000000000000..3e6af3d48991
 +		 * sense on RX0, cout/cin (the jack) on TX2/RX2, the microphone
 +		 * array on LEAP-S RX0 (Linux channel 2N for TX N, 2N+1 for RX N).
 +		 */
++		/*
++		 * The AOP's sensor services, gathered from DjDeveloperr's aurora-silicon/linux #1542 and
++		 * #1548 (tested on a J714s): "als" is a VD6286 that reports once it has this machine's
++		 * calibration (apple/aop-als-cal.bin, AppleSPUVD6286 CalibrationData under macOS);
++		 * "las" is the lid angle, as on T6020 and T8112.
++		 */
++		aop_als: als {
++			compatible = "apple,t6050-aop-als", "apple,aop-als";
++		};
++
++		aop_las: las {
++			compatible = "apple,t6050-aop-las", "apple,aop-las";
++		};
++
 +		aop_audio: audio {
 +			compatible = "apple,t6050-aop-audio";
 +			dmas = <&admac_base_ns 0>, <&admac_base_ns 1>,

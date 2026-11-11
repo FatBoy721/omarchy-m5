@@ -1,0 +1,48 @@
+From 9dcff3d1cd3b2a2d5b65ce2337533f817e6d17c6 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 14:25:37 -0500
+Subject: [PATCH] arm64: dts: apple: j714s: the AOP's ambient light and lid
+ angle sensors (gathered)
+
+DjDeveloperr's aurora-silicon/linux #1542 and #1548 (tested on a J714s): the
+AOP's "als" (a VD6286, reports once it has this machine's calibration as
+apple/aop-als-cal.bin) and "las" services as child nodes. This tree's AOP
+driver already boots the T6050 AOP and announces both services; the
+aop_als/aop_las drivers are there too.
+
+On TripleU613's J714s: aop-sensors-las reads the lid at 130 degrees; aop-sensors-als binds and waits for its calibration file.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
+index 3e6af3d48991..f611ff967566 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-audio.dtsi
+@@ -99,6 +99,20 @@ aop: aop@290c00000 {
+ 		 * sense on RX0, cout/cin (the jack) on TX2/RX2, the microphone
+ 		 * array on LEAP-S RX0 (Linux channel 2N for TX N, 2N+1 for RX N).
+ 		 */
++		/*
++		 * The AOP's sensor services, gathered from DjDeveloperr's aurora-silicon/linux #1542 and
++		 * #1548 (tested on a J714s): "als" is a VD6286 that reports once it has this machine's
++		 * calibration (apple/aop-als-cal.bin, AppleSPUVD6286 CalibrationData under macOS);
++		 * "las" is the lid angle, as on T6020 and T8112.
++		 */
++		aop_als: als {
++			compatible = "apple,t6050-aop-als", "apple,aop-als";
++		};
++
++		aop_las: las {
++			compatible = "apple,t6050-aop-las", "apple,aop-las";
++		};
++
+ 		aop_audio: audio {
+ 			compatible = "apple,t6050-aop-audio";
+ 			dmas = <&admac_base_ns 0>, <&admac_base_ns 1>,
+-- 
+2.56.0
+
