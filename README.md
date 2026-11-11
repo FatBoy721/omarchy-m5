@@ -48,8 +48,8 @@ Steps:
    follow [`docs/bringup.md`](docs/bringup.md). This is the only fiddly part.
 2. **Download the image** on your PC:
    ```sh
-   gh release download j714s-developer-image-2026.11.11-6 -R betizzel/omarchy-m5
-   cat omarchy-2026.11.11-6-*.zip.part0 omarchy-2026.11.11-6-*.zip.part1 \
+   gh release download j714s-developer-image-2026.11.11-7 -R betizzel/omarchy-m5
+   cat omarchy-2026.11.11-7-*.zip.part0 omarchy-2026.11.11-7-*.zip.part1 \
      > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
    sha256sum -c SHA256SUMS --ignore-missing
    ```
