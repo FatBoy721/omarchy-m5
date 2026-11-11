@@ -38,11 +38,18 @@ booted through the normal chain (m1n1 → U-Boot → Limine → EFI Linux) into
 Omarchy, with Wi-Fi and trackpad. 2026.11.11 adds one change: the GPU takes
 its own chip's voltage bins, so the image is meant for any J714s.
 
-**What you get:** the merged kernel (`linux-aurora 7.3.0.aurora16.j714s3-3`,
+**What you get:** the merged kernel (`linux-aurora 7.3.0.aurora16.j714s3-4`,
 this repo's `patches/linux-aurora` + `patches/linux-aurora-n1`) on **15
-cores**, NVMe, keyboard and trackpad, **N1 Wi-Fi and Bluetooth**, the GPU with
-Vulkan (see the GPU caveat below), the panel on simpledrm, and Omarchy's normal
-first-boot setup.
+cores**, NVMe, keyboard and trackpad (with the J714c AFE reset, so it comes up
+every boot), **N1 Wi-Fi and Bluetooth**, **speakers, headphone jack and
+microphones** (speaker volume capped at -30 dB), the GPU with Vulkan (see the
+GPU caveat below), the panel on simpledrm, and Omarchy's normal first-boot setup.
+
+Much of this is other people's working code, gathered here: the J716s audio
+setup (rolotrealanis98/m5pro-linux), the J714c trackpad reset and J714 speaker
+profile and graphs (edimoldovan), the T6050 kernel base (rolotrealanis98) and
+N1/GPU work (betizzel, TripleU613). See the credits in
+[`docs/installer-stones.md`](docs/installer-stones.md).
 
 **Be honest with yourself before trying:**
 
