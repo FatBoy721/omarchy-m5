@@ -31,6 +31,8 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0012 | the internal display through the DCP by default at full panel height, GPU-rendered desktop: `m1n1-aurora` j714s5 (m1n1 0006-0007), kernel pkgrel 6 (DCP device tree), `omarchy-aurora-firmware` j714s5 (two-card Hyprland session) and the new `hyprland-m5` support package (the builder installs it in the hyprland role); `finish-inputs` counts the profile's roles instead of a fixed 15 |
 | 0013 | speakers and jack in PipeWire: `omarchy-aurora-firmware` j714s6 (edimoldovan's J714 UCM profiles, kazuhidet's busy-card discovery) |
 | 0014 | hardware video decode: kernel pkgrel 7 (aurora-n1 0017, DjDeveloperr's J714s decoder DT) and `omarchy-aurora-firmware` j714s7 (avd-fw v5-t2 built from source) |
+| 0015 | FatBoy721's precheck log fix (keep pacman's reason when the package precheck fails; his PR #4 0008) |
+| 0016 | lid angle and ambient light sensors: kernel pkgrel 8 (aurora-n1 0018, DjDeveloperr's AOP sensors) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
