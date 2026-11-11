@@ -6,7 +6,7 @@ with the reason and what would bring it back. The 30-minute watch
 
 | What | Whose | Why it's not in | Recheck when |
 | --- | --- | --- | --- |
-| Switching the kernel to aurora-silicon's `integration/aurora` + the Aura bootloader (USB4, external displays, SD reader, PMP, SEP, memory-speed fix) | DjDeveloperr, erikwb, aurora-silicon | Aura hands over the GPU and display only on the macOS 27.0 firmware; every J714s we know runs 27.3 beta 1 (needed for all cores). On 27.3 we'd lose the GPU and the full display. Tested on TripleU613's J714s 2026-11-11: boots, Wi-Fi ok, no GPU/DCP/SEP. | aurora-silicon/linux #1173 (GPU on 27.2/27.3) and #1174 (DCP on 27.3) merge, or Aura gains a 27.3 handoff |
+| Switching the image to aurora-silicon's `integration/aurora` + the Aura bootloader (USB4, external displays, SD reader, PMP, SEP, memory-speed fix, Touch ID, ANE, AVE) | DjDeveloperr, erikwb, aurora-silicon | **Unblocked 2026-11-11:** with #1173/#1174 merged and Aura taught the 27.3 beta 1 hand-off ([`patches/upstream-27.3`](../patches/upstream-27.3/README.md)) it boots on TripleU613's J714s with the GPU, 120 Hz DCP, Wi-Fi, trackpad, NVMe and USB. Still missing there before the image moves: the notch rows, sound | Notch rows and sound work on that base |
 | USB4 / Thunderbolt and external displays | DjDeveloperr (#1515), erikwb | Needs the aurora-silicon base above | With the base switch |
 | SD card reader | DjDeveloperr (#1570) | Needs upstream's kernel-trained PCIe port 1 (#1182); open PR, no card read yet | #1570 merges and the base switch |
 | CLPC DRAM floor after idle (memory latency 300 → 110 ns) | DjDeveloperr (#1555, #1556) | Needs upstream's T6050 CLPC driver (#1324); ours has none | With the base switch |
