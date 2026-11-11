@@ -1,5 +1,5 @@
 pkgname=omarchy-aurora-firmware
-pkgver=20261014.j714s5
+pkgver=20261014.j714s6
 pkgrel=1
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
@@ -19,7 +19,9 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         # RT uclamp: edimoldovan/omarchy-mac-pkgs rt-uclamp 74d8f8bbef
         90-aurora-rt-uclamp.conf
         # DCP two-card Hyprland session (rolotrealanis98's J716s daily session)
-        aurora-m5-display-env start-hyprland-m5 60-aurora-m5-display.conf)
+        aurora-m5-display-env start-hyprland-m5 60-aurora-m5-display.conf
+        # J714 UCM: aurora-silicon/alsa-ucm-conf-asahi #10 (edimoldovan, merged, 401a49d4f7ee); busy-card discovery: kazuhidet
+        ucm-macaudio-j714.conf ucm-aop-j714.conf wireplumber-81-aurora-busy-discovery.conf)
 sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'abd1fd7f2c40561311356c5748f964687e45771ad461ef7786fbdbda2aff530d'
             '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31'
@@ -40,7 +42,10 @@ sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             '88d8f67c2066aab9abd738c83da5a89bf5be653e4e5d102bca6e6c9cfceefb3c'
             'e50f077b2735b8b7a28bdd165bbea3e731080c998f52e43ad69442f87adc5c73'
             'a40a72344fd5fad870900a5f92c9793bce4eab5467e206f1d5f6ccf2a2a09b18'
-            '1edefd658763c198fa174535b11ae6b7796d5e6c223b18226ce8d25092556ead')
+            '1edefd658763c198fa174535b11ae6b7796d5e6c223b18226ce8d25092556ead'
+            '64a7594002f84d15a1fd9a0735ace44df4f9bca341112950850371a6f28213f0'
+            '66c1da54fb834923d3a42c08c04d74758778356417e1edbb191af131a4911483'
+            'c9e54f1e1d5938e47ad047599b4306c767c800a92fe52c0b35985f0f4d7647f1')
 package() {
   # These services run on the target system; packaging only installs files.
   depends=('bash' 'iw' 'kmod' 'omarchy-mac-boot' 'wireless-regdb' 'linux-aurora>=7.1.12.aurora5')
@@ -84,4 +89,12 @@ package() {
   install -d "$pkgdir/usr/lib/systemd/user-environment-generators"
   ln -s /usr/lib/omarchy-aurora/aurora-m5-display-env "$pkgdir/usr/lib/systemd/user-environment-generators/60-aurora-m5-display"
   install -Dm644 60-aurora-m5-display.conf "$pkgdir/etc/sddm.conf.d/60-aurora-m5-display.conf"
+
+  # Speakers, headphone jack and microphones in PipeWire. The J714 UCM profiles are edimoldovan's
+  # (aurora-silicon/alsa-ucm-conf-asahi #10, merged after alsa-ucm-conf-aurora 10.aurora3 was built;
+  # drop them when that package carries them). The busy-card discovery is kazuhidet's (J713): without
+  # it PipeWire skips the speaker card while speakersafetyd holds its sense PCM.
+  install -Dm644 ucm-macaudio-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/macaudio/MacBook Pro J714.conf"
+  install -Dm644 ucm-aop-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/t8140-aop-audio/MacBook Pro J714 AOP Audio.conf"
+  install -Dm644 wireplumber-81-aurora-busy-discovery.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/81-aurora-busy-discovery.conf"
 }
