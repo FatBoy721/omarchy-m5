@@ -17,6 +17,10 @@ on:
         description: SHA-256 of the bundle
         type: string
         default: 61a872af9194b42bf8e66bae37fe69d30e85d090e09ebf4cbaba51a265af2cdb
+      patch-set:
+        description: Extra installer patch set (installer/patches-<name>, its tree in TREE); empty for the stable image
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -29,6 +33,7 @@ jobs:
     env:
       INPUT_URL: ${{ inputs.bundle-url }}
       INPUT_SHA256: ${{ inputs.bundle-sha256 }}
+      PATCH_SET: ${{ inputs.patch-set }}
       INSTALLER_REPO: https://github.com/omacom/omarchy-mac-installer
       INSTALLER_BASE: c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9
       # c07e54c + installer/patches 0001-0010
@@ -50,6 +55,14 @@ jobs:
           git -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
             am --quiet --committer-date-is-author-date ../omarchy-m5/installer/patches/*.patch
           [[ $(git rev-parse 'HEAD^{tree}') == "$INSTALLER_TREE" ]]
+          if [[ -n $PATCH_SET ]]; then
+            # An experimental variant: its patches go on top, and its own TREE file pins the result.
+            [[ $PATCH_SET =~ ^[a-z0-9][a-z0-9.-]*$ ]]
+            set_dir=../omarchy-m5/installer/patches-$PATCH_SET
+            git -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
+              am --quiet --committer-date-is-author-date "$set_dir"/*.patch
+            [[ $(git rev-parse 'HEAD^{tree}') == "$(tr -d '[:space:]' < "$set_dir/TREE")" ]]
+          fi
           [[ -z $(git status --porcelain) ]]
           git log --oneline -8
 

@@ -14,7 +14,7 @@ with the reason and what would bring it back. The 30-minute watch
 | Touch ID | DjDeveloperr (#1587, on the T6050 SEP profile #1325) | Enrols and verifies on his J714s, but needs the Secure Enclave, which our base has no driver for and which Aura hands over | With the base switch |
 | ProRes engine | DjDeveloperr (#1586, on #1260) | Open, stacked; upstream base | #1586 merges and the base switch |
 | Neural Engine (ANE) | DjDeveloperr (linux #1595 merged 2026-11-11, aura #168/#169) | In integration/aurora now, enabled on the J714s; Aura's preload hand-off still open; comes with the upstream base image | The upstream-base image, then aura #169 |
-| Hardware video encode (AVE) | DjDeveloperr (linux #1597, aura #171 merged) | Needs Aura's encoder firmware preload handoff and the aurora-silicon base | #1597 merges and the base switch |
+| Hardware video encode (AVE) | DjDeveloperr (linux #1597 merged 2026-11-11, aura #171 merged) | In integration/aurora now, enabled on the J714s; needs the aurora-silicon base | The upstream-base image |
 | Keyboard backlight off when idle | danielfernau (omacom/omarchy #12558), IronsideXXVI (#18177) | Patches the Omarchy package itself; the image ships stock Omarchy | Either PR merges into omacom/omarchy |
 | Deep sleep (suspend-to-RAM) | IronsideXXVI (J604, M4) | Not working on his own Mac yet; lid sleep (s2idle) already works here | He reports a completed s2r cycle |
 | P-cluster drop to the slowest state when all cores idle | IronsideXXVI (J604 0223/0224/0228) | On the J714s's default schedutil governor idle clusters already sit at their minimum (measured 1.3 GHz); only matters under the performance governor | If we make "performance" a default |
