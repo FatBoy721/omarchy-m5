@@ -7,7 +7,7 @@ normal-system image work. It now lives here; the fork is deleted.
 
 Six commits on top of
 [omacom/omarchy-mac-installer `c07e54c2134a`](https://github.com/omacom/omarchy-mac-installer/commit/c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9).
-0001-0006 reproduce the fork's final `main` tree exactly (`b3da2a18094e`); with 0007-0009 the tree is `06ae9aab7743`.
+0001-0006 reproduce the fork's final `main` tree exactly (`b3da2a18094e`); with 0007-0010 the tree is `8d8403e67730`.
 
 ```sh
 git clone https://github.com/omacom/omarchy-mac-installer && cd omarchy-mac-installer
@@ -26,6 +26,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0007 | merged kernel, loader 0002-0004 and firmware-hook packages from [`recipes/`](recipes); new developer signer `0DA040FF…B6D116B1`; the merged kernel's verified boot arguments |
 | 0008 | kernel pkgrel 2 (aurora-n1 0009: the t6050 NVMe compatible U-Boot needs) and the gcc-built `uboot-aurora` (the cross build's arm64 `image_size` was refused by m1n1) |
 | 0009 | one image for every J714s: kernel pkgrel 3 (aurora-n1 0010, default DTB `t6050-j714s-gpu-adt-simpledrm.dtb`: GPU voltage bins from the ADT) and m1n1-aurora `j714s4` (m1n1-installer 0005 passes them) |
+| 0010 | speakers, microphones, headphone jack and an always-on trackpad: kernel pkgrel 4 (aurora-n1 0011-0012, AOP audio drivers) and `omarchy-aurora-firmware` `j714s3` (edimoldovan's J714 speaker-safety profile and graphs) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
@@ -57,7 +58,7 @@ only, not an installer release.
 
 `.github/workflows/installer-image.yml` (manual dispatch) rebuilds the tree
 above and builds the image from the bundle in release
-[`installer-build-inputs-j714s-82c6aa3f156e`](https://github.com/betizzel/omarchy-m5/releases/tag/installer-build-inputs-j714s-82c6aa3f156e).
+[`installer-build-inputs-j714s-1d32202bb6f2`](https://github.com/betizzel/omarchy-m5/releases/tag/installer-build-inputs-j714s-1d32202bb6f2).
 The old bundle (`76004483a972`, freeze kernel) got through package resolution
 with 0006 and failed in mkinitcpio (`dm_integrity`, `mt7932-fullmac` missing);
 0007 and the recipes fix both. Its signing key did not survive the fork, so
