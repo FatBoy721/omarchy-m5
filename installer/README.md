@@ -34,6 +34,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0015 | FatBoy721's precheck log fix (keep pacman's reason when the package precheck fails; his PR #4 0008) |
 | 0016 | lid angle and ambient light sensors: kernel pkgrel 8 (aurora-n1 0018, DjDeveloperr's AOP sensors) |
 | 0017 | USB 2.0 host on USB-C ports 0 and 2: kernel pkgrel 9 (aurora-n1 0019-0023, edimoldovan's T6050 USB 2.0 host PHY) |
+| 0018 | USB host on all three USB-C ports: kernel pkgrel 10 (aurora-n1 0024-0032, the rest of edimoldovan's USB series) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
