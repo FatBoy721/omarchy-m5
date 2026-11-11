@@ -12,11 +12,11 @@ on:
       bundle-url:
         description: Build-inputs bundle (a release asset of this repo)
         type: string
-        default: https://github.com/betizzel/omarchy-m5/releases/download/installer-build-inputs-j714s-484fba3e098b/j714s-developer-inputs-484fba3e098b.tar.zst
+        default: https://github.com/betizzel/omarchy-m5/releases/download/installer-build-inputs-j714s-61a872af9194/j714s-developer-inputs-61a872af9194.tar.zst
       bundle-sha256:
         description: SHA-256 of the bundle
         type: string
-        default: 484fba3e098b2e567a7266f01b90b2a940e5aa76023770df7fcb417f4d1b4de7
+        default: 61a872af9194b42bf8e66bae37fe69d30e85d090e09ebf4cbaba51a265af2cdb
 
 permissions:
   contents: read
@@ -32,7 +32,7 @@ jobs:
       INSTALLER_REPO: https://github.com/omacom/omarchy-mac-installer
       INSTALLER_BASE: c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9
       # c07e54c + installer/patches 0001-0010
-      INSTALLER_TREE: 7c0f91afed9e911f6ac1b9dd944586d916a1115b
+      INSTALLER_TREE: 7f2f54c09928de609f1d4496e8a49dafc1418933
       RECOVERY_SOURCE_TREE: 13705bf0ccab8cc841ee9d418c36b7d7ddcafb48
       RECOVERY_INVENTORY: f32296121b1145619f7dff52155fc056b00c1c67942891252bb977ce8291b386
     steps:

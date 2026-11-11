@@ -71,7 +71,9 @@ jobs:
         run: |
           set -uo pipefail
           sudo chroot /mnt/sys pacman -Q > "$RUNNER_TEMP/before.txt"
-          sudo chroot /mnt/sys pacman -Syu --noconfirm 2>&1 | tee "$RUNNER_TEMP/upgrade.log"
+          # omarchy update runs this transaction (plus snapshot and migrations); its pacman hook stops a
+          # bare pacman -Syu unless told this is deliberate.
+          sudo chroot /mnt/sys env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --noconfirm 2>&1 | tee "$RUNNER_TEMP/upgrade.log"
           echo "pacman exit: ${PIPESTATUS[0]}" | tee -a "$RUNNER_TEMP/upgrade.log"
           sudo chroot /mnt/sys pacman -Q > "$RUNNER_TEMP/after.txt"
 

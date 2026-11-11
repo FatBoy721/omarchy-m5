@@ -35,6 +35,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0016 | lid angle and ambient light sensors: kernel pkgrel 8 (aurora-n1 0018, DjDeveloperr's AOP sensors) |
 | 0017 | USB 2.0 host on USB-C ports 0 and 2: kernel pkgrel 9 (aurora-n1 0019-0023, edimoldovan's T6050 USB 2.0 host PHY) |
 | 0018 | USB host on all three USB-C ports: kernel pkgrel 10 (aurora-n1 0024-0032, the rest of edimoldovan's USB series) |
+| 0019 | updates keep the J714s packages: the image pin covers every package the set takes from this repo (kernel, m1n1, U-Boot, Mesa, Hyprland, firmware), found by the `update-check` workflow (edge's m1n1-aurora aurora23 would have replaced ours) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
