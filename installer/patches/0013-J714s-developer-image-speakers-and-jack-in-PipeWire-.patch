@@ -1,0 +1,57 @@
+From f12469dff23f95bb2fab8f9554ae1f52bfdbad10 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 13:51:10 -0500
+Subject: [PATCH] J714s developer image: speakers and jack in PipeWire
+ (omarchy-aurora-firmware j714s6)
+
+omarchy-aurora-firmware 20261014.j714s6 adds edimoldovan's J714 UCM profiles
+and kazuhidet's busy-card discovery, so PipeWire shows the J714 speakers and
+headphone jack beside speakersafetyd. From betizzel/omarchy-m5 (95af50dd).
+---
+ .../candidate-package-manifest.json                | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index 93f6032..fe878a9 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-a325d529d822",
++  "set": "j714s-dev-runtime-f8e022e87aba",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -126,15 +126,15 @@
+     },
+     {
+       "name": "omarchy-aurora-firmware",
+-      "version": "20261014.j714s5-1",
++      "version": "20261014.j714s6-1",
+       "arch": "aarch64",
+-      "filename": "omarchy-aurora-firmware-20261014.j714s5-1-aarch64.pkg.tar.zst",
+-      "sha256": "b67fe7833740a0c781473c42c35bb909101397a689af66035701d5232b091136",
++      "filename": "omarchy-aurora-firmware-20261014.j714s6-1-aarch64.pkg.tar.zst",
++      "sha256": "66fc8947562fef95f4e986909a31dfc4c7a29201d86dc0a7cb96ec331bd283f6",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "650b22d1b78b03bf0cdbdb28f7670fa9760828f3"
++        "commit": "95af50dd4189cb79ea87f6f2ee3b91233987d6be"
+       },
+-      "size_bytes": 23053
++      "size_bytes": 23992
+     },
+     {
+       "name": "omarchy-mac",
+@@ -216,5 +216,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "a325d529d8226826efbe0860a1863a7d716c2f6b0536faab147ae35838575ade"
++  "set_sha256": "f8e022e87aba3a54708ca0759e78ef9e2464a5bc258b142cda95af96b347a83e"
+ }
+-- 
+2.56.0
+

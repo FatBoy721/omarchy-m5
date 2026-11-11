@@ -29,6 +29,7 @@ git am /path/to/omarchy-m5/installer/patches/*.patch
 | 0010 | speakers, microphones, headphone jack and an always-on trackpad: kernel pkgrel 4 (aurora-n1 0011-0012, AOP audio drivers) and `omarchy-aurora-firmware` `j714s3` (edimoldovan's J714 speaker-safety profile and graphs) |
 | 0011 | lid sleep, quiet idle clocks, N1 6 GHz: kernel pkgrel 5 (aurora-n1 0013-0016 from FatBoy721 and rolotrealanis98, `UCLAMP_TASK`) and `omarchy-aurora-firmware` `j714s4` (edimoldovan's realtime uclamp sysctl and N1 iwd default) |
 | 0012 | the internal display through the DCP by default at full panel height, GPU-rendered desktop: `m1n1-aurora` j714s5 (m1n1 0006-0007), kernel pkgrel 6 (DCP device tree), `omarchy-aurora-firmware` j714s5 (two-card Hyprland session) and the new `hyprland-m5` support package (the builder installs it in the hyprland role); `finish-inputs` counts the profile's roles instead of a fixed 15 |
+| 0013 | speakers and jack in PipeWire: `omarchy-aurora-firmware` j714s6 (edimoldovan's J714 UCM profiles, kazuhidet's busy-card discovery) |
 
 The kernel and m1n1 in 0001 are the same sources as
 [`patches/linux-aurora-installer`](../patches/linux-aurora-installer) and
