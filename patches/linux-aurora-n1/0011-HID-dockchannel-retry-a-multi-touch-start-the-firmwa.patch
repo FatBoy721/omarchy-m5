@@ -1,0 +1,90 @@
+From ad1f6f66cc3f2c4e41ea29350c30c90dba90a2b2 Mon Sep 17 00:00:00 2001
+From: TripleU <tripleuworld@gmail.com>
+Date: Tue, 10 Nov 2026 21:33:54 -0500
+Subject: [PATCH] HID: dockchannel: retry a multi-touch start the firmware
+ never finishes
+
+On a J714s boot the MTP firmware received the trackpad's AFE image and
+then failed to boot the AFE ("Failed to attach to AFE (-6)", "AFE[0]
+Chip Boot Failure for HBPP: No HINT_L"), so the multi-touch interface
+never reported ready and dchid_open() timed out. The interface stayed
+marked as starting, and every later open (each time the compositor
+retried) only logged "Interface multi-touch is already starting": no
+trackpad until reboot. The next boot came up normally.
+
+On a timeout, power the interface off with the same MTP command the
+firmware upload ends with, clear the starting flag and start again,
+firmware upload included, up to three starts per open. A final timeout
+now also clears the flag, so a later open starts over instead of being
+refused. The retry is limited to power method 1 without the SMC AFE
+sequence, whose writes have a per-boot budget.
+
+Compile-tested; the failure is intermittent and the retry has not yet
+been seen on hardware.
+
+Assisted-by: Claude Opus 5.5
+---
+ drivers/hid/dockchannel-hid/dockchannel-hid.c | 29 +++++++++++++++++--
+ 1 file changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/hid/dockchannel-hid/dockchannel-hid.c b/drivers/hid/dockchannel-hid/dockchannel-hid.c
+index e1d8f3ca8..5d110c5f1 100644
+--- a/drivers/hid/dockchannel-hid/dockchannel-hid.c
++++ b/drivers/hid/dockchannel-hid/dockchannel-hid.c
+@@ -28,6 +28,8 @@
+ 
+ #define COMMAND_TIMEOUT_MS 1000
+ #define START_TIMEOUT_MS 2000
++/* Starts of an interface whose firmware never reports it ready, per open. */
++#define START_ATTEMPTS 3
+ 
+ #define MAX_INTERFACES 16
+ 
+@@ -810,20 +812,41 @@ static void dchid_stop(struct hid_device *hdev)
+ static int dchid_open(struct hid_device *hdev)
+ {
+ 	struct dchid_iface *iface = hdev->driver_data;
+-	int ret;
++	int attempt, ret;
+ 
+ 	if (READ_ONCE(iface->dchid->stopping))
+ 		return -ESHUTDOWN;
+ 
+-	if (!completion_done(&iface->ready)) {
++	for (attempt = 1; !completion_done(&iface->ready); attempt++) {
+ 		ret = dchid_start_interface(iface);
+ 		if (ret < 0)
+ 			return ret;
+ 
+-		if (!wait_for_completion_timeout(&iface->ready, msecs_to_jiffies(START_TIMEOUT_MS))) {
++		if (wait_for_completion_timeout(&iface->ready, msecs_to_jiffies(START_TIMEOUT_MS)))
++			break;
++
++		/*
++		 * The MTP firmware can fail to boot the trackpad's AFE ("No
++		 * HINT_L") and then never reports the interface ready. Left
++		 * marked as starting, the interface refused every later open
++		 * until reboot. Power it off and start it again, firmware
++		 * upload included. Only where that power-off is a plain MTP
++		 * command: the SMC AFE sequence has a per-boot write budget.
++		 */
++		if (attempt >= START_ATTEMPTS ||
++		    (iface->dchid->afe_smc && iface->index == 1) ||
++		    iface->power_method != DCHID_POWER_METHOD_1) {
+ 			dev_err(iface->dchid->dev, "iface %s start timed out\n", iface->name);
++			iface->starting = false;
+ 			return -ETIMEDOUT;
+ 		}
++		dev_warn(iface->dchid->dev, "iface %s start timed out, retrying (%d/%d)\n",
++			 iface->name, attempt + 1, START_ATTEMPTS);
++		ret = dchid_reset_interface(iface, DCHID_POWER_STATE_OFF);
++		iface->starting = false;
++		if (ret < 0)
++			return ret;
++		msleep(100);
+ 	}
+ 
+ 	/* Pairs with the acquire in dchid_handle_report(); publishes iface->hid. */
+-- 
+2.56.0
+
