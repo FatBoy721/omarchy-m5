@@ -1,7 +1,7 @@
-From 5f8e00ebf3c1d0658dba9969f68373a52efa923f Mon Sep 17 00:00:00 2001
+From 70e7b7c61d51d5ae0a71ef15f4c312e15c06a520 Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Sat, 7 Nov 2026 01:53:54 +0100
-Subject: [PATCH 29/31] arm64: dts: apple: t6050-j714c: Type-C controllers of
+Subject: [PATCH 30/32] arm64: dts: apple: t6050-j714c: Type-C controllers of
  ports 0 and 2
 
 Ports 0 (left-back) and 2 (right) had no Type-C controller, so nothing in

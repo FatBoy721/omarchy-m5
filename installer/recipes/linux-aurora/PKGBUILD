@@ -16,7 +16,7 @@ pkgrel=10
 # PR that moves _commit; its cold-boot qualification is recorded in
 # the PR's attached qualification evidence before channel publication.
 _commit=34f2f5bb4d03bbe3acce237cb67af8dc9972aa4a
-# Plus betizzel/omarchy-m5 linux-aurora + linux-aurora-n1 0001-0031 (harness tree 4c648104e) as one diff.
+# Plus betizzel/omarchy-m5 linux-aurora + linux-aurora-n1 0001-0032 (harness tree 7f43e957b) as one diff.
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -45,7 +45,7 @@ sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '7cb1499d43fe111d83980bf4d1ca9f6c6855699b63a22d3328e65def501aa2df'
-            'bca93a30f0a44cfc03ce51bccb03946c82ff03314298f3029bfcd19505d6e0ac'
+            '8742cc20d438e7a8de4227e08821abed34fce72d16349f9098960245d176d072'
             'e05323aa7a676f6ba4022e65c3d900b58c5d979789a7de2b9610fd982dbb15a3')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.

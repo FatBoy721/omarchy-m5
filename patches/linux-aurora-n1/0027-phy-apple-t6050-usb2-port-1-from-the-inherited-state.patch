@@ -1,7 +1,7 @@
-From b8db4e0987729e4934a51f55ad38e1b0ddb4ff56 Mon Sep 17 00:00:00 2001
+From 58b2f317bb697a3e45b3e8c76f7a7f3be542eec6 Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Wed, 28 Oct 2026 18:52:50 +0100
-Subject: [PATCH 26/31] phy: apple: t6050-usb2: port 1 from the inherited
+Subject: [PATCH 27/32] phy: apple: t6050-usb2: port 1 from the inherited
  state, test switches
 
 Port 1 skips the USB 2.0 flip and starts the SuperSpeed sequence from the

@@ -1,7 +1,7 @@
-From 3171d8b88050b5888e2a9e88a442ab330902b4e4 Mon Sep 17 00:00:00 2001
+From 045f22a70ffd18491f3116759de97ddff9ae08e4 Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Wed, 28 Oct 2026 18:52:50 +0100
-Subject: [PATCH 27/31] arm64: dts: apple: t6050-j714c: port 1's Type-C
+Subject: [PATCH 28/32] arm64: dts: apple: t6050-j714c: port 1's Type-C
  controller
 
 The SPMI controller nub-spmi-a0 with hpm1 only (ADT hpm1, left-front,

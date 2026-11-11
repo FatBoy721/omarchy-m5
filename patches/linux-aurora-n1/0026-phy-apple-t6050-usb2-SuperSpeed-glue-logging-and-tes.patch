@@ -1,7 +1,7 @@
-From 3cc3f73886d26c78579aec5f39dcaebe74c7d9d2 Mon Sep 17 00:00:00 2001
+From 8292a1b16f14f9e3c344d96b0c91561fe609f306 Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Wed, 28 Oct 2026 14:17:24 +0100
-Subject: [PATCH 25/31] phy: apple: t6050-usb2: SuperSpeed glue, logging and
+Subject: [PATCH 26/32] phy: apple: t6050-usb2: SuperSpeed glue, logging and
  test switches
 
 The SuperSpeed sequence on J714c port 1 trains the link on some boots

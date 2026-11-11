@@ -1,7 +1,7 @@
-From 817accb007fc0f03984ddaa3e9cbedc856636c21 Mon Sep 17 00:00:00 2001
+From 9425acd03e6999e83fee1e5cf68bc5208a6f06b8 Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Wed, 28 Oct 2026 12:28:44 +0100
-Subject: [PATCH 24/31] phy: apple: t6050-usb2: SuperSpeed host on J714c port 1
+Subject: [PATCH 25/32] phy: apple: t6050-usb2: SuperSpeed host on J714c port 1
 
 A port whose node has the "atc-power" window also gets SuperSpeed. After
 the USB 2.0 flip, phy_init() runs the port 1 SuperSpeed host sequence

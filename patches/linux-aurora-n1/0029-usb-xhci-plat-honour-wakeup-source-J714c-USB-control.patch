@@ -1,7 +1,7 @@
-From 72e25432a079ef3bde61fcfbfe743e0c753aae15 Mon Sep 17 00:00:00 2001
+From b9190fd6cef036ab8002473b871a860361c8d88e Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Thu, 5 Nov 2026 19:22:54 +0100
-Subject: [PATCH 28/31] usb: xhci-plat: honour wakeup-source; J714c USB
+Subject: [PATCH 29/32] usb: xhci-plat: honour wakeup-source; J714c USB
  controllers keep their PHY across s2idle
 
 xhci-plat marks the controller wakeup-capable but never enables it, so

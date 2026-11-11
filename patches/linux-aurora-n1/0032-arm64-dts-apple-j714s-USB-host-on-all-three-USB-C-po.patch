@@ -1,7 +1,7 @@
-From 4c648104e9ddc94371076352f51e7f15980522be Mon Sep 17 00:00:00 2001
+From 7f43e957b99fb7fcaa7cda8264d9327639e84de5 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Wed, 11 Nov 2026 15:38:30 -0500
-Subject: [PATCH 31/31] arm64: dts: apple: j714s: USB host on all three USB-C
+Subject: [PATCH 32/32] arm64: dts: apple: j714s: USB host on all three USB-C
  ports (gathered)
 
 The rest of edimoldovan's J714c USB series (cherry-picked before this:
