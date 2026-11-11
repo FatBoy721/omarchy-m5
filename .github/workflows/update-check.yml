@@ -54,7 +54,7 @@ jobs:
           sudo mount --rbind /sys /mnt/sys/sys
           sudo mount --rbind /dev /mnt/sys/dev
           sudo mount -t tmpfs tmpfs /mnt/sys/run
-          sudo cp -L /etc/resolv.conf /mnt/sys/etc/resolv.conf
+          sudo rm -f /mnt/sys/etc/resolv.conf && sudo cp -L /etc/resolv.conf /mnt/sys/etc/resolv.conf
           grep -nE '^\s*(IgnorePkg|IgnoreGroup|\[)' /mnt/sys/etc/pacman.conf || true
 
       - name: Upgrade it (pacman -Syu)
