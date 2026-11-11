@@ -19,5 +19,6 @@ with the reason and what would bring it back. The 30-minute watch
 | Light sensor calibration in the image | aurora-silicon installer | Per machine and only in macOS; [`tools/als-calibration/save-als-cal.py`](../tools/als-calibration/save-als-cal.py) saves it | An installer path that runs on macOS for the J714s |
 | A USB 3 device on port 1 | edimoldovan (in the image) | Port 1's SuperSpeed host comes up on TripleU613's J714s (its PHY firmware boots, SuperSpeed root hub registers), but the PC recovery cable lives on that port, so no USB 3 device has been tried | Someone plugs a USB 3 device into the left-front port |
 | USB-C network gadget on port 1 | this repo | Port 1 is a USB host now (all three ports host); the image doesn't need the gadget, the dev Linux keeps it | If someone needs the cable network back |
+| Our own pacman repo for the J714s packages | this repo | The image pins its J714s packages (installer 0019) so `omarchy update` can't swap in the channel's unpatched ones; fixes to them then only arrive with a new image | When owners want J714s package updates without reinstalling |
 | SMC key inventory (debug) | satchlj (t6050-smc-key-inventory) | A debugging aid, no user feature | — |
 | Haptic actuator without hidraw | DjDeveloperr (#1576) | Our kernel has `CONFIG_HIDRAW=y`; the actuator binds | — |
