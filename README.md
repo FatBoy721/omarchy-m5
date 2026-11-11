@@ -1,350 +1,137 @@
 # omarchy-m5
 
-Bringing [Omarchy](https://omarchy.org) - Arch Linux ARM + Hyprland - to the
-**M5 Pro MacBook Pro**: Apple **T6050 "Sotra"**, Mac17,9 / J714s, dual-booted
-beside macOS, Asahi-style.
+**[Omarchy](https://omarchy.org) on the 14-inch MacBook Pro with M5 Pro (J714s).**
 
-This is frontier J714s bring-up, built on
-[m1n1](https://github.com/AsahiLinux/m1n1) and
-[linux-asahi](https://github.com/AsahiLinux/linux). A Linux ThinkPad drives the
-Mac over USB-C. The installed raw m1n1 boots Linux on **all 15 cores** now that
-the Omarchy stub carries Apple's fixed firmware (macOS 27.3 beta 1 or later).
-A pinned [Aura](https://github.com/aurora-silicon/aura) Mach-O Stage 1 is also
-packaged as an alternative; it has not been tested on hardware.
+We don't reinvent anything. A lot of people are getting Linux running on the M5 Macs, each
+in their own repo. We collect the parts that already work, put them together in one image,
+test it on a real J714s, and say who made each part.
 
-A separate, pinned [Aurora Linux](https://github.com/aurora-silicon/linux)
-kernel now drives the **internal display through DCP**, including a readable
-console, brightness control and display off/on. This is a kernel alternative,
-not the Aura bootloader trial; it uses the existing raw-m1n1 boot path.
+---
 
-> **N1 Wi-Fi/Bluetooth, T6050 PHYs and the installer image's kernel/loader**
-> are an isolated extra flavor: [`docs/installer-stones.md`](docs/installer-stones.md)
-> (`make kernel-aurora-installer`, `make m1n1-installer`). Merged with this repo's GPU
-> kernel as `make kernel-aurora-n1` (GPU bins from the ADT with `t6050-j714s-gpu-adt`). This Mac's variant,
-> `make kernel-aurora-gpu-n1-simpledrm`, now
-> [runs Wi-Fi and Bluetooth](#n1-wi-fi-and-bluetooth-isolated-j714s).
-> Full J714s status/evidence history: [`docs/omarchy-m5-pro/`](docs/omarchy-m5-pro/README.md).
+## What works
 
-> **Reviewing this?** Start with **[`FOR-AURORA.md`](FOR-AURORA.md)** - the three
-> things worth your time, and what to skip.
+| Thing | Works? | Whose work |
+| --- | --- | --- |
+| Boots from the Mac's own disk, all 15 CPU cores | ✅ | Apple's firmware fix + rolotrealanis98, betizzel |
+| Keyboard, backlight | ✅ | rolotrealanis98, edimoldovan |
+| Trackpad (every boot) | ✅ | edimoldovan (the reset fix) |
+| Wi-Fi, Bluetooth | ✅ | rolotrealanis98, betizzel, TripleU613, DjDeveloperr |
+| Wi-Fi on 6 GHz | 🟡 in the next image, not tested here | edimoldovan |
+| Speakers, headphone jack, microphones | 🟡 works, speakers kept quiet on purpose (-30 dB cap) | rolotrealanis98, edimoldovan |
+| GPU (Vulkan) | ✅ | TripleU613, betizzel, DjDeveloperr |
+| Screen | ✅ (basic mode; full-speed mode coming) | betizzel, DjDeveloperr |
+| Sleep (lid close) | 🟡 works on the dev kernel, not yet in the image | betizzel |
+| USB-C ports, external displays, USB4 | 🔜 testing now (aurora-silicon's new J714s kernel) | DjDeveloperr, erikwb |
+| Quiet fans at idle | 🔜 in the next image | edimoldovan |
+| Camera, Touch ID | ❌ not yet | |
 
-## Try it: Omarchy on an M5 Pro (developer image, for the brave)
+✅ works · 🟡 partly · 🔜 coming · ❌ no
 
-There is now a full **Omarchy 4.5.0 image** for the J714s, built in CI from
-this repo:
-[**`j714s-developer-image-2026.11.11`**](https://github.com/betizzel/omarchy-m5/releases/tag/j714s-developer-image-2026.11.11).
-The previous build (2026.11.10) was installed onto TripleU613's J714s and
-booted through the normal chain (m1n1 → U-Boot → Limine → EFI Linux) into
-Omarchy, with Wi-Fi and trackpad. 2026.11.11 adds one change: the GPU takes
-its own chip's voltage bins, so the image is meant for any J714s.
+---
 
-**What you get:** the merged kernel (`linux-aurora 7.3.0.aurora16.j714s3-4`,
-this repo's `patches/linux-aurora` + `patches/linux-aurora-n1`) on **15
-cores**, NVMe, keyboard and trackpad (with the J714c AFE reset, so it comes up
-every boot), **N1 Wi-Fi and Bluetooth**, **speakers, headphone jack and
-microphones** (speaker volume capped at -30 dB), the GPU with Vulkan (see the
-GPU caveat below), the panel on simpledrm, and Omarchy's normal first-boot setup.
+## Try it
 
-Much of this is other people's working code, gathered here: the J716s audio
-setup (rolotrealanis98/m5pro-linux), the J714c trackpad reset and J714 speaker
-profile and graphs (edimoldovan), the T6050 kernel base (rolotrealanis98) and
-N1/GPU work (betizzel, TripleU613). See the credits in
-[`docs/installer-stones.md`](docs/installer-stones.md).
+You need:
 
-**Be honest with yourself before trying:**
+- A **MacBook Pro 14-inch, M5 Pro** (J714s). Not M5 Max, not the 16-inch, not yet.
+- **macOS 27.3 beta 1 or newer** on it.
+- About **35 GB free** on the Mac's disk.
+- A Linux PC and a USB-C cable for the first setup.
 
-- **One unit tested, installed by hand.** The image was written from Linux on
-  the Mac (below), not through the Omarchy Mac app from macOS; that path is next.
-- **J714s only** (MacBook Pro 14-inch, M5 Pro), with the **macOS 27.3 beta 1
-  stub firmware** (`mBoot-20457.60.65.0.1`) the bring-up needs for all cores.
-- **GPU bins come from your chip** (new in 2026.11.11). m1n1 passes the
-  voltage bins macOS's device tree holds for your GPU, and the kernel checks
-  them against the M5 Pro profile; if they look wrong it refuses to start the
-  GPU (no acceleration, the rest runs). Checked on one unit so far: its bins
-  came out identical to the hand-measured table. A second unit's boot log line
-  `J714s GPU voltage bins from the ADT (...)` is the result we want next.
-- The internal-display DCP driver works but is off by default (simpledrm);
-  the USB-C gadget network does not always come up.
+Steps:
 
-**How it was installed (you need this repo's bring-up first):** a J714s that
-already boots Linux the [`docs/bringup.md`](docs/bringup.md) way (stub +
-stage-1 m1n1), and about **35 GiB of free disk space** (we shrank the existing
-Linux ext4 to make room; macOS can shrink its APFS container instead).
+1. **Set up the Mac once** so it can boot Linux:
+   follow [`docs/bringup.md`](docs/bringup.md). This is the only fiddly part.
+2. **Download the image** on your PC:
+   ```sh
+   gh release download j714s-developer-image-2026.11.11 -R betizzel/omarchy-m5
+   cat omarchy-2026.11.11-*.zip.part0 omarchy-2026.11.11-*.zip.part1 \
+     > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
+   sha256sum -c SHA256SUMS --ignore-missing
+   ```
+3. **Write it to the Mac** from Linux running on the Mac, as root:
+   ```sh
+   tools/install-image/install-from-linux.sh omarchy-2026.11.11-*.zip /usr/lib/firmware
+   ```
+4. **Reboot.** First boot sets things up, then asks for your name and password.
 
-```sh
-# on a PC: download and check the image (two parts: GitHub's 2 GiB limit)
-gh release download j714s-developer-image-2026.11.11 -R betizzel/omarchy-m5
-cat omarchy-2026.11.11-*.zip.part0 omarchy-2026.11.11-*.zip.part1 \
-  > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
-sha256sum -c SHA256SUMS --ignore-missing
+Stuck? Open an [issue](https://github.com/betizzel/omarchy-m5/issues) and paste what you see.
 
-# on the Mac's Linux, as root: write EFI/Boot/Root into free space
-tools/install-image/install-from-linux.sh omarchy-2026.11.11-*.zip /usr/lib/firmware
-```
+---
 
-The script prints the line that boots the image (the new ESP's
-`m1n1/boot.bin` plus `chosen.asahi,efi-system-partition=<uuid>`). Try it once
-from RAM with [`tools/m5-remote/bmboot.sh`](tools/m5-remote/README.md) before
-making it your stage 1's default. The first boot sets up the system, then asks
-for your user name and password on screen.
+## Who we collect from
 
-How the image is built: [`installer/README.md`](installer/README.md) (patches
-on omacom/omarchy-mac-installer, the signed build inputs, and the manual
-[`installer-image`](.github/workflows/installer-image.yml) workflow).
-Bring-up notes and credits: [`docs/installer-stones.md`](docs/installer-stones.md).
+These are the people and repos we watch. A script ([`tools/watch/watch.sh`](tools/watch/watch.sh))
+checks all of them every 30 minutes for new commits, and anything new that works on a J714s
+gets pulled in here.
 
-## Status - verified on hardware
+### M5 Mac owners doing the bring-up
 
-Unless noted, this table describes the default `vendor/linux` kernel.
-The experimental Aurora/DCP path and its limits are described below.
+| Who | Mac | Their repo | What we took |
+| --- | --- | --- | --- |
+| [rolotrealanis98](https://github.com/rolotrealanis98) | 16" M5 Pro (J716s) | [m5pro-linux](https://github.com/rolotrealanis98/m5pro-linux), [m4-m5-linux](https://github.com/rolotrealanis98/m4-m5-linux) (status tracker) | the T6050 kernel base, audio, many fixes |
+| [edimoldovan](https://github.com/edimoldovan) | 14" M5 Max (J714c) | [linux-aurora](https://github.com/edimoldovan/linux-aurora), [omarchy-mac-pkgs](https://github.com/edimoldovan/omarchy-mac-pkgs) | trackpad reset, speaker safety + sound profiles, 6 GHz Wi-Fi, quiet idle fans |
+| [DjDeveloperr](https://github.com/DjDeveloperr) | 14" M5 Pro (J714s) | via [aurora-silicon/linux](https://github.com/aurora-silicon/linux) and [aura](https://github.com/aurora-silicon/aura) | the upstream J714s device tree: USB-C, USB4, displays, GPU handoff (testing now) |
+| [betizzel](https://github.com/betizzel) | 14" M5 Pro (J714s) | this repo | the first J714s boot, display, GPU |
+| [TripleU613](https://github.com/TripleU613) | 14" M5 Pro (J714s) | this repo | Wi-Fi, GPU, the installer image |
+| [FatBoy721](https://github.com/FatBoy721) | 14" M5 Pro (J714s) | | reported the installer image booting to the Omarchy desktop (#293) |
+| [cameroncooper](https://github.com/cameroncooper) | 16" M5 Max (J716c) | | watched (Aura stage 1, accelerated Hyprland on J716c) |
+| [joshuaswarren](https://github.com/joshuaswarren) | | | J714c PMP and USB-C upstream, PMP analysis in #293 |
+| [erikwb](https://github.com/erikwb) | | | T6050 USB4 and external displays upstream (J716c) |
 
-| Area | State |
+### The Omarchy-on-Mac team ([omacom](https://github.com/omacom))
+
+[maralcbr](https://github.com/maralcbr) (Marcelo Alcantara) ·
+[scottjones](https://github.com/scottjones) (Scott Jones) ·
+[chriskearney](https://github.com/chriskearney) (Chris Kearney) ·
+[malik-na](https://github.com/malik-na) (Naeem Malik) ·
+[DjDeveloperr](https://github.com/DjDeveloperr) (Dj) ·
+[joshuaswarren](https://github.com/joshuaswarren) (Joshua Warren) ·
+[themartiano](https://github.com/themartiano) (Eduardo Martinez) ·
+[riverscn](https://github.com/riverscn) (Shun Li) ·
+[RyanTheTide](https://github.com/RyanTheTide) (Ryan Murray) ·
+[Acelogic](https://github.com/Acelogic) (Miguel Cruz) ·
+[LiamRay11](https://github.com/LiamRay11) (Liam) ·
+[erykwieliczko](https://github.com/erykwieliczko) (Eryk Wieliczko) ·
+[subedijaidip](https://github.com/subedijaidip) (Jaidip Subedi) ·
+[shawnyeager](https://github.com/shawnyeager) (Shawn Yeager) ·
+[jondkinney](https://github.com/jondkinney) (Jon Kinney) ·
+Randy (GitHub name unknown: tell us)
+
+Also watched: [satchlj](https://github.com/satchlj), [joske](https://github.com/joske).
+
+### Repos we watch
+
+| Repo | What it is |
 | --- | --- |
-| Boot chain | ✅ iBoot → m1n1 → Linux kernel, **all 15 cores** (stub firmware ≥ mBoot-20457.60) |
-| Root filesystem | ✅ Arch on the **internal SSD** (`nvme0n1p5`), dual-boot, macOS preserved |
-| Storage | ✅ NVMe (ANS2 + NVMMU + SARTv4) |
-| Console / display | ✅ simpledrm fallback (`eDP-1`); experimental Aurora DCP (`eDP-2`) with brightness and display off/on. Patched Hyprland 0.57.1 works on DCP at 3024x1890 / 120 Hz, software-rendered (no GPU) |
-| Input | ✅ built-in keyboard **and** trackpad (DockChannel MTP + `tpmtfw`) |
-| Keyboard backlight | ✅ `fpwm0` + pwm-leds (`/sys/class/leds/kbd_backlight`) |
-| CPU frequency | ✅ all three clusters on schedutil; P cores measured 1307 MHz before, about 4.22 GHz after |
-| CPU idle | ✅ WFI on all 15 cores, no `idle=nop` (patches 0012 + 0013): idle draws 5.6 W in total (SoC 1.6 W) against 15.3 W with `idle=nop` |
-| SMC | ✅ hwmon (both fans, temperatures, power rails); lid opens wake the Mac from sleep; RTC registers |
-| Networking | ✅ USB-C gadget (CDC EEM) - host reaches the Mac over the cable |
-| m1n1 on upstream `main` | ✅ USB enumeration unblocked on T6050 (`patches/m1n1/0005`) |
-| **SMP - secondary CPUs** | ✅ 15/15 online (2026-11-06): stub rebuilt from macOS 27.3 beta 1 (`scripts/refresh-stub-firmware.sh`), kernel patches 0009 + 0010 |
-| Sleep (s2idle) | ✅ On the default kernel, `systemctl suspend` or closing the lid sleeps, and opening the lid wakes it (patch 0011 fixes a resume SError in the debug UART). With cpuidle registered (patch 0013) the tick and timekeeping stop during sleep. The default simpledrm path leaves the panel lit |
-| Battery / charger | Verified on Aurora: battery telemetry, charging/discharging and charger notifications. Still disabled on the default fallback kernel |
-| Wi-Fi / Bluetooth (N1) | Works in the isolated `aurora-gpu-n1` profile (2026-11-09): WPA3 association on 2.4 and 5 GHz, DHCP, DNS and HTTPS; drivers load and the saved network rejoins by themselves at boot; Bluetooth controller up with classic and LE discovery. Pairing, HID, audio, suspend and sustained load are not qualified. Not in the default kernel |
-| GPU | Native GL/compute and Vulkan-backed Zink checks pass on this J714s. Isolated Zink/Borealis Hyprland renders on simpledrm at 3024x1890 / 60 Hz in short automatic checks. Native Gallium desktop rendering is defective; GPU+DCP and sustained-load qualification remain open |
+| [aurora-silicon/linux](https://github.com/aurora-silicon/linux) | the Apple Silicon kernel everyone lands work in |
+| [aurora-silicon/aura](https://github.com/aurora-silicon/aura) | the bootloader (m1n1 fork) |
+| [aurora-silicon/mesa](https://github.com/aurora-silicon/mesa), [u-boot](https://github.com/aurora-silicon/u-boot) | graphics drivers, U-Boot |
+| [omacom/linux-aurora](https://github.com/omacom/linux-aurora), [m1n1](https://github.com/omacom/m1n1) | Omarchy's kernel and bootloader |
+| [omacom/omarchy-mac-pkgs](https://github.com/omacom/omarchy-mac-pkgs), [omarchy-mac-installer](https://github.com/omacom/omarchy-mac-installer) | Omarchy's Mac packages and installer |
+| [omacom/linux-aurora#293](https://github.com/omacom/linux-aurora/issues/293) | the thread where M5 owners post results |
 
-Today the machine boots Arch from the internal SSD on **all 15 cores**; the
-kernel is staged over the USB tether (`boot-m5.sh`). Apple fixed the
-single-core raw-boot-object bug in macOS 27.3 beta 1, but the fix only reaches
-Linux once the Omarchy stub is rebuilt from that macOS: the stub supplies its
-own stage-2 firmware.
+Plus every repo the people above push to, and a GitHub-wide search for `t6050`, `j714s`,
+`j714c`, `j716s`, `m5 pro linux`, `m5 max linux`. Know someone we missed? Open an issue.
 
-## SMP: fixed by Apple's firmware
+---
 
-On stub firmware cloned from macOS 26.5, every secondary failed to start
-([probe log](docs/research/probe-logs/t6050-cpu-impl-0100-2026-11-04-j714s.log)).
-Apple fixed "only a single core is available when you boot Linux ... from a
-custom raw boot object" on M5 Pro/Max/Ultra in macOS 27.3 beta 1 (26C5035r).
-The stage-2 firmware that loads m1n1 comes from the Omarchy stub's own restore
-bundle, so after updating macOS the stub has to be rebuilt:
-[`docs/bringup.md` -> Stub firmware refresh](docs/bringup.md#stub-firmware-refresh-all-cores).
-With `mBoot-20457.60.65.0.1` the unchanged installed m1n1 starts 14/14
-secondaries.
+## Help out (dev)
 
-Linux also needs patch 0009 with `arm64.nowfxt` (cores lose state in WFIT; a
-kernel without the override panics in `__delay` on CPU1), patch 0012 (WFI
-loses x0-x30 and FP/SIMD on every core except the boot CPU, so the idle path
-saves them; `idle=nop` is gone) and patch 0010 (the ANS firmware can take
-about 3 s to answer RTKit on an all-core boot). The October SPTM attribution
-does not explain the failure: the fix is in mBoot, with m1n1 unchanged.
-[`docs/smp-t6050-findings.md`](docs/smp-t6050-findings.md) keeps the
-measurements of the broken firmware, with that history labeled.
+You don't need to be a kernel hacker. The easiest ways to help:
 
-## Internal DCP display (experimental Aurora kernel)
+- **Got a J714s?** Try the image and tell us what works and what doesn't.
+- **Found someone's M5 work that we don't have?** Open an issue with the link. That's the whole job here.
+- **Want to watch the repos yourself?** `tools/watch/watch.sh` (needs `gh` logged in). The first
+  run just records where everything is; after that it prints what changed.
 
-`make kernel-aurora` builds Linux 7.3 from pinned Aurora commit
-`5b0f106acdd71de11400464adfeb8c87a83b20b0` plus
-[`patches/linux-aurora/`](patches/linux-aurora/). The default `make kernel`
-and its artifacts stay separate. Package it with
-`KERNEL_FLAVOR=aurora scripts/mktether.sh`; see the
-[build and fallback instructions](docs/bringup.md#aurora-kernel-with-internal-dcp-experimental).
+Want to build it yourself? The kernel and bootloader patches are in [`patches/`](patches/), the
+image recipe in [`installer/`](installer/README.md), and the full build guide is
+[`docs/bringup.md`](docs/bringup.md). Everything detailed (status history, how each piece was
+found, the old notes) lives in [`docs/status-and-history.md`](docs/status-and-history.md).
 
-Verified on J714s with stub firmware **mBoot-20457.60.65.0.1**:
-all 15 CPUs, internal SSD root, USB networking, trackpad motion and clicks,
-DCP framebuffer console, brightness changes and display off/on.
-The console needed both fbdev damage
-submission and ARGB pixels: this firmware treats the fourth XRGB byte as
-alpha, so otherwise valid console text was invisible.
+---
 
-SMC power samples on this DCP boot averaged **9.09 W at brightness
-setting 300**, versus **5.55 W with the display blanked**, with keyboard
-backlight still at 200/255 (15 samples each). These are awake measurements,
-not sleep power; the earlier simpledrm brightness was not controlled.
-
-This does **not** provide GPU acceleration. A basic software-rendered
-Hyprland desktop and native Wayland terminals are now verified on DCP at
-3024x1890, 120 Hz, using the
-[alpha-only scanout fix](patches/hyprland/0001-output-support-alpha-only-scanout.patch).
-Unpatched Hyprland 0.57.1 assumes XRGB during mode tests and crashes on this
-alpha-only primary plane; the fix selects an advertised format and permits
-ARGB/ABGR. The user config and packaged compositor are unchanged; the tested
-build is a local override described in the
-[runbook](docs/bringup.md#aurora-kernel-with-internal-dcp-experimental).
-Lid suspend/resume still needs qualification on DCP. Keep the default kernel
-as the tested fallback; do not infer sleep or GPU support from the desktop.
-
-## M5 Pro GPU trial (isolated J714s)
-
-The isolated GPU trial now performs real rendering on this J714s. Two boots of
-`7.3.0-g929e67a1da3e` passed native GL/compute and Vulkan-backed Zink smoke
-checks, plus all 14 indexed-rendering cases in each mode, with no new kernel
-messages during the tests. The GPU reports **Apple M5 Pro (G17S B1), 16 enabled
-cores**. This is short functional coverage, not Vulkan conformance or general
-application/thermal qualification.
-
-The working profile uses **simpledrm, with Linux DCP disabled**. It combines
-Aurora Linux PR #1173, Mesa PR #194 and the minimal m1n1 GPU handoff, retaining
-**this Mac's own voltage bins**, not the other J714s's draft voltage profile.
-`make kernel-aurora-gpu-simpledrm` and `make m1n1-gpu-simpledrm` use private
-build trees; `scripts/build-mesa-gpu.sh` packages Mesa and its Vulkan loader
-under `/opt`, without replacing system graphics libraries.
-
-The [GPU desktop launch path](docs/bringup.md#accelerated-hyprland-zink-on-simpledrm)
-now uses **Zink/Borealis**, with a private Aquamarine render-node allocator
-fix. Captured Kitty text/colours and a short active-update timing sample
-worked near the panel's 60 Hz rate, with no new kernel messages. This is real
-M5 GPU rendering, not a software fallback. Native Gallium could start the
-desktop but produced black Kitty content and poor responsiveness, so it is
-not the desktop default. The user's config and system graphics packages are
-unchanged. On a GPU kernel the distro's Mesa has no driver for the GPU node and
-plain `start-hyprland` aborts at startup, so `scripts/start-hyprland.sh` is
-installed as the default `start-hyprland` and `hyprland`: it runs
-`start-hyprland-gpu` when that node exists.
-
-Both original recovery bundles and the installed boot object are unchanged.
-The corrected trial loader also passed a live watchdog-preservation check.
-Final physical-input/latency confirmation for the Zink session is pending.
-The [GPU runbook](docs/bringup.md#gpu-trial-isolated-j714s) records the source
-pins, calibration guard and remaining limits. **GPU + DCP is not yet qualified.**
-
-The [standalone milestone](docs/bringup.md#standalone-no-second-machine---one-1tr-ceremony-per-image)
-packaged that same kernel/DT/initramfs behind a native loader that checks this
-Mac's calibration and prepares NVMe without the host probe. Its real payload
-parser and boot routine were exercised from RAM: SSD-root Linux, all 15 CPUs
-and both GPU smoke modes passed. **Do not enroll that image.** The N1 image of
-the same shape and size boot-looped when it was enrolled (below); a RAM run
-does not show what iBoot does with the object.
-
-Omarchy itself is **not installed yet**. The
-[package preflight](docs/bringup.md#omarchy-installation-preflight-not-installed)
-found stock Btrfs/boot assumptions and network/firewall changes that would put
-this ext4/custom-boot setup's SSH recovery path at risk if applied unattended.
-
-## N1 Wi-Fi and Bluetooth (isolated J714s)
-
-The N1 now runs on this J714s. On tethered boots of `7.3.0-gc1fabe3c06f9`
-Linux powered and trained the N1's PCIe link itself, loaded Apple's firmware
-and registered `wlan0` and `hci0`. Wi-Fi joined a WPA2/WPA3 network from
-`nmtui` with an ordinary passphrase (SAE, management-frame protection), took a
-DHCP lease and carried ping, DNS, HTTPS and a 25 MB download. After a reboot
-udev loaded both drivers and NetworkManager rejoined the network, on 5 GHz,
-with nothing typed. Bluetooth answered a classic inquiry and, with LE built
-in, found 48 LE devices in ten seconds. CPUs, SSD, the GPU hand-off, battery
-and SMC behaved as in the GPU trial, and the kernel logged no Oops, WARN or
-SError.
-
-The profile adds two things to the GPU/simpledrm one. `patches/linux-aurora-n1/`
-carries TripleU613's merge of the installer kernel's N1 work (Centauri drivers
-and kernel-owned PCIe train by rolotrealanis98) plus the five patches that
-merge needed on this tree. `patches/m1n1-gpu/0004` gives this repo's GPU
-loader a device-tree-only N1 hand-off: it copies the PCIe tunables and the
-control function's identity from the boot ADT and enables the port, does no
-PCIe MMIO, and leaves the N1 off if anything is missing. The firmware is
-assembled locally from Apple's public restore image by `scripts/mk-n1-ftab.py`
-and is not redistributed.
-
-A self-contained
-[native image](docs/bringup.md#native-n1-image-proven-from-ram-boot-loops-when-enrolled)
-of the same kernel, tree and loader ran its own payload parser, calibration
-guard, NVMe preparation and hand-off from RAM and reached the same running
-system. **Enrolled on 2026-11-09, it boot-looped**, and so did a 1.2 MB loader
-with a `chainload=` line appended: a few restarts, then recoveryOS, and nothing
-of either ever appeared on the cable. Size alone does not explain both
-failures. Both had data appended and neither size was a multiple of 16 KiB;
-[the raw objects compared in the runbook](docs/bringup.md#raw-image-alignment-evidence-and-current-workaround)
-that booted were aligned. The plain, aligned replacement now boots natively
-on this Mac; alignment versus the appended tail has not been isolated.
-The saved boot object was put back with `enroll.sh rollback` both
-times.
-
-A native boot is therefore
-[two stages](docs/bringup.md#native-boot-in-two-stages), and stage 1 is a plain
-image: a 1.2 MB m1n1 with its target compiled in reads the GPU/N1 loader from
-the EFI partition, and that loader reads the kernel, device tree and initramfs
-from a file there. Chainloaded from the cable with nothing else sent, the whole
-chain booted this system, and with either file missing the stage concerned
-fell back to its USB proxy, from which the tether flow still works. **The owner
-enrolled the plain stage 1 on 2026-11-09 and it booted successfully.** Live SSH
-confirmed both loader versions, Linux `7.3.0-gc1fabe3c06f9`, all 15 CPUs and the
-existing SSD root, with no host-supplied boot images. An unplugged cold boot
-remains to be confirmed. The first native boot exposed an N1 probe-order race:
-Bluetooth's temporarily assigned driver pointer caused shared IPC startup to
-abort with `-16`. Patch 0007 synchronizes sibling acquisition with probing.
-**Native `7.3.0-g76b01c3f2e1c` now reconnects Wi-Fi and starts Bluetooth
-automatically**; Wi-Fi SSH, ICMP and HTTPS passed, with `hci0` powered and no
-matches for the selected kernel warning/Oops/SError checks. The enrolled
-loader is unchanged. A small unit in the root image clears
-[iBoot's boot counter](docs/bringup.md#iboots-boot-counter), which otherwise
-adds up with every restart made without the cable.
-
-This is short functional coverage. Bluetooth pairing, HID and audio with a
-real device, suspend and sustained load are open. The
-[N1 runbook](docs/bringup.md#n1-wi-fi-and-bluetooth-isolated-j714s) has the
-build, the bring-up failures and their fixes, and the remaining limits.
-
-## Aura Mach-O Stage 1 (optional, untested on hardware)
-
-`make aura-test` packages a pinned Aura v1.0.0b4 Mach-O Stage 1 with our
-kernel/DT and a RAM-only diagnostic image. SMP no longer depends on it. See
-[`docs/bringup.md` -> Aura Mach-O diagnostic trial](docs/bringup.md#aura-mach-o-diagnostic-trial-j714s)
-for preflight, approval, testing and rollback.
-
-## Repo map
-
-- **[`docs/`](docs/)** - everything written down; **[`docs/README.md`](docs/README.md)**
-  indexes it (current state, SMP RE, build guide, Phase-0 research).
-- `dt/` - the T6050 device trees, authored from **this machine's real ADT**
-  (`scripts/adt2pmgr.py`), not guessed.
-- `patches/m1n1/`, `patches/linux/` - the default bootloader and kernel changes;
-  `patches/linux-aurora/` - the separate pinned Aurora/DCP port.
-- `scripts/` - the dev harness (build / install / tether) and
-  `scripts/probes/` (the hardware RE tooling).
-- `configs/` - kernel configs · `tools/` - tiny on-device C helpers ·
-  `Makefile` - `make setup fetch m1n1 dtbs kernel`.
-
-## Build & dev loop
-
-See **[`docs/bringup.md`](docs/bringup.md)**. Short version:
-
-```sh
-make setup fetch m1n1 dtbs kernel   # toolchain, vendor clones, m1n1, DTBs, kernel
-```
-
-The original on-device install (partitioning + `kmutil`) is in
-`docs/bringup.md` -> *"One-time on-device step"*. After a macOS update, rebuild
-only the stub (`scripts/refresh-stub-firmware.sh`); do not repeat the
-installation. Kernel uploads are memory-only, but the normal tether workflow
-subsequently boots the SSD root filesystem.
-
-## Credits & upstreams
-
-Built on the Asahi Linux project and the omarchy-mac / Aurora Silicon ecosystem.
-The hardware reverse-engineering here is interoperability work on the author's
-own Mac.
-
-- [m1n1](https://github.com/AsahiLinux/m1n1) ·
-  [linux-asahi](https://github.com/AsahiLinux/linux) ·
-  [Asahi feature support](https://asahilinux.org/docs/platform/feature-support/)
-- [omarchy-mac](https://github.com/omacom/omarchy-mac) ·
-  [Aurora Silicon](https://github.com/aurora-silicon)
-- [rolotrealanis98/m5pro-linux](https://github.com/rolotrealanis98/m5pro-linux) -
-  found that the 27.3 beta 1 SMP fix needs a rebuilt stub, and the RTKit timeout.
-- [edimoldovan/linux-aurora](https://github.com/edimoldovan/linux-aurora) - J714c
-  platform work ported here (P-cluster DVFS, eDP connector, keyboard backlight,
-  T6050 fan keys).
-- [antiapplefox/m5-linux](https://github.com/antiapplefox/m5-linux) - the SPTM
-  static-RE / XNU-shim track behind the earlier SMP investigation.
-
-## License
-
-[MIT](LICENSE) for this repo's original scripts and docs. Patches under
-`patches/` follow the project they apply to and keep its SPDX identifiers: the
-Linux patches are GPL-2.0, device trees (there and under `dt/`) are
-GPL-2.0+ OR MIT, and the m1n1 patches are MIT. Where a file carries an SPDX
-line, that line decides. Contributions are accepted on the same terms. No Apple
-firmware is redistributed here - the extraction scripts re-derive everything
-from a locally-downloaded IPSW.
+Built on [Asahi Linux](https://asahilinux.org), [Aurora Silicon](https://github.com/aurora-silicon)
+and [omacom](https://github.com/omacom). [MIT](LICENSE) for this repo's own scripts and docs;
+patches keep the license of the project they apply to. No Apple firmware is shipped here.

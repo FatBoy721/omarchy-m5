@@ -14,7 +14,7 @@ qualification, Wi-Fi/BT and GPU work remain open.
 ## The 3 things actually worth your time
 
 1. **SMP was Apple's firmware, not the loader.** See
-   [`README.md` -> SMP](README.md#smp-fixed-by-apples-firmware) and
+   [`docs/status-and-history.md` -> SMP](docs/status-and-history.md#smp-fixed-by-apples-firmware) and
    [`docs/bringup.md` -> Stub firmware refresh](docs/bringup.md#stub-firmware-refresh-all-cores):
    rebuild the Omarchy stub from macOS 27.3 beta 1 or later, make sure the
    kernel really carries patch 0009 (`arm64.nowfxt`), and give RTKit 10 s
@@ -63,5 +63,5 @@ sleep on the default kernel (lid wake, panel stays lit) ✅ ·
 Aurora DCP console / brightness / display off-on / patched Hyprland desktop / battery telemetry verified ·
 DCP sleep / Wi-Fi (N1) / GPU open
 
-Full table and repo map in [`README.md`](README.md). We'd rather compare notes
+Full table and repo map in [`docs/status-and-history.md`](docs/status-and-history.md). We'd rather compare notes
 than re-derive each other's halves - reach out.
