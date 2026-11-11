@@ -24,7 +24,7 @@ test it on a real J714s, and say who made each part.
 | Lid angle sensor | ✅ in the image | DjDeveloperr |
 | Ambient light sensor | 🟡 in the image; needs this Mac's calibration, saved once from macOS with [`tools/als-calibration/save-als-cal.py`](tools/als-calibration/save-als-cal.py) | DjDeveloperr, aurora-silicon |
 | Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
-| USB 2.0 host on the left-back and right USB-C ports | 🟡 in the image; ports come up, no device tried on a J714s yet | edimoldovan |
+| USB 2.0 host on the left-back and right USB-C ports | ✅ in the image (a USB stick mounts on TripleU613's J714s) | edimoldovan |
 | USB 3, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
 | Camera, Touch ID | ❌ not yet | |
@@ -147,7 +147,7 @@ You don't need to be a kernel hacker. The easiest ways to help:
 
 Want to build it yourself? The kernel and bootloader patches are in [`patches/`](patches/), the
 image recipe in [`installer/`](installer/README.md), and the full build guide is
-[`docs/bringup.md`](docs/bringup.md). Everything detailed (status history, how each piece was
+[`docs/bringup.md`](docs/bringup.md). What we know of but left out on purpose, and why: [`docs/left-out.md`](docs/left-out.md). Everything detailed (status history, how each piece was
 found, the old notes) lives in [`docs/status-and-history.md`](docs/status-and-history.md).
 
 ---
