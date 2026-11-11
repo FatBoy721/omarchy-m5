@@ -27,6 +27,7 @@ test it on a real J714s, and say who made each part.
 | USB host on all three USB-C ports | ✅ in the image (a USB stick mounts on TripleU613's J714s; USB 3 on the left-front port not tried yet) | edimoldovan |
 | USB 3, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
+| Updates (`omarchy update`) | ✅ keep the J714s kernel, m1n1, Mesa, Hyprland and firmware (checked in CI with [`update-check`](.github/workflows/update-check.yml)) | this repo |
 | Camera, Touch ID | ❌ not yet | |
 
 ✅ works · 🟡 partly · 🔜 coming · ❌ no
