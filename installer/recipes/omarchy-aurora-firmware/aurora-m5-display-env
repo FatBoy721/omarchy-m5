@@ -1,0 +1,15 @@
+#!/bin/sh
+# Print the Hyprland environment for this boot's display, one KEY=VALUE per line. Used as a systemd
+# user environment generator (Omarchy's uwsm session) and by start-hyprland-m5 (the SDDM greeter).
+#
+# When m1n1 handed the internal display (DCP) over, the session is two-card: aquamarine scans out on
+# the apple-drm display-subsystem card, which takes linear buffers only, and the GPU renders through
+# zink on the native Vulkan driver. That is rolotrealanis98's J716s daily session
+# (m5pro-linux contrib/validated/desktop), run on TripleU613's J714s at 3024x1890@120.
+# Without the hand-off (simpledrm) nothing is set and the session runs as before.
+card=/dev/dri/by-path/platform-display-subsystem-card
+[ -e "$card" ] || exit 0
+echo "AQ_DRM_DEVICES=$card"
+echo AQ_NO_MODIFIERS=1
+echo MESA_LOADER_DRIVER_OVERRIDE=zink
+echo ASAHI_M5_BRINGUP=1

@@ -1,31 +1,26 @@
-# hyprland-m5: Hyprland 0.57.1 for the M5 Pro MacBook's DCP display (Omarchy on Arch Linux ARM).
+# hyprland-m5: Omarchy's Hyprland 0.57.2-2 for the M5 Pro MacBook's DCP display.
 #
-# Gathered: this recipe is rolotrealanis98's hyprland-m5pro (m5pro-linux
-# contrib/validated/desktop/hyprland, 46d3b2e) with his 0001 direct-scanout latch, plus
-# betizzel/omarchy-m5 patches/hyprland/0001 as 0002 (pick an alpha format first: the
-# firmware-27 DCP primary plane offers only alpha formats and stock 0.57.1 aborts on it;
-# FatBoy721 ran it at 3024x1890@120 on his J714s). His notes follow.
+# Gathered. The recipe is omacom/omarchy-pkgs pkgbuilds/hyprland 0.57.2-2 (its three patches kept)
+# built as hyprland-m5 with two more patches:
+#  0001 rolotrealanis98's direct-scanout failed-candidate latch (m5pro-linux contrib/validated/
+#       desktop/hyprland, 46d3b2e): a fullscreen client the DCP cannot scan out was re-tested every
+#       frame, leaking 31 MB scanout buffers to OOM on his J716s.
+#  0002 betizzel/omarchy-m5 patches/hyprland/0001: choose an alpha format first; the firmware-27
+#       DCP primary plane offers only alpha formats and stock Hyprland aborts on it.
+# Run on TripleU613's J714s at 3024x1890@120, GPU-rendered through zink; FatBoy721 ran 0002 on his.
 #
-# with the direct-scanout failed-candidate latch (0001-direct-scanout-latch-failed-candidate.patch).
-#
-# Recipe: Arch's extra/hyprland 0.57.1-1 (maintainer Caleb Maclennan), which Arch Linux ARM
-# ships unchanged (the package installed on the MacBook) and Omarchy's pkgbuilds/hyprland
-# 0.57.1-2 extends with three unrelated patches (nvidia-egl-teardown, wl-output-global-grace,
-# monitor-rule-vrr; they apply cleanly on top of ours if ever wanted). Only our patch is added.
-# hyprpm is not built here: ALARM's hyprpm 0.57.1-1 stays installed and is satisfied by provides.
-#
-# Build (never as root): cd into this directory, with the patch next to the PKGBUILD, and run
-#   PKGDEST=$PWD/out LOGDEST=$PWD/out makepkg -sL
-# The release tarball ships src/version.h.in pre-filled (hash acc1aa0, branch "v0.57.1"); only the
-# branch and commit-message labels shown by 'hyprctl version' are changed here. GIT_COMMIT_HASH
-# stays acc1aa0 like the tarball builds in extra/ and [omarchy], so plugins built against them
-# (the plugin API hash includes it) keep loading.
+# Maintainer: Caleb Maclennan <caleb@alerque.com>
+# Contributor: ThatOneCalculator <kainoa@t1c.dev>
+# Contributor: Brenno Lemos <brenno@syndel.is>
+# Contributor: Gabriel Fox <inbox@gabrielfox.dev>
 
 pkgname=hyprland-m5
-pkgver=0.57.1
-pkgrel=1
-pkgdesc='Hyprland 0.57.1 for the M5 Pro MacBook DCP: direct-scanout latch and alpha-only primary planes'
-arch=(aarch64 x86_64)
+pkgver=0.57.2
+# Above Arch's 0.57.2-1, so an x86_64 machine that took Arch's build moves to this one
+pkgrel=2
+pkgdesc='Hyprland for the M5 Pro MacBook DCP (Omarchy 0.57.2-2 + direct-scanout latch + alpha-only primary planes)'
+# Built for x86_64 too, so PCs get the patches below and move with the titlebars plugin: see README.md
+arch=(x86_64 aarch64)
 url="https://github.com/hyprwm/Hyprland"
 license=(BSD-3-Clause)
 depends=(cairo # libcairo.so
@@ -88,28 +83,31 @@ provides=("hyprland=$pkgver" wayland-compositor)
 conflicts=(hyprland)
 _archive="Hyprland-$pkgver"
 source=("$_archive.tar.gz::$url/releases/download/v$pkgver/source-v$pkgver.tar.gz"
+        nvidia-egl-teardown.patch
+        wl-output-global-grace.patch
+        monitor-rule-vrr.patch
         0001-direct-scanout-latch-failed-candidate.patch
         0002-output-support-alpha-only-scanout.patch)
-# The patch checksum is of ../0001-direct-scanout-latch-failed-candidate.patch; rerun 'updpkgsums' after editing it.
-sha256sums=('24e7428f83115e58e5fc81f100f6b73691dcaaf7a503087391e44327a71c43ab'
+sha256sums=('34dbec0738ab88c8228caf89385662688ab1601ea58fbe5c60a6b6ab383db46d'
+            '26d62139b8ae55e286bcdff1838a6bc01a021d8f1039b40b8fa523df83f61610'
+            '8fa0f57dc1b3246ab4e30ae81419150f4af7767fb31e739e36c824c6d99fab73'
+            'c14fb0ec02d97100bcfa4e5c8daaf524972fa5c665e04960619744ba01c73c39'
             '3049a6d8bcef2ad5b3e34a2daf9ab59fb4d3f9b05b455d553d8435e53aca516b'
             '5fcd37fc0193223d10d309441f87acd82552fb497d5d9fc7f34f874a40bfdd42')
 
 prepare() {
 	ln -sf hyprland-source "$_archive"
 	cd "$_archive"
-	# A fullscreen client whose dmabuf KMS cannot import (tiled modifier, AQ_NO_MODIFIERS=1) was
-	# re-tested every frame, reconfiguring the output swapchain there and back with a modeset:
-	# 6 new 31 MB dumb buffers per client frame, never released, OOM in seconds (2026-11-08).
+	# Release the EGL context before teardown; NVIDIA's EGL crashes on exit otherwise
+	patch -Np1 --fuzz=0 -i "$srcdir/nvidia-egl-teardown.patch"
+	# Destroying a wl_output global that clients may still be binding kills every client
+	# when a dock's output flaps; wait before destroying it, as wlroots does
+	patch -Np1 --fuzz=0 -i "$srcdir/wl-output-global-grace.patch"
+	# A reload ignored a monitor rule's vrr unless something else about the rule changed
+	patch -Np1 --fuzz=0 -i "$srcdir/monitor-rule-vrr.patch"
+	# M5 DCP: rolotrealanis98's direct-scanout latch, then pick an alpha format first
 	patch -Np1 --fuzz=0 -i "$srcdir/0001-direct-scanout-latch-failed-candidate.patch"
-	# The firmware-27 DCP primary plane offers only alpha formats (it blends X as alpha):
-	# choose a supported format before the first mode test (betizzel/omarchy-m5 patches/hyprland/0001).
 	patch -Np1 -i "$srcdir/0002-output-support-alpha-only-scanout.patch"
-	# label the build for 'hyprctl version' (branch and commit message; the hash is left alone)
-	sed -i -e "s|^#define GIT_BRANCH .*|#define GIT_BRANCH         \"m5-dcp\"|" \
-	       -e "s|^#define GIT_COMMIT_MESSAGE .*|#define GIT_COMMIT_MESSAGE \"$pkgname $pkgver-$pkgrel: DS latch + alpha-only planes\"|" \
-	       src/version.h.in
-	grep -q 'm5-dcp' src/version.h.in
 	sed -i -e '/^release:/{n;s/-D/-DCMAKE_SKIP_RPATH=ON -D/}' Makefile
 	sed -i -e '/find_package.glaze/s/7...<8 //' {.,hyprpm,start}/CMakeLists.txt
 }
@@ -146,6 +144,6 @@ package() {
 	cd "$_archive"
 	make DESTDIR="$pkgdir" install
 	rm -fv "$pkgdir/usr/include/hyprland/src/version.h.in"
-	find "$pkgdir" -name '*hyprpm*' -delete
+	find $pkgdir -name '*hyprpm*' -delete
 	install -Dm0644 -t "$pkgdir/usr/share/licenses/$pkgname/" LICENSE
 }

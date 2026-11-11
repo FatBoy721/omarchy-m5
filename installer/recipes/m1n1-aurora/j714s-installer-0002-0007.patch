@@ -1,7 +1,16 @@
 diff --git a/src/kboot.c b/src/kboot.c
-index 1e7d1ca..ee7b2a5 100644
+index 1e7d1ca..58530d2 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
+@@ -5387,7 +5387,7 @@ static void dt_reserve_t6050_oslogs(void)
+  * (DCP SID 23 on dart-dcp; scanout SID 0 and PIODMA SID 16 on dart-disp0) beside the ADT's
+  * l1-tt-N. Every read is guarded; nothing is written. Logged on every T6050 boot.
+  *
+- * With chosen.asahi,t6050-display=1, and only when the DCP runs and both DARTs are locked with
++ * Unless chosen.asahi,t6050-display=0, and only when the DCP runs and both DARTs are locked with
+  * those three streams translating on four-level tables at the ADT's roots: reserve /vram (no-map,
+  * "framebuffer"), give it to the dcp node and the display subsystem as their "framebuffer"
+  * memory-region, publish the stub's firmware as apple,firmware-version/-compat, and enable the
 @@ -5400,8 +5400,8 @@ static void dt_reserve_t6050_oslogs(void)
   * and the kboot_display_handoff.c walk is written for two-level tables; these are four-level).
   *
@@ -13,7 +22,7 @@ index 1e7d1ca..ee7b2a5 100644
   * <27 0 0> instead: that claims an ABI this firmware was not built for; experiment only.
   */
  #define T6050_ASC_CPU_CONTROL     0x44
-@@ -5565,10 +5565,21 @@ static int t6050_disp_publish(const struct t6050_disp_nodes *ph, u64 vram, u64 v
+@@ -5565,16 +5565,32 @@ static int t6050_disp_publish(const struct t6050_disp_nodes *ph, u64 vram, u64 v
      return 0;
  }
  
@@ -36,7 +45,20 @@ index 1e7d1ca..ee7b2a5 100644
      struct t6050_disp_state e;
  
      t6050_disp_read(&e);
-@@ -5614,12 +5625,16 @@ static void dt_set_display_t6050(void)
+ 
+-    if (!t6050_chosen_is("asahi,t6050-display", "1")) {
+-        t6050_dcp_log("not armed (chosen.asahi,t6050-display)\n");
++    /*
++     * On by default: the checks below refuse a DCP that isn't running on locked tables or a
++     * firmware this loader can't name, which leaves simpledrm as before. chosen.asahi,t6050-display=0
++     * in m1n1.conf keeps the framebuffer for an owner who wants it.
++     */
++    if (t6050_chosen_is("asahi,t6050-display", "0")) {
++        t6050_dcp_log("not armed (chosen.asahi,t6050-display=0)\n");
+         return;
+     }
+     if (os_firmware.version == V_UNKNOWN) {
+@@ -5614,12 +5630,16 @@ static void dt_set_display_t6050(void)
          t6050_dcp_log("no ADT /vram above OS RAM: no handoff\n");
          return;
      }
@@ -55,7 +77,7 @@ index 1e7d1ca..ee7b2a5 100644
      struct t6050_disp_nodes ph = {
          .dcp = fdt_get_phandle(dt, dcp),
          .disp = fdt_get_phandle(dt, disp),
-@@ -5627,13 +5642,16 @@ static void dt_set_display_t6050(void)
+@@ -5627,13 +5647,16 @@ static void dt_set_display_t6050(void)
          .dart_disp = fdt_get_phandle(dt, dart_disp),
          .mbox = fdt_get_phandle(dt, mbox),
      };
@@ -75,6 +97,24 @@ index 1e7d1ca..ee7b2a5 100644
          t6050_dcp_log("DT edit failed: no handoff\n");
          return;
      }
+@@ -6862,6 +6885,17 @@ int kboot_prepare_dt(void *fdt)
+         dt = NULL;
+     }
+ 
++    /*
++     * T6050 MacBook Pros: drive the full panel, notch rows included, unless m1n1.conf says
++     * chosen.asahi,show-notch=0. The firmware-27 DCP already reports the full 3024x1964 timing;
++     * appledrm only trims it to the notch-less height when /chosen/asahi,show-notch is not 1, and
++     * this keeps the boot framebuffer at the same height. As edimoldovan's J714c kernel does
++     * (linux-aurora 4d11ac10a012, "show the notch rows by default"); omarchy-mac's
++     * display-cutouts.json keeps the bar clear of the notch.
++     */
++    if (chip_id == T6050 && !kboot_get_chosen("asahi,show-notch"))
++        kboot_set_chosen("asahi,show-notch", "1");
++
+     /* Need to init ISP early to carve out heap */
+     isp_init();
+ 
 diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
 index 5bb0f25..93534be 100644
 --- a/src/kboot_gpu.c

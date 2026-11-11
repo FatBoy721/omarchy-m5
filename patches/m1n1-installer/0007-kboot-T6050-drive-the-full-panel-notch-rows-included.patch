@@ -1,0 +1,45 @@
+From 292d147233aca8f92f8641a68f11887566598b21 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 13:28:25 -0500
+Subject: [PATCH] kboot: T6050: drive the full panel, notch rows included, by
+ default
+
+Unless m1n1.conf says chosen.asahi,show-notch=0, set it on T6050 before the DT
+is built, so the boot framebuffer keeps iBoot's full height and appledrm uses
+the firmware-27 DCP's full timing instead of trimming the notch rows. As
+edimoldovan's J714c kernel does (linux-aurora 4d11ac10a012, "show the notch
+rows by default", 3024x1964 through the DCP on his J714c). On TripleU613's
+J714s with this and 0006's display default (no m1n1.conf lines): eDP-2
+3024x1964@120, Hyprland on the full panel.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ src/kboot.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/kboot.c b/src/kboot.c
+index b4c8ff3..58530d2 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -6885,6 +6885,17 @@ int kboot_prepare_dt(void *fdt)
+         dt = NULL;
+     }
+ 
++    /*
++     * T6050 MacBook Pros: drive the full panel, notch rows included, unless m1n1.conf says
++     * chosen.asahi,show-notch=0. The firmware-27 DCP already reports the full 3024x1964 timing;
++     * appledrm only trims it to the notch-less height when /chosen/asahi,show-notch is not 1, and
++     * this keeps the boot framebuffer at the same height. As edimoldovan's J714c kernel does
++     * (linux-aurora 4d11ac10a012, "show the notch rows by default"); omarchy-mac's
++     * display-cutouts.json keeps the bar clear of the notch.
++     */
++    if (chip_id == T6050 && !kboot_get_chosen("asahi,show-notch"))
++        kboot_set_chosen("asahi,show-notch", "1");
++
+     /* Need to init ISP early to carve out heap */
+     isp_init();
+ 
+-- 
+2.56.0
+

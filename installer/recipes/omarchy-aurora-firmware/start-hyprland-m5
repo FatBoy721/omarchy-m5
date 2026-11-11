@@ -1,0 +1,5 @@
+#!/bin/sh
+# start-hyprland with this boot's display environment (aurora-m5-display-env): SDDM starts its
+# greeter compositor with a clean environment, so the greeter gets it here.
+for kv in $(/usr/lib/omarchy-aurora/aurora-m5-display-env); do export "$kv"; done
+exec start-hyprland "$@"
