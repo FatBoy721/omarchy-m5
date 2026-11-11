@@ -1,11 +1,12 @@
 pkgname=omarchy-aurora-firmware
-pkgver=20261014.j714s6
+pkgver=20261014.j714s7
 pkgrel=1
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
 license=('MIT' 'GPL-2.0-only')
 backup=('etc/mkinitcpio.conf.d/95-aurora-vendor-order.conf' 'etc/sddm.conf.d/60-aurora-m5-display.conf')
+makedepends=('git' 'clang' 'lld' 'llvm')
 url='https://github.com/aurora-silicon/omarchy-mac'
 source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         aurora-peripheral-firmware.service aurora-vendor-order.install
@@ -21,7 +22,9 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         # DCP two-card Hyprland session (rolotrealanis98's J716s daily session)
         aurora-m5-display-env start-hyprland-m5 60-aurora-m5-display.conf
         # J714 UCM: aurora-silicon/alsa-ucm-conf-asahi #10 (edimoldovan, merged, 401a49d4f7ee); busy-card discovery: kazuhidet
-        ucm-macaudio-j714.conf ucm-aop-j714.conf wireplumber-81-aurora-busy-discovery.conf)
+        ucm-macaudio-j714.conf ucm-aop-j714.conf wireplumber-81-aurora-busy-discovery.conf
+        # The video decoder's v5-t2 firmware (MIT), built from source; avd-fw 0.1 has up to v5-t1
+        "avd-fw::git+https://github.com/aurora-silicon/avd-fw.git#commit=ea3a65cc9c0c41907e6ad2714b813e4be6858485")
 sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'abd1fd7f2c40561311356c5748f964687e45771ad461ef7786fbdbda2aff530d'
             '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31'
@@ -45,7 +48,13 @@ sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             '1edefd658763c198fa174535b11ae6b7796d5e6c223b18226ce8d25092556ead'
             '64a7594002f84d15a1fd9a0735ace44df4f9bca341112950850371a6f28213f0'
             '66c1da54fb834923d3a42c08c04d74758778356417e1edbb191af131a4911483'
-            'c9e54f1e1d5938e47ad047599b4306c767c800a92fe52c0b35985f0f4d7647f1')
+            'c9e54f1e1d5938e47ad047599b4306c767c800a92fe52c0b35985f0f4d7647f1'
+            'SKIP')
+build() {
+  # AVD_VER/AVD_TIER as the J714s ADT's avd0 reports them (avd-version 5, tier 2)
+  make -C avd-fw AVD_VER=5 AVD_TIER=2
+}
+
 package() {
   # These services run on the target system; packaging only installs files.
   depends=('bash' 'iw' 'kmod' 'omarchy-mac-boot' 'wireless-regdb' 'linux-aurora>=7.1.12.aurora5')
@@ -97,4 +106,9 @@ package() {
   install -Dm644 ucm-macaudio-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/macaudio/MacBook Pro J714.conf"
   install -Dm644 ucm-aop-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/t8140-aop-audio/MacBook Pro J714 AOP Audio.conf"
   install -Dm644 wireplumber-81-aurora-busy-discovery.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/81-aurora-busy-discovery.conf"
+
+  # Hardware video decode: the J714s decoder (linux-aurora-n1 0017, DjDeveloperr's #1577) runs
+  # avd-fw v5-t2, which the image's avd-fw 0.1 does not ship (it ends at v5-t1).
+  install -Dm644 avd-fw/build/avd-fw-v5-t2.bin "$pkgdir/usr/lib/firmware/apple/avd-fw-v5-t2.bin"
+  install -Dm644 avd-fw/LICENSE "$pkgdir/usr/share/licenses/$pkgname/avd-fw-LICENSE"
 }

@@ -3603,6 +3603,67 @@ index 000000000000..3e6af3d48991
 +&pinctrl_ap {
 +	gpio-reserved-ranges = <0 80>, <81 25>, <108 26>, <135 4>, <140 81>;
 +};
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-avd.dtsi b/arch/arm64/boot/dts/apple/t6050-j714s-avd.dtsi
+new file mode 100644
+index 000000000000..d4d63abeda58
+--- /dev/null
++++ b/arch/arm64/boot/dts/apple/t6050-j714s-avd.dtsi
+@@ -0,0 +1,55 @@
++// SPDX-License-Identifier: GPL-2.0+ OR MIT
++/*
++ * J714s video decoder (ADT avd0, the same block as the T6050 Ultra's die 0 here, t6050-ultra.dtsi).
++ * Gathered from DjDeveloperr's aurora-silicon/linux #1577 ("t6050-j714s: Enable the video
++ * decoder", tested on a J714s: H.264/H.265 bit-exact against software through v4l2sl), which
++ * enables avd0 as #1322 does on the J714c: decoder, dart-avd0 and AVD_SYS under FAB1_SOC, FAB1_SOC
++ * kept on (macOS sets it active once at boot and never gates it).
++ */
++
++/ {
++	/*
++	 * Die 0's video decoder (ADT /arm-io/avd0, avd-version 4, the T8142 generation): reg[0]
++	 * 0x2308000000 + 0x1404000 through arm-io's ranges, windows in the T8142/T6041 layout (CM3 code
++	 * and SRAM 0x14000 each at +0x1080000, mailbox +0x10a8000, decode control +0x1100000); ADT
++	 * interrupts 2417, 2418 (die 0 IRQs 2417, 2418). dart-avd0 at +0x1020000,
++	 * interrupt 2424 (die 0 2424), SIDs 0-2 (mapper, piodma, adsbuf). Power: the clock
++	 * gates AVD_SYS_V and AVD_SOC_DART have no PS register; both hang off AVD_SYS (PMGR block
++	 * 0x2380600000 + 0x1d8, also the ARST reset), whose parent FAB1_SOC (+0x1b0) is critical.
++	 */
++	soc@2308000000 {
++		compatible = "simple-bus";
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges = <0x23 0x08000000 0x23 0x08000000 0x0 0x1404000>;
++		nonposted-mmio;
++		interrupt-parent = <&aic>;
++
++		avd: avd@2309080000 {
++			compatible = "apple,t6050-avd", "apple,t8142-avd";
++			reg = <0x23 0x09080000 0x0 0x14000>,
++			      <0x23 0x09094000 0x0 0x14000>,
++			      <0x23 0x090a8000 0x0 0x4000>,
++			      <0x23 0x09100000 0x0 0x10000>;
++			reg-names = "code", "sram", "mbox", "ctrl";
++			interrupts = <AIC_IRQ 2417 IRQ_TYPE_LEVEL_HIGH>,
++				     <AIC_IRQ 2418 IRQ_TYPE_LEVEL_HIGH>;
++			power-domains = <&ps_avd_sys>;
++			resets = <&ps_avd_sys>;
++			iommus = <&avd_dart 0>, <&avd_dart 1>, <&avd_dart 2>;
++		};
++
++		avd_dart: iommu@2309020000 {
++			compatible = "apple,t6050-dart", "apple,t8110-dart";
++			reg = <0x23 0x09020000 0x0 0x20000>;
++			#iommu-cells = <1>;
++			interrupts = <AIC_IRQ 2424 IRQ_TYPE_LEVEL_HIGH>;
++			power-domains = <&ps_avd_sys>;
++		};
++	};
++};
++
++/* pmgr4's FAB1_SOC and AVD_SYS are the base tree's (t6050.dtsi); macOS never gates FAB1_SOC */
++&ps_fab1_soc {
++	apple,always-on;
++};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts b/arch/arm64/boot/dts/apple/t6050-j714s-gpu-adt-simpledrm.dts
 new file mode 100644
 index 000000000000..074bacb00cda
@@ -4062,10 +4123,10 @@ index 000000000000..c9d54d141a40
 +};
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
 new file mode 100644
-index 000000000000..b2aa48521d0c
+index 000000000000..6e6a1d19bbf6
 --- /dev/null
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,154 @@
 +// SPDX-License-Identifier: GPL-2.0+ OR MIT
 +/*
 + * Apple MacBook Pro (14-inch, M5 Pro, 2026)
@@ -4219,6 +4280,7 @@ index 000000000000..b2aa48521d0c
 +};
 +
 +#include "t6050-j714s-audio.dtsi"
++#include "t6050-j714s-avd.dtsi"
 diff --git a/arch/arm64/boot/dts/apple/t6050-j716c.dts b/arch/arm64/boot/dts/apple/t6050-j716c.dts
 new file mode 100644
 index 000000000000..da061edcb7b2
