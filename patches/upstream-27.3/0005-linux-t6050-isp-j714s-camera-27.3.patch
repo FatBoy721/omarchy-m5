@@ -1,0 +1,494 @@
+From 2f49529f4909d08ef8ce4461f94a4a80fbeec84c Mon Sep 17 00:00:00 2001
+From: Eduard Moldovan <edimoldovan@gmail.com>
+Date: Sun, 8 Nov 2026 12:56:36 +0100
+Subject: [PATCH 1/4] media: apple: isp: Tune the J714c IMX958 with setfile
+ 2226_02
+
+macOS's appleh16camerad carries three setfiles naming sensor 0x958:
+2224_01, 2226_01 and 2226_02. The J714c module reports build revision 2,
+and with 2226_02 its noise is far lower and its colour neutral, where
+2224_01 leaves heavy grain and a green cast. Add 2226_02 and select it
+for T6050; T8142 and T6040 keep 2224_01.
+
+Signed-off-by: Eduard Moldovan <edimoldovan@gmail.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 38993598aa9aff325515eddc0de76ae895977802)
+---
+ drivers/media/platform/apple/isp/isp-cam.c | 11 ++++++++---
+ drivers/media/platform/apple/isp/isp-drv.c |  2 ++
+ drivers/media/platform/apple/isp/isp-drv.h |  4 ++++
+ 3 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/platform/apple/isp/isp-cam.c b/drivers/media/platform/apple/isp/isp-cam.c
+index bbbb58d5fb95..3f62d309f645 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.c
++++ b/drivers/media/platform/apple/isp/isp-cam.c
+@@ -87,6 +87,8 @@ static const struct isp_setfile isp_setfiles[] = {
+ 	[ISP_IMX913_7523_01] = {0x913, 0x75230107, "apple/isp_7523_01XX.dat", 0x247f8},
+ 	[ISP_IMX958_2224_01] = {0x958, 0x22240106, "apple/isp_2224_01XX.dat", 0x6ff4, 0,
+ 				ISP_TEMPORAL_FILTER_BAND0},
++	[ISP_IMX958_2226_02] = {0x958, 0x22260201, "apple/isp_2226_02XX.dat", 0x6ff4, 0,
++				ISP_TEMPORAL_FILTER_BAND0},
+ 	[ISP_VD56G0_6221_01] = {0xd56, 0x62210102, "apple/isp_6221_01XX.dat", 0x1b80},
+ 	[ISP_VD56G0_6222_01] = {0xd56, 0x62220102, "apple/isp_6222_01XX.dat", 0x1b80},
+ };
+@@ -176,8 +178,11 @@ static int isp_ch_get_sensor_id(struct apple_isp *isp, u32 ch)
+ 		id = ISP_IMX913_7523_01;
+ 		break;
+ 	case 0x958:
+-		/* Section 0x50f of 2224 names sensor 0x958; 2924's names 0x614. */
+-		id = ISP_IMX958_2224_01;
++		/*
++		 * Section 0x50f of 2224 and 2226 names sensor 0x958; 2924's
++		 * names 0x614.
++		 */
++		id = isp->hw->imx958_2226 ? ISP_IMX958_2226_02 : ISP_IMX958_2224_01;
+ 		break;
+ 	case 0xd56:
+ 		id = ISP_VD56G0_6221_01;
+@@ -485,7 +490,7 @@ static int isp_ch_cache_sensor_info(struct apple_isp *isp, u32 ch)
+ 	if (err ||
+ 	    (fmt->id != ISP_IMX248_1820_01 && fmt->id != ISP_IMX558_1921_01 &&
+ 	     fmt->id != ISP_IMX558_1925_03 && fmt->id != ISP_IMX364_8720_01 &&
+-	     fmt->id != ISP_IMX958_2224_01)) {
++	     fmt->id != ISP_IMX958_2224_01 && fmt->id != ISP_IMX958_2226_02)) {
+ 		dev_err(isp->dev,
+ 			"ch %d: unsupported sensor. Please file a bug report with hardware info & dmesg trace.\n",
+ 			ch);
+diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
+index a1a79ad97b4a..a2c8660d28fe 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.c
++++ b/drivers/media/platform/apple/isp/isp-drv.c
+@@ -1364,6 +1364,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+ 	.fw_restore = true,
+ 	.deferred_start = true,
+ 	.setfile_stride_fixup = true,
++	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
++	.imx958_2226 = true,
+ };
+ 
+ static const struct of_device_id apple_isp_of_match[] = {
+diff --git a/drivers/media/platform/apple/isp/isp-drv.h b/drivers/media/platform/apple/isp/isp-drv.h
+index fda0e754e711..9f054d529051 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.h
++++ b/drivers/media/platform/apple/isp/isp-drv.h
+@@ -276,6 +276,9 @@ struct apple_isp_hw {
+ 	 * reopen the camera, does not wait for another firmware start.
+ 	 */
+ 	unsigned int fw_idle_ms;
++
++	/* The IMX958 module takes setfile 2226_02, not 2224_01 */
++	bool imx958_2226;
+ };
+ 
+ enum isp_sensor_id {
+@@ -327,6 +330,7 @@ enum isp_sensor_id {
+ 	ISP_IMX853_7622_01,
+ 	ISP_IMX913_7523_01,
+ 	ISP_IMX958_2224_01,
++	ISP_IMX958_2226_02,
+ 	ISP_VD56G0_6221_01,
+ 	ISP_VD56G0_6222_01,
+ };
+-- 
+2.56.0
+
+
+From 130546cf5bdef8d3dda458e2d2849321e9b4806c Mon Sep 17 00:00:00 2001
+From: Eduard Moldovan <edimoldovan@gmail.com>
+Date: Sun, 8 Nov 2026 14:11:59 +0100
+Subject: [PATCH 2/4] media: apple: isp: Compute the T6050 setfile's noise
+ reduction radial gains
+
+The IMX958 setfile 2226_02 carries its noise reduction radial gains
+(record 0xc404) flat: every bin 4096. macOS's appleh16camerad computes
+them from the setfile's lens shading table (record 0xc003) before
+loading it: for each of 257 radius bins, 4096 over the mean shading gain
+of the four Bayer planes along the rays to the four image corners,
+around the optical centre 156 rows above the image centre.
+
+Do the same for T6050. On the J714c the grain on a flat wall drops by
+about 30% at the centre and 40% at the edges, where the shading gain
+is highest.
+
+Signed-off-by: Eduard Moldovan <edimoldovan@gmail.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 162531436bd8c0e1016877f1ebcf9243baceb3fe)
+---
+ drivers/media/platform/apple/isp/isp-cam.c | 104 +++++++++++++++++++++
+ drivers/media/platform/apple/isp/isp-drv.c |   1 +
+ drivers/media/platform/apple/isp/isp-drv.h |   2 +
+ 3 files changed, 107 insertions(+)
+
+diff --git a/drivers/media/platform/apple/isp/isp-cam.c b/drivers/media/platform/apple/isp/isp-cam.c
+index 3f62d309f645..63cbe5a0b46e 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.c
++++ b/drivers/media/platform/apple/isp/isp-cam.c
+@@ -3,6 +3,9 @@
+ 
+ #include <linux/firmware.h>
+ #include <linux/gcd.h>
++#include <linux/log2.h>
++#include <linux/math.h>
++#include <linux/math64.h>
+ #include <linux/unaligned.h>
+ #include <kunit/static_stub.h>
+ 
+@@ -637,6 +640,105 @@ static void isp_setfile_fixup_h17(void *data, size_t len)
+ 	}
+ }
+ 
++/*
++ * The noise reduction radial gains (setfile record 0xc404) from the lens
++ * shading table (0xc003), as macOS's appleh16camerad computes them before
++ * loading the setfile: per radius bin, 4096 over the mean shading gain of
++ * the four Bayer planes along the rays to the four image corners.
++ */
++static u8 *isp_setfile_record(u8 *data, size_t len, u32 tag, size_t *size)
++{
++	size_t off = 0x14;
++
++	while (off + 12 <= len) {
++		u32 sz = get_unaligned_le32(data + off);
++
++		if (get_unaligned_le32(data + off + 4) || sz < 8 || off + 4 + sz > len)
++			return NULL;
++		if (get_unaligned_le32(data + off + 8) == tag) {
++			*size = sz;
++			return data + off + 4;
++		}
++		off += 4 + sz;
++	}
++	return NULL;
++}
++
++#define LSC_PLANES	4
++#define LSC_TABLE	0x5c
++#define RG_BINS		257
++
++static u32 isp_lsc_gain(const u8 *lsc, size_t lsc_size, int plane, s64 x, s64 y)
++{
++	const u8 *h = lsc + 0x12 + plane * 0x12;
++	u32 sx = get_unaligned_le16(h + 2), sy = get_unaligned_le16(h + 4);
++	u32 base = get_unaligned_le32(h + 6);
++	u32 gx = get_unaligned_le16(h + 14), gy = get_unaligned_le16(h + 16);
++	s64 fx, fy, ax, ay;
++	s64 ix, iy;
++	u32 t00, t10, t01, t11;
++	size_t i00;
++
++	/* x and y in 1/256 half-resolution pixels; fx, fy in 1/256 cells */
++	fx = div_s64(x, sx);
++	fy = div_s64(y, sy);
++	ix = clamp_t(s64, fx >> 8, 0, gx - 2);
++	iy = clamp_t(s64, fy >> 8, 0, gy - 2);
++	ax = clamp_t(s64, fx - (ix << 8), 0, 256);
++	ay = clamp_t(s64, fy - (iy << 8), 0, 256);
++	i00 = LSC_TABLE + 2 * (base + iy * gx + ix);
++	if (i00 + 2 * (gx + 2) > lsc_size + 4)
++		return 4096;
++	t00 = get_unaligned_le16(lsc + i00);
++	t10 = get_unaligned_le16(lsc + i00 + 2);
++	t01 = get_unaligned_le16(lsc + i00 + 2 * gx);
++	t11 = get_unaligned_le16(lsc + i00 + 2 * gx + 2);
++	return ((t00 * (256 - ax) + t10 * ax) * (256 - ay) +
++		(t01 * (256 - ax) + t11 * ax) * ay) >> 16;
++}
++
++static void isp_setfile_radial_gain(u8 *data, size_t len)
++{
++	size_t lsc_size, rg_size;
++	u8 *lsc = isp_setfile_record(data, len, 0xc003, &lsc_size);
++	u8 *rg = isp_setfile_record(data, len, 0xc404, &rg_size);
++	s64 cx, cy, dx[4], dy[4], dist[4], rmax = 0;
++	u32 w, h, shift;
++	int i, c, p;
++
++	if (!lsc || !rg || lsc_size < LSC_TABLE || rg_size < 0xe + 2 * RG_BINS - 4)
++		return;
++	w = get_unaligned_le16(lsc + 0xe);
++	h = get_unaligned_le16(lsc + 0x10);
++	if (!w || !h)
++		return;
++
++	/* full-resolution pixels in 1/256; the optical centre sits 156 rows up */
++	cx = (s64)w << 7;
++	cy = ((s64)h << 7) - (156 << 8);
++	for (c = 0; c < 4; c++) {
++		dx[c] = ((c & 1) ? (s64)w << 8 : 0) - cx;
++		dy[c] = ((c & 2) ? (s64)h << 8 : 0) - cy;
++		dist[c] = int_sqrt64(dx[c] * dx[c] + dy[c] * dy[c]);
++		rmax = max(rmax, dist[c]);
++	}
++	shift = order_base_2(DIV_ROUND_UP(rmax, 256 << 8));
++	put_unaligned_le16(shift, rg + 0xc);
++
++	for (i = 0; i < RG_BINS; i++) {
++		s64 t = min_t(s64, (s64)i << (shift + 8), rmax);
++		u64 sum = 0;
++
++		for (p = 0; p < LSC_PLANES; p++)
++			for (c = 0; c < 4; c++)
++				sum += isp_lsc_gain(lsc, lsc_size, p,
++						    (cx + div64_s64(t * dx[c], dist[c])) / 2,
++						    (cy + div64_s64(t * dy[c], dist[c])) / 2);
++		put_unaligned_le16(min_t(u64, div64_u64(16ULL * 4096 * 4096, sum), 0xffff),
++				   rg + 0xe + 2 * i);
++	}
++}
++
+ static int isp_ch_load_setfile(struct apple_isp *isp, u32 ch)
+ {
+ 	struct isp_format *fmt = isp_get_format(isp, ch);
+@@ -684,6 +786,8 @@ static int isp_ch_load_setfile(struct apple_isp *isp, u32 ch)
+ 	/* Seen on T6040 only; T8140 runs its setfiles as they are. */
+ 	if (isp->hw->gen == ISP_GEN_T6040 || isp->hw->setfile_stride_fixup)
+ 		isp_setfile_fixup_h17(isp->data_surf->virt, len);
++	if (isp->hw->setfile_radial_gain)
++		isp_setfile_radial_gain(isp->data_surf->virt, len);
+ 
+ 	err = isp_cmd_ch_set_file_load(isp, ch, isp->data_surf->iova,
+ 				       setfile->size);
+diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
+index a2c8660d28fe..ef2a52ca1ea3 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.c
++++ b/drivers/media/platform/apple/isp/isp-drv.c
+@@ -1366,6 +1366,7 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+ 	.setfile_stride_fixup = true,
+ 	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
+ 	.imx958_2226 = true,
++	.setfile_radial_gain = true,
+ };
+ 
+ static const struct of_device_id apple_isp_of_match[] = {
+diff --git a/drivers/media/platform/apple/isp/isp-drv.h b/drivers/media/platform/apple/isp/isp-drv.h
+index 9f054d529051..bf83968d0f03 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.h
++++ b/drivers/media/platform/apple/isp/isp-drv.h
+@@ -279,6 +279,8 @@ struct apple_isp_hw {
+ 
+ 	/* The IMX958 module takes setfile 2226_02, not 2224_01 */
+ 	bool imx958_2226;
++	/* Compute the setfile's noise reduction radial gains from its lens shading */
++	bool setfile_radial_gain;
+ };
+ 
+ enum isp_sensor_id {
+-- 
+2.56.0
+
+
+From f40e971167c8c66a9b77012b17ebd84e4cf3c2f3 Mon Sep 17 00:00:00 2001
+From: Eduard Moldovan <edimoldovan@gmail.com>
+Date: Sun, 8 Nov 2026 14:13:01 +0100
+Subject: [PATCH 3/4] media: apple: isp: Set the J714c lens shading target and
+ scene metering
+
+macOS's appleh16camerad sets the IMX958's lens shading ideal percent to
+84 before loading its setfile (CH_LSC_IDEAL_PERCENT_SET, 0x0a4e), and
+sends the face-detection scene metering setup that this driver skips
+on H17 firmware. The T6050 firmware takes both. Add the command, and
+make the percent and the scene metering T6050 hardware data.
+
+Signed-off-by: Eduard Moldovan <edimoldovan@gmail.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit cb9cbb2b470f12966dfafa8679c3dc9f80f8ef12)
+---
+ drivers/media/platform/apple/isp/isp-cam.c | 11 +++++++++--
+ drivers/media/platform/apple/isp/isp-cmd.c | 11 +++++++++++
+ drivers/media/platform/apple/isp/isp-cmd.h | 12 ++++++++++++
+ drivers/media/platform/apple/isp/isp-drv.c |  3 +++
+ drivers/media/platform/apple/isp/isp-drv.h |  4 ++++
+ 5 files changed, 39 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/media/platform/apple/isp/isp-cam.c b/drivers/media/platform/apple/isp/isp-cam.c
+index 63cbe5a0b46e..00e4f162ec11 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.c
++++ b/drivers/media/platform/apple/isp/isp-cam.c
+@@ -789,6 +789,13 @@ static int isp_ch_load_setfile(struct apple_isp *isp, u32 ch)
+ 	if (isp->hw->setfile_radial_gain)
+ 		isp_setfile_radial_gain(isp->data_surf->virt, len);
+ 
++	if (isp->hw->lsc_ideal_percent) {
++		err = isp_cmd_ch_lsc_ideal_percent_set(isp, ch,
++						       isp->hw->lsc_ideal_percent);
++		if (err)
++			return err;
++	}
++
+ 	err = isp_cmd_ch_set_file_load(isp, ch, isp->data_surf->iova,
+ 				       setfile->size);
+ 	if (err)
+@@ -1025,8 +1032,8 @@ static int isp_ch_configure_capture(struct apple_isp *isp, u32 ch)
+ 	if (err)
+ 		return err;
+ 
+-	/* The H17 firmware faults on this face-detection metering setup. */
+-	if (!h17) {
++	/* Most H17 firmware faults on this face-detection metering setup. */
++	if (!h17 || isp->hw->ae_fd_scene_metering) {
+ 		err = isp_cmd_apple_ch_ae_fd_scene_metering_config_set(isp,
+ 								       ch);
+ 		if (err)
+diff --git a/drivers/media/platform/apple/isp/isp-cmd.c b/drivers/media/platform/apple/isp/isp-cmd.c
+index a609fe2c3416..7f4733192a72 100644
+--- a/drivers/media/platform/apple/isp/isp-cmd.c
++++ b/drivers/media/platform/apple/isp/isp-cmd.c
+@@ -779,6 +779,17 @@ int isp_cmd_apple_ch_ae_metering_mode_set(struct apple_isp *isp, u32 chan,
+ 	return CISP_SEND_IN(isp, args);
+ }
+ 
++int isp_cmd_ch_lsc_ideal_percent_set(struct apple_isp *isp, u32 chan,
++				     u16 percent)
++{
++	struct cmd_ch_lsc_ideal_percent_set args = {
++		.opcode = CISP_OPCODE(CISP_CMD_CH_LSC_IDEAL_PERCENT_SET),
++		.chan = chan,
++		.percent = percent,
++	};
++	return CISP_SEND_IN(isp, args);
++}
++
+ int isp_cmd_apple_ch_ae_flicker_freq_update_current_set(struct apple_isp *isp,
+ 							u32 chan, u32 freq)
+ {
+diff --git a/drivers/media/platform/apple/isp/isp-cmd.h b/drivers/media/platform/apple/isp/isp-cmd.h
+index ab98f3447d6f..6511b625c58f 100644
+--- a/drivers/media/platform/apple/isp/isp-cmd.h
++++ b/drivers/media/platform/apple/isp/isp-cmd.h
+@@ -70,6 +70,7 @@
+ #define CISP_CMD_CH_ALS_DISABLE				     0x0a1d
+ #define CISP_CMD_CH_CNR_START				     0x0a2f
+ #define CISP_CMD_CH_MBNR_ENABLE				     0x0a3a
++#define CISP_CMD_CH_LSC_IDEAL_PERCENT_SET		     0x0a4e
+ #define CISP_CMD_CH_OUTPUT_CONFIG_SET			     0x0b01
+ #define CISP_CMD_CH_OUTPUT_CONFIG_SCL1_SET		     0x0b09
+ #define CISP_CMD_CH_PREVIEW_STREAM_SET			     0x0b0d
+@@ -782,6 +783,15 @@ struct cmd_apple_ch_ae_fd_scene_metering_config_set {
+ static_assert(sizeof(struct cmd_apple_ch_ae_fd_scene_metering_config_set) ==
+ 	      0x24);
+ 
++/* The lens shading falloff the firmware corrects to, in percent at the corner */
++struct cmd_ch_lsc_ideal_percent_set {
++	u64 opcode;
++	u32 chan;
++	u16 percent;
++	u16 pad;
++} __packed;
++static_assert(sizeof(struct cmd_ch_lsc_ideal_percent_set) == 0x10);
++
+ struct cmd_apple_ch_ae_metering_mode_set {
+ 	u64 opcode;
+ 	u32 chan;
+@@ -810,6 +820,8 @@ int isp_cmd_apple_ch_ae_fd_scene_metering_config_set(struct apple_isp *isp,
+ 						     u32 chan);
+ int isp_cmd_apple_ch_ae_metering_mode_set(struct apple_isp *isp, u32 chan,
+ 					  u32 mode);
++int isp_cmd_ch_lsc_ideal_percent_set(struct apple_isp *isp, u32 chan,
++				     u16 percent);
+ int isp_cmd_apple_ch_ae_flicker_freq_update_current_set(struct apple_isp *isp,
+ 							u32 chan, u32 freq);
+ 
+diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
+index ef2a52ca1ea3..d7077996586d 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.c
++++ b/drivers/media/platform/apple/isp/isp-drv.c
+@@ -1367,6 +1367,9 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+ 	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
+ 	.imx958_2226 = true,
+ 	.setfile_radial_gain = true,
++	/* As macOS's appleh16camerad sets them for the J714c's IMX958 */
++	.lsc_ideal_percent = 84,
++	.ae_fd_scene_metering = true,
+ };
+ 
+ static const struct of_device_id apple_isp_of_match[] = {
+diff --git a/drivers/media/platform/apple/isp/isp-drv.h b/drivers/media/platform/apple/isp/isp-drv.h
+index bf83968d0f03..5c64c3fbd814 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.h
++++ b/drivers/media/platform/apple/isp/isp-drv.h
+@@ -281,6 +281,10 @@ struct apple_isp_hw {
+ 	bool imx958_2226;
+ 	/* Compute the setfile's noise reduction radial gains from its lens shading */
+ 	bool setfile_radial_gain;
++	/* The lens shading falloff to correct to, in percent at the corner (0: unset) */
++	u16 lsc_ideal_percent;
++	/* H17 firmware that takes the face-detection scene metering setup */
++	bool ae_fd_scene_metering;
+ };
+ 
+ enum isp_sensor_id {
+-- 
+2.56.0
+
+
+From 72dfdaee9550a1d4e8b05ccaa04f9cbc8babf456 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 04:15:12 -0500
+Subject: [PATCH 4/4] arm64: dts: apple: t6050-j714s: Stream the camera as the
+ J714c does
+
+Take edimoldovan's J714c presets (omacom/linux-aurora #422, e8233e1bbe91
+and 8916070002f4) for the J714s's IMX958: the full sensor cropped to the
+centre, 1920x1080 and 2560x1440 in firmware configuration 6 (two merged
+exposures, as macOS streams), 1280x720 in configuration 7.
+
+Tested on the J714s (macOS 27.3 beta 1 firmware): all three stream NV12
+at 30 fps.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ arch/arm64/boot/dts/apple/t6050-j714s.dts | 36 +++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+index 8147a1ff8d11..680c934ccfaa 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+@@ -548,6 +548,42 @@ fan-F1Ac {
+ /* The same T6050 camera as J716c (J714sAP ADT); the loader sets the J714s sensor type. */
+ #include "t6050-j716c-isp.dtsi"
+ 
++/*
++ * The J714s's IMX958 streams as edimoldovan's J714c does (omacom/linux-aurora
++ * #422): the full sensor cropped to the centre, inside the lens circle.
++ * 1920x1080 and 2560x1440 use firmware configuration 6, the one macOS streams
++ * (two exposures, 3040x5760, merged to 3040x2880); 1280x720 uses
++ * configuration 7 (3040x2880). 1920x1080 and 1280x720 scale a 2400x1350
++ * window; 2560x1440 is the centre 1:1.
++ */
++&isp0 {
++	/delete-node/ sensor-presets;
++
++	sensor-presets {
++		/* 1920x1080 */
++		preset0 {
++			apple,config-index = <6>;
++			apple,input-size = <3040 2880>;
++			apple,output-size = <1920 1080>;
++			apple,crop = <320 765 2400 1350>;
++		};
++		/* 1280x720 */
++		preset1 {
++			apple,config-index = <7>;
++			apple,input-size = <3040 2880>;
++			apple,output-size = <1280 720>;
++			apple,crop = <320 765 2400 1350>;
++		};
++		/* 2560x1440 */
++		preset2 {
++			apple,config-index = <6>;
++			apple,input-size = <3040 2880>;
++			apple,output-size = <2560 1440>;
++			apple,crop = <240 720 2560 1440>;
++		};
++	};
++};
++
+ /* The GPU and the internal panel, for the boot loader's handoff */
+ #include "t6050-j714s-gpu-panel.dtsi"
+ 
+-- 
+2.56.0
+
