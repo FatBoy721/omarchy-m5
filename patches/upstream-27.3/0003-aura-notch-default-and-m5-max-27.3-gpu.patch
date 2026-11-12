@@ -1,0 +1,80 @@
+From f81ba213d6af677d4aaf4102cf7fa7e3dcaf2ccf Mon Sep 17 00:00:00 2001
+From: TripleU <usher@gentechsolution.com>
+Date: Wed, 11 Nov 2026 18:39:56 -0500
+Subject: [PATCH 1/2] kboot: M5: show the notch rows by default
+
+The full 3024x1964 panel (notch rows included) is what the J714s image wants by
+default, as our m1n1 (m1n1-installer 0006/0007) did. Without a config line
+Aura now keeps iBoot's full framebuffer on T6050/T6051 and sets
+/chosen/asahi,show-notch = "1" for the display driver; chosen.asahi,show-notch=0
+opts out.
+---
+ src/kboot.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/kboot.c b/src/kboot.c
+index ce6b5f75..c108bfe2 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -169,7 +169,8 @@ static bool kboot_show_notch(void)
+         if (!strcmp(chosen_params[i][0], "asahi,show-notch"))
+             return chosen_params[i][1] && !strcmp(chosen_params[i][1], "1");
+     }
+-    return false;
++    /* omarchy-m5: on M5 the full panel (notch rows) is the default; chosen.asahi,show-notch=0 opts out */
++    return chip_id == T6050 || chip_id == T6051;
+ }
+ 
+ static int dt_set_rng_seed_sep(int node)
+@@ -878,6 +879,13 @@ static int dt_set_chosen(void)
+         printf("FDT: set chosen.%s\n", name);
+     }
+ 
++    /* Tell the display driver the same default kboot_show_notch() chose (dcp.c reads it) */
++    if (kboot_show_notch() && !kboot_chosen_param("asahi,show-notch")) {
++        if (fdt_setprop_string(dt, node, "asahi,show-notch", "1") < 0)
++            bail("FDT: couldn't set chosen.asahi,show-notch property\n");
++        printf("FDT: set chosen.asahi,show-notch (M5 default)\n");
++    }
++
+     if (dt_set_stdout_path(node))
+         return -1;
+ 
+-- 
+2.56.0
+
+
+From e75fbb14fe4e06d6c55214a44b168b7353c4c77e Mon Sep 17 00:00:00 2001
+From: TripleU <usher@gentechsolution.com>
+Date: Wed, 11 Nov 2026 19:25:29 -0500
+Subject: [PATCH 2/2] kboot: T6050: also admit the M5 Max's 27.3 GPU build
+ (aura #172)
+
+joshuaswarren's aurora-silicon/aura #172 (60a3b0fdb3) accepts the 26C5035r digest he
+measured on an M5 Max, normalized with the 27.0 record offsets. Our 27.3 hand-off keeps a
+table of builds, so his digest goes in as one more entry rather than a second check.
+
+Co-authored-by: Joshua Warren <816217+joshuaswarren@users.noreply.github.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/kboot_gpu.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
+index 90d6dba6..164569de 100644
+--- a/src/kboot_gpu.c
++++ b/src/kboot_gpu.c
+@@ -3942,6 +3942,10 @@ static const struct {
+     {{0x4976c, 0x49eac, 0x9d1ec, 0x9d92c},
+      {0xb5, 0x53, 0x7c, 0x8f, 0x06, 0xbd, 0x19, 0xeb, 0xf0, 0xef, 0xd0, 0xcb, 0xfb, 0x65, 0x52, 0x33,
+       0x9a, 0x10, 0xd4, 0xaf, 0xc4, 0xed, 0xa9, 0xd2, 0x1c, 0xbe, 0xdc, 0x36, 0x66, 0x76, 0x36, 0x00}},
++    /* 27.3 (26C5035r) on the M5 Max, with the 27.0 records: aura #172 (joshuaswarren) */
++    {{0x49720, 0x49e60, 0x9d1d8, 0x9d918},
++     {0xb7, 0x97, 0x17, 0x83, 0x72, 0xd1, 0xde, 0xb2, 0x8b, 0x56, 0xb5, 0xcc, 0x43, 0xe6, 0x45, 0xb1,
++      0x09, 0x88, 0x60, 0xc1, 0x6d, 0x69, 0x1f, 0x59, 0x91, 0xc1, 0xad, 0x8a, 0xfd, 0x5c, 0x07, 0xeb}},
+     /* 27.2 (26B123) */
+     {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
+      {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41, 0x01, 0x70, 0x2c, 0x9a, 0xc6,
+-- 
+2.56.0
+
