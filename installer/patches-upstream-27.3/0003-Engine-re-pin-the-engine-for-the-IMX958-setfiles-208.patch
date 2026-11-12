@@ -1,4 +1,4 @@
-From cdef5eed661cf35caeb093561263a443ffaaade4 Mon Sep 17 00:00:00 2001
+From e12840427d0c580890ba9c8539f9bf18eda1e543 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 05:37:49 -0500
 Subject: [PATCH 3/3] Engine: re-pin the engine for the IMX958 setfiles (#208)
