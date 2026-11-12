@@ -9,7 +9,8 @@
 # resized, moved or deleted: make the free space first (see the README).
 #
 # usage: install-from-linux.sh IMAGE.zip FIRMWARE_DIR
-#   FIRMWARE_DIR holds apple/centauri/j714s-ftab.bin and apple/tpmtfw-j714s.bin
+#   FIRMWARE_DIR holds apple/centauri/j714s-ftab.bin and apple/tpmtfw-j714s.bin, and optionally
+#   the camera setfiles apple/isp_*.dat
 #   (on an existing J714s Linux: /usr/lib/firmware). It prints the m1n1 line
 #   that boots the image; it does not change how the Mac boots.
 set -euo pipefail
@@ -67,8 +68,13 @@ mkdir "$WORK/esp" "$WORK/x" && mount ${DISK}p$P7 "$WORK/esp"
 unzip -o -q "$ZIP" 'esp/*' -d "$WORK/x" && cp -r "$WORK/x/esp/." "$WORK/esp/"
 mkdir -p "$WORK/esp/vendorfw" "$WORK/esp/asahi"
 # vendorfw the way the installer packs it (firmware.tar is what the image installs)
-tar -C "$FW" -cf "$WORK/esp/vendorfw/firmware.tar" apple/centauri/j714s-ftab.bin apple/tpmtfw-j714s.bin
-(cd "$FW" && sha256sum apple/centauri/j714s-ftab.bin apple/tpmtfw-j714s.bin | awk '{print "FILE "$2" SHA256 "$1}') > "$WORK/esp/vendorfw/manifest.txt"
+FILES=(apple/centauri/j714s-ftab.bin apple/tpmtfw-j714s.bin)
+# Front camera tuning (IMX958 setfiles, extracted from macOS by omacom/omarchy-mac-installer#208's
+# code); optional: without them the camera still streams, badly.
+for f in "$FW"/apple/isp_*.dat; do [[ -f $f ]] && FILES+=("apple/${f##*/}"); done
+tar -C "$FW" -cf "$WORK/esp/vendorfw/firmware.tar" "${FILES[@]}"
+(cd "$FW" && sha256sum "${FILES[@]}" | awk '{print "FILE "$2" SHA256 "$1}') > "$WORK/esp/vendorfw/manifest.txt"
+echo "vendor firmware packed: ${FILES[*]}"
 sync; umount "$WORK/esp"
 
 for img in boot.img:$P8 root.img:$P9; do

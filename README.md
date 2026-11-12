@@ -55,11 +55,14 @@ Steps:
      > omarchy-2026.11.11-aarch64-apple-silicon-mac-edge-os-package.zip
    sha256sum -c SHA256SUMS --ignore-missing
    ```
-3. **Write it to the Mac** from Linux running on the Mac, as root:
+3. *(Optional, for the experimental upstream image's camera)* in macOS run
+   [`tools/camera-setfiles/save-camera-setfiles.py`](tools/camera-setfiles/save-camera-setfiles.py)
+   and copy its `apple/` folder into `/usr/lib/firmware/` on the Mac's Linux.
+4. **Write it to the Mac** from Linux running on the Mac, as root:
    ```sh
    tools/install-image/install-from-linux.sh omarchy-2026.11.11-*.zip /usr/lib/firmware
    ```
-4. **Reboot.** First boot sets things up, then asks for your name and password.
+5. **Reboot.** First boot sets things up, then asks for your name and password.
 
 Stuck? Open an [issue](https://github.com/betizzel/omarchy-m5/issues) and paste what you see.
 
