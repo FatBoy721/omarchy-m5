@@ -357,15 +357,12 @@ No other T6050 or J714s work was merged into `integration/aurora` or Aura main (
 Booted with `appledrm.fw27_panel_vrr=1` in the loader's bootargs:
 - **The panel offers VRR.** The eDP connector's `vrr_capable` is 1, Hyprland shows `vrrCapable: yes`, and the mode set logs `vrr:1`. Without the parameter, `vrr_capable` is 0 and nothing changes.
 - **Hyprland enables it.** `hyprctl eval 'hl.config({ misc = { vrr = 1 } })'` gives `vrr: true` and `VRR_ENABLED 1: selecting "3024x1964" ... again`. The firmware logs `IOMFBParameter_adaptive_sync Req minRR = 0x180000` (24 Hz). `vrr = 0` sends `minRR = 0x0`. The mode stays 3024x1964@120 throughout.
-- **Measurement:** the DCP's `iomfb_swap_complete` tracepoint over 5 s, with mpv paced at 48 fps full screen.
-  - With VRR on, swaps come 20.8 ms apart (227-236 of 239), so the panel follows the content.
-  - At a fixed 120 Hz, swaps alternate between 240 Hz subframe multiples (12.5/16.7/25/29.1 ms), as seen the first time VRR was turned off.
-  - 120 fps content with VRR on: 599 swaps in 5 s, all 8.3-8.4 ms.
-- **Toggling is not deterministic.** There were 26 settled samples, 8 s after each toggle, across the 7 boots with the parameter. Every toggle logged its `VRR_ENABLED` mode set and `minRR`.
-  - VRR on (16 samples): 12 kept steady 20.8 ms pacing; 4 were partly or mostly at the fixed rate.
-  - VRR off (10 samples): only 1 showed the fixed-rate pattern; the other 9 kept the 20.8 ms pacing (one partly).
-  - So turning VRR off does not reliably bring the J714s panel back to a fixed 120 Hz, and turning it on usually, not always, takes effect within 8 s. rolotrealanis98 reports clean off/on on his J716s.
-- **Stable:** in 7 boots with the parameter on (a 2-minute 48 fps run on the first, 48 fps with off/on toggles on each), there was no `adaptive swap timed out`, no retraining, no swap watchdog and no error. Hyprland stayed at 120.00 Hz.
+- **What swap timing does and doesn't show.** The DCP's `iomfb_swap_complete` tracepoint, with mpv paced at 48 fps full screen, gives steady 20.8 ms swaps with VRR on. 120 fps content gives 8.3-8.4 ms.
+  - A control boot **without** the parameter (`vrr_capable` 0, Hyprland `vrr: false`) gives the same steady 20.8 ms. So does `iomfb_vrr_timestamps` (`enabled=0`, firmware timestamps 20.8 ms apart).
+  - So neither tracepoint shows when the panel scans out, and they cannot prove the panel refreshes at the content's rate.
+  - Some samples, in either state, showed 12.5/16.7/25/29.1 ms swap intervals. They did not follow the VRR state. They were mostly the first sample after mpv started, so they say more about the client than the panel. An earlier reading of them as "VRR off does not restore a fixed rate" is withdrawn.
+  - Established: the panel offers VRR, Hyprland enables it, the firmware takes `minRR` 24 Hz on and 0 off, and it stays stable. Not yet measured: the panel's actual refresh (needs a scanout-side timestamp or a camera on the panel).
+- **Stable:** in 7 boots with the parameter on (a 2-minute 48 fps run on the first, 48 fps with off/on toggles on each; each boot's kernel journal checked afterwards), there was no `adaptive swap timed out`, no retraining and no error. Hyprland stayed at 120.00 Hz. The packaged up273-8 boot with the parameter is clean too.
 - **Image -7 ships it opt-in**, as written: add `appledrm.fw27_panel_vrr=1` to the kernel command line, then turn on Hyprland's `misc.vrr`.
 
 ### RAM tests of `7.3.0-17.up273-8-ARCH`
@@ -377,14 +374,14 @@ Booted through the -6 loader template (Aura main + 0002/0003/0006/0007, test wat
 | Boots | 8 of 8 up in 84-91 s: one without the VRR parameter, then seven with it (one VRR session, six stability boots in a row) |
 | GPU | `GPU firmware build: 26C5035r for T6050 G17S` |
 | Internal display | `eDP-1` 3024x1964 at 120.00 Hz, Hyprland |
-| Wi-Fi | associated on all 8 (on 2, Aura's 0007 path `storage after F: allowed`) |
+| Wi-Fi | associated on all 8. Aura's 0007 path (`storage after ...: allowed`) fired on 5 of the 8, and on the packaged boot |
 | ANE | `/dev/accel/accel0` |
 | AVE | H.264 and HEVC, 30 frames each, decode clean on all 8 |
 | Camera | `/dev/video0`, 10 distinct NV12 frames at 1920x1080 on all 8 |
 | MTE | 15 CPUs |
 | Errors | no SError, Oops, WARNING or call trace |
 
-Then the **up273-8 package itself** (linux-aurora 7.3.0.aurora17.up273-8, the one in image -7; `/proc/version` clang 23.1.4, `20:23:47 +0000`), with its Image (gzip'd), dtb and module tree, through `loader-up273-8-vrr-bm.bin`. It gave the same full pass, and VRR 48 fps swaps at 20.8 ms.
+Then the **up273-8 package itself** (linux-aurora 7.3.0.aurora17.up273-8, the one in image -7; `/proc/version` clang 23.1.4, `20:23:47 +0000`), with its Image (gzip'd), dtb and module tree, through `loader-up273-8-vrr-bm.bin`. It gave the same full pass, with `vrr_capable` 1. A later control boot of the same package without the parameter also passed (9 up273-8 boots in all).
 
 ### Dev Mac state
 
@@ -396,5 +393,6 @@ Then the **up273-8 package itself** (linux-aurora 7.3.0.aurora17.up273-8, the on
   - `7.3.0-17.up273-8-ARCH`: the packaged tree.
   - `7.3.0-17.up273-7-ARCH`, now the packaged tree; the ush-built one is in `/root/modules-up273-7-ush`.
 - Logs: `/var/lib/m5test/up273-8/<tag>` (pass lists, dmesg, VRR timings) and `/var/lib/m5test/aura-log`.
-- The Mac was left on the packaged up273-8 (a test boot); the catcher is back on `catch-loop.sh loader-daily-dcp-bm.bin` for the next reboot.
+- The Mac was left on the packaged up273-8 (a test boot, the no-VRR control); the catcher is back on `catch-loop.sh loader-daily-dcp-bm.bin` for the next reboot.
+- Also on p5: `/root/pkg-up273-7-old` (the -6 linux-aurora packages), `/root/Image-pkg-up273-7.gz`. The `linux-aurora-up` build tree's old src, pkg and 8679514f tarball were deleted, and the up273-8 package was built there.
 - Test loaders in `~/m5/tools`: `loader-up273-7pkgk-bm.bin`, `loader-up273-7pkgaura-bm.bin`, `loader-up273-8-bm.bin`, `loader-up273-8-vrr-bm.bin`.
