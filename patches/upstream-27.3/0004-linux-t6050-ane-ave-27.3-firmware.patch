@@ -1,7 +1,7 @@
-diff --git i/drivers/accel/ane/ane_fw_cold.c w/drivers/accel/ane/ane_fw_cold.c
-index 6f447afa7..bd62013b2 100644
---- i/drivers/accel/ane/ane_fw_cold.c
-+++ w/drivers/accel/ane/ane_fw_cold.c
+diff --git a/drivers/accel/ane/ane_fw_cold.c b/drivers/accel/ane/ane_fw_cold.c
+index 6f447afa769e..bd62013b2ead 100644
+--- a/drivers/accel/ane/ane_fw_cold.c
++++ b/drivers/accel/ane/ane_fw_cold.c
 @@ -74,6 +74,8 @@ struct ane_fw_backend {
  	struct ane_fw_surface preload[2], heap_tail;
  	u64 preload_phys[2];
@@ -174,10 +174,10 @@ index 6f447afa7..bd62013b2 100644
  	INIT_WORK(&b->start, ane_fw_start_work);
  	return 0;
  fail:
-diff --git i/drivers/accel/ane/ane_fw_cold.h w/drivers/accel/ane/ane_fw_cold.h
-index a9bea3958..d3497f50e 100644
---- i/drivers/accel/ane/ane_fw_cold.h
-+++ w/drivers/accel/ane/ane_fw_cold.h
+diff --git a/drivers/accel/ane/ane_fw_cold.h b/drivers/accel/ane/ane_fw_cold.h
+index a9bea3958790..d3497f50ec53 100644
+--- a/drivers/accel/ane/ane_fw_cold.h
++++ b/drivers/accel/ane/ane_fw_cold.h
 @@ -153,6 +153,9 @@ struct ane_fw_handoff {
  	bool regions_ok;
  	u64 phys[2], size[2], dva[2];
@@ -188,10 +188,10 @@ index a9bea3958..d3497f50e 100644
  	const struct ane_fw_cold_state *pmgr;
  	bool crash_kernel;
  };
-diff --git i/drivers/accel/ane/ane_fw_platform.c w/drivers/accel/ane/ane_fw_platform.c
-index 5639f340d..c17656c17 100644
---- i/drivers/accel/ane/ane_fw_platform.c
-+++ w/drivers/accel/ane/ane_fw_platform.c
+diff --git a/drivers/accel/ane/ane_fw_platform.c b/drivers/accel/ane/ane_fw_platform.c
+index 5639f340d0a6..c17656c17e47 100644
+--- a/drivers/accel/ane/ane_fw_platform.c
++++ b/drivers/accel/ane/ane_fw_platform.c
 @@ -49,6 +49,33 @@ static const u8 ane_t6050_text_pin_27_0[] = {
  	0xd1, 0xa2, 0x20, 0xd0, 0xee, 0x43, 0x8b, 0x8f,
  };
@@ -235,10 +235,10 @@ index 5639f340d..c17656c17 100644
  };
  
  /*
-diff --git i/drivers/accel/ane/ane_fw_platform.h w/drivers/accel/ane/ane_fw_platform.h
-index e4afe348b..a2b11206e 100644
---- i/drivers/accel/ane/ane_fw_platform.h
-+++ w/drivers/accel/ane/ane_fw_platform.h
+diff --git a/drivers/accel/ane/ane_fw_platform.h b/drivers/accel/ane/ane_fw_platform.h
+index e4afe348b30c..a2b11206ee52 100644
+--- a/drivers/accel/ane/ane_fw_platform.h
++++ b/drivers/accel/ane/ane_fw_platform.h
 @@ -24,6 +24,20 @@ enum ane_fw_irq_role {
  	ANE_FW_IRQ_CHANNELS,
  };
@@ -333,10 +333,10 @@ index e4afe348b..a2b11206e 100644
  /*
   * The system sleep path of a device the ane_t6021 driver bound. Devices of
   * the shared firmware platform (H16, H17) carry the backend's drvdata and
-diff --git i/drivers/accel/ane/ane_fw_platform_test.c w/drivers/accel/ane/ane_fw_platform_test.c
-index 7fa82abf6..53eb20cb1 100644
---- i/drivers/accel/ane/ane_fw_platform_test.c
-+++ w/drivers/accel/ane/ane_fw_platform_test.c
+diff --git a/drivers/accel/ane/ane_fw_platform_test.c b/drivers/accel/ane/ane_fw_platform_test.c
+index 7fa82abf63fa..53eb20cb1300 100644
+--- a/drivers/accel/ane/ane_fw_platform_test.c
++++ b/drivers/accel/ane/ane_fw_platform_test.c
 @@ -37,6 +37,40 @@ static void ane_preload_ranges_test(struct kunit *test)
  	KUNIT_EXPECT_FALSE(test, ane_fw_preload_ranges_valid(&soc, phys, size, dva));
  }
@@ -386,10 +386,10 @@ index 7fa82abf6..53eb20cb1 100644
  	{}
  };
  
-diff --git i/drivers/media/platform/apple/ave/ave-drv.c w/drivers/media/platform/apple/ave/ave-drv.c
-index b80ae4b78..e0654a8b8 100644
---- i/drivers/media/platform/apple/ave/ave-drv.c
-+++ w/drivers/media/platform/apple/ave/ave-drv.c
+diff --git a/drivers/media/platform/apple/ave/ave-drv.c b/drivers/media/platform/apple/ave/ave-drv.c
+index b80ae4b78c55..cf4c43d9ca05 100644
+--- a/drivers/media/platform/apple/ave/ave-drv.c
++++ b/drivers/media/platform/apple/ave/ave-drv.c
 @@ -125,10 +125,22 @@ static const struct ave_variant ave_t8140 = {
   * A18 Pro, after clearing the SVE idle word at mailbox +0x118. Its boot configuration names
   * device 28, and so does its handshake's device type.
@@ -398,8 +398,8 @@ index b80ae4b78..e0654a8b8 100644
 +	{ "26A428", 0x154000, 0x134000, AVE_FW_TEXT_CRC_T6050_26A428 },
 +	/*
 +	 * macOS 27.3 beta 1: TEXT grew by 0x4000 (ADT ave0 segment-ranges on a J714s with
-+	 * iBoot 20457.60.65), DATA kept its size. The firmware starts as 26A428 does; its
-+	 * command payloads are not qualified, so it probes without a command layout.
++	 * iBoot 20457.60.65), DATA kept its size. The firmware starts as 26A428 does and
++	 * takes 26A428's command layout (ave_layout_for_crc()).
 +	 */
 +	{ "26C5035", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26C5035 },
 +};
@@ -413,10 +413,10 @@ index b80ae4b78..e0654a8b8 100644
  	.boot_device_id = 28,
  	.boot_arg_value = AVE_COPROC_BOOT_ARG_VALUE,
  	.timebase_multiplier = 1,
-diff --git i/drivers/media/platform/apple/ave/ave-fw.c w/drivers/media/platform/apple/ave/ave-fw.c
-index 4671803fa..a8671206d 100644
---- i/drivers/media/platform/apple/ave/ave-fw.c
-+++ w/drivers/media/platform/apple/ave/ave-fw.c
+diff --git a/drivers/media/platform/apple/ave/ave-fw.c b/drivers/media/platform/apple/ave/ave-fw.c
+index 4671803fac94..a8671206dfe5 100644
+--- a/drivers/media/platform/apple/ave/ave-fw.c
++++ b/drivers/media/platform/apple/ave/ave-fw.c
 @@ -40,6 +40,7 @@ static const u32 ave_known_text_crc[] = {
  	0x69c54454, /* AppleAVE2FW 9003.78.0 (macOS 26.0.x) */
  	AVE_FW_TEXT_CRC_T6040_25G83, /* AppleAVE2FW 9003.78.0 / T6040 */
@@ -487,10 +487,10 @@ index 4671803fa..a8671206d 100644
  
  	ave->data_pristine = vmalloc(ave->data.size);
  	if (!ave->data_pristine)
-diff --git i/drivers/media/platform/apple/ave/ave-layout.c w/drivers/media/platform/apple/ave/ave-layout.c
-index d0bd73d21..ba1f3e33e 100644
---- i/drivers/media/platform/apple/ave/ave-layout.c
-+++ w/drivers/media/platform/apple/ave/ave-layout.c
+diff --git a/drivers/media/platform/apple/ave/ave-layout.c b/drivers/media/platform/apple/ave/ave-layout.c
+index 37fde4f8c4f1..44669342197e 100644
+--- a/drivers/media/platform/apple/ave/ave-layout.c
++++ b/drivers/media/platform/apple/ave/ave-layout.c
 @@ -1,5 +1,7 @@
  // SPDX-License-Identifier: GPL-2.0-only
  /* Apple AVE command layouts, identified by firmware TEXT CRC. */
@@ -499,34 +499,68 @@ index d0bd73d21..ba1f3e33e 100644
  #include "ave.h"
  
  const struct ave_fw_layout ave_layout_9003_78_0 = {
-@@ -943,6 +945,11 @@ const struct ave_fw_layout ave_layout_6070_11_1 = {
+@@ -947,6 +949,20 @@ const struct ave_fw_layout ave_layout_6070_11_1 = {
  	},
  };
  
-+static bool ave_t6050_try_26a428;
-+module_param(ave_t6050_try_26a428, bool, 0444);
-+MODULE_PARM_DESC(ave_t6050_try_26a428,
-+		 "Drive the T6050 macOS 27.3 (26C5035r) firmware with the 27.0 (26A428) command layout (unqualified; testing only)");
++static bool ave_t6050_27_3_hevc;
++module_param(ave_t6050_27_3_hevc, bool, 0444);
++MODULE_PARM_DESC(ave_t6050_27_3_hevc,
++		 "Allow HEVC on the T6050 macOS 27.3 (26C5035r) firmware (unqualified; testing only)");
++
++/*
++ * HEVC on the macOS 27.3 build is not qualified: only its H.264 was checked
++ * on hardware with the 26A428 layout.
++ */
++bool ave_layout_hevc_refused(u32 crc)
++{
++	return crc == AVE_FW_TEXT_CRC_T6050_26C5035 && !ave_t6050_27_3_hevc;
++}
 +
  const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
  {
  	/*
-@@ -956,5 +963,11 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
+@@ -960,5 +976,12 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
  	/* The macOS 27.0 build for the M5 Pro and Max. */
  	if (crc == AVE_FW_TEXT_CRC_T6050_26A428)
  		return &ave_layout_26a428;
 +	/*
-+	 * The macOS 27.3 build: no qualified layout yet. ave_t6050_try_26a428
-+	 * lets it speak 26A428's, to qualify that by hand.
++	 * The macOS 27.3 build speaks 26A428's command layout: H.264 (Main with
++	 * B-frames, Baseline) encodes on a J714s on two boots. HEVC stays refused
++	 * there unless ave_t6050_27_3_hevc is set (ave_layout_hevc_refused()).
 +	 */
-+	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035 && ave_t6050_try_26a428)
++	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
 +		return &ave_layout_26a428;
  	return NULL;
  }
-diff --git i/drivers/media/platform/apple/ave/ave.h w/drivers/media/platform/apple/ave/ave.h
-index e2313b00a..bfc662044 100644
---- i/drivers/media/platform/apple/ave/ave.h
-+++ w/drivers/media/platform/apple/ave/ave.h
+diff --git a/drivers/media/platform/apple/ave/ave-layout.h b/drivers/media/platform/apple/ave/ave-layout.h
+index 6731d634da8b..bba3aadba8d8 100644
+--- a/drivers/media/platform/apple/ave/ave-layout.h
++++ b/drivers/media/platform/apple/ave/ave-layout.h
+@@ -389,5 +389,6 @@ extern const struct ave_fw_layout ave_layout_6070_11_1;
+ /* Not selectable until its loader TEXT CRC is measured and qualified. */
+ extern const struct ave_fw_layout ave_layout_26a428;
+ const struct ave_fw_layout *ave_layout_for_crc(u32 crc);
++bool ave_layout_hevc_refused(u32 crc);
+ 
+ #endif
+diff --git a/drivers/media/platform/apple/ave/ave-sess.c b/drivers/media/platform/apple/ave/ave-sess.c
+index 2bdec4b0f2f6..32c6da268b13 100644
+--- a/drivers/media/platform/apple/ave/ave-sess.c
++++ b/drivers/media/platform/apple/ave/ave-sess.c
+@@ -267,6 +267,8 @@ static int ave_sess_params(struct ave_ctx *ctx, struct ave_params *p)
+ 	    (p->fps_num != 30ULL * p->fps_den ||
+ 	     (!p->bframes && (p->codec == AVE_CODEC_HEVC || (!baseline && !p->intra_only)))))
+ 		return -EOPNOTSUPP;
++	if (p->codec == AVE_CODEC_HEVC && ave_layout_hevc_refused(ctx->ave->text_crc))
++		return -EOPNOTSUPP;
+ 	return 0;
+ }
+ 
+diff --git a/drivers/media/platform/apple/ave/ave.h b/drivers/media/platform/apple/ave/ave.h
+index e2313b00a6ff..bfc66204431d 100644
+--- a/drivers/media/platform/apple/ave/ave.h
++++ b/drivers/media/platform/apple/ave/ave.h
 @@ -168,6 +168,8 @@ enum ave_opcode {
  /* The M4 Pro (T6040) build of the same 25G83 firmware. */
  #define AVE_FW_TEXT_CRC_T6040_25G83 0x68d5f9f6

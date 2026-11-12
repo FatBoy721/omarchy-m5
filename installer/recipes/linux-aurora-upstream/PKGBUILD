@@ -9,13 +9,14 @@
 
 _auroraver=7.3.0
 _aurorarel=17.up273
-pkgrel=5
+pkgrel=6
 
-# aurora-silicon/linux integration/aurora at f8581cbaa87f, plus upstream-27.3.patch,
+# aurora-silicon/linux integration/aurora at 2b4523cb6592, plus upstream-27.3.patch (which also
+# reverts upstream's partial-27.3 #1174 merge for the first #1174's full 27.3 table),
 # t6050-ane-ave-27.3.patch (patches/upstream-27.3/0004: ANE and AVE on the 27.3 firmware) and
 # t6050-isp-j714s-camera-27.3.patch (patches/upstream-27.3/0005: the front camera's IMX958
 # setfile 2226_02, image tuning, camera light and J714s presets; edimoldovan's J714c camera).
-_commit=f8581cbaa87fa19f18970f7a49624c3de85004f9
+_commit=2b4523cb65927eadb42a921c75a99671ef18970a
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -41,15 +42,15 @@ source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github
         speakersafetyd-hold.conf t6050-ane-ave-27.3.patch t6050-isp-j714s-camera-27.3.patch)
 sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
-            '16e6d92260de2a5547c5ccaaf7b0854ed9ae7a0aad0d0814d4ebe17b3f14878a'
+            '0cb808400e68bf3b7369bdbbc56a2e373a028ea96904fbd4700bbded6384cc1b'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '32507b46e6d2bd6bc3c9bd933cb0236e3c1887a977ea8aff3ab46d9ece5f4eae'
-            'e3cec243391108ca1853efabf589e47b8ac739a383b7c2fd1a2ea2c5bdad30bf'
+            '308969cd421902587546fbd72bc6e5442e0124e93a31b67d6a5af58a97e2496b'
             'c812ed7ea8a9c482de07526896c249fa16c833e0f5679aeaff9e40133292c44f'
             'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7'
-            '3c9bbbf92d68538b196d4572fa427801c3b7eefb88a261fbfbe8f66ad8977803'
-            '3c5713304df9a92f47ef4cf3205b728ea3f4de32a6a1e1cf12fff4af6cc176eb')
+            '0cecb24565c8384106d1d0384aa12952198eeb957d3683f7fb7e00e60b857a6f'
+            '43e3e3f7193c1efe7163a75e9dfa7b47a27323484b88d92522cc7bc8241dcefb')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64
