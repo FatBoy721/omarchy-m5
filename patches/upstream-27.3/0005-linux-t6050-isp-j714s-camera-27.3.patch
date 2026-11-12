@@ -1,7 +1,7 @@
 From 2f49529f4909d08ef8ce4461f94a4a80fbeec84c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
-Subject: [PATCH 1/4] media: apple: isp: Tune the J714c IMX958 with setfile
+Subject: [PATCH 1/7] media: apple: isp: Tune the J714c IMX958 with setfile
  2226_02
 
 macOS's appleh16camerad carries three setfiles naming sensor 0x958:
@@ -97,7 +97,7 @@ index fda0e754e711..9f054d529051 100644
 From 130546cf5bdef8d3dda458e2d2849321e9b4806c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:11:59 +0100
-Subject: [PATCH 2/4] media: apple: isp: Compute the T6050 setfile's noise
+Subject: [PATCH 2/7] media: apple: isp: Compute the T6050 setfile's noise
  reduction radial gains
 
 The IMX958 setfile 2226_02 carries its noise reduction radial gains
@@ -281,7 +281,7 @@ index 9f054d529051..bf83968d0f03 100644
 From f40e971167c8c66a9b77012b17ebd84e4cf3c2f3 Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:13:01 +0100
-Subject: [PATCH 3/4] media: apple: isp: Set the J714c lens shading target and
+Subject: [PATCH 3/7] media: apple: isp: Set the J714c lens shading target and
  scene metering
 
 macOS's appleh16camerad sets the IMX958's lens shading ideal percent to
@@ -425,7 +425,7 @@ index bf83968d0f03..5c64c3fbd814 100644
 From 72dfdaee9550a1d4e8b05ccaa04f9cbc8babf456 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 04:15:12 -0500
-Subject: [PATCH 4/4] arm64: dts: apple: t6050-j714s: Stream the camera as the
+Subject: [PATCH 4/7] arm64: dts: apple: t6050-j714s: Stream the camera as the
  J714c does
 
 Take edimoldovan's J714c presets (omacom/linux-aurora #422, e8233e1bbe91
@@ -489,6 +489,401 @@ index 8147a1ff8d11..680c934ccfaa 100644
  /* The GPU and the internal panel, for the boot loader's handoff */
  #include "t6050-j714s-gpu-panel.dtsi"
  
+-- 
+2.56.0
+
+
+From 1c3279397bb83d91ffecba82cfadd9b3dc92f030 Mon Sep 17 00:00:00 2001
+From: Eduard Moldovan <edimoldovan@gmail.com>
+Date: Sun, 8 Nov 2026 12:56:35 +0100
+Subject: [PATCH 5/7] media: apple: isp: Drive the J714c camera light from the
+ driver
+
+On the J714c the camera light belongs to the exclave indicator
+controller, which Linux does not run: the sensor streams with the light
+off. Frames pass only while the controller's ISP watchdog (eic
+mmio-wd-isp) is fed.
+
+Make the light the driver's: before every stream start, drive the light
+pin (ADT eic cil-gpio-offset 141 in gpio0, cil-gpio-config 0x474002) as
+an output at its on level with its input buffer on, and refuse the
+stream unless the pin reads back at that level. Turn it off only after
+the stream stops, a start fails or the firmware halts. Feed the capture
+watchdog only while the light is on. A T6050 ISP without a described
+light does not probe.
+
+Signed-off-by: Eduard Moldovan <edimoldovan@gmail.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 5a3e9d8a5f0b2e64cf89b4a96bb6f158afa50df7)
+---
+ drivers/media/platform/apple/isp/isp-cam.c | 56 +++++++++++++++++++++-
+ drivers/media/platform/apple/isp/isp-cam.h |  1 +
+ drivers/media/platform/apple/isp/isp-drv.c | 21 ++++++++
+ drivers/media/platform/apple/isp/isp-drv.h | 11 +++++
+ drivers/media/platform/apple/isp/isp-fw.c  |  1 +
+ 5 files changed, 89 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/apple/isp/isp-cam.c b/drivers/media/platform/apple/isp/isp-cam.c
+index 00e4f162ec11..b7ee5fff119b 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.c
++++ b/drivers/media/platform/apple/isp/isp-cam.c
+@@ -1,6 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /* Copyright 2023 Eileen Yoon <eyn@gmx.com> */
+ 
++#include <linux/delay.h>
+ #include <linux/firmware.h>
+ #include <linux/gcd.h>
+ #include <linux/log2.h>
+@@ -1151,6 +1152,8 @@ static enum hrtimer_restart apple_isp_wdt_timer(struct hrtimer *timer)
+ 	struct apple_isp *isp = container_of(timer, struct apple_isp,
+ 					     wdt_timer);
+ 
++	if (isp->hw->camera_light && !isp->cil_lit)
++		return HRTIMER_NORESTART;
+ 	apple_isp_wdt_kick(isp);
+ 	hrtimer_forward_now(timer, ns_to_ktime(ISP_WDT_PERIOD_NS));
+ 
+@@ -1167,6 +1170,8 @@ static void apple_isp_wdt_start(struct apple_isp *isp)
+ {
+ 	if (!isp->wdt || isp->wdt_running)
+ 		return;
++	if (isp->hw->camera_light && !isp->cil_lit)
++		return;
+ 
+ 	isp->wdt_running = true;
+ 	apple_isp_wdt_kick(isp);
+@@ -1183,16 +1188,64 @@ void apple_isp_wdt_stop(struct apple_isp *isp)
+ 	isp->wdt_running = false;
+ }
+ 
++#define ISP_GPIO_DATA		BIT(0)
++#define ISP_GPIO_MODE		GENMASK(3, 1)
++#define ISP_GPIO_INPUT_ENABLE	BIT(9)
++/* The mode and the pin's level, as the input buffer reads it */
++#define ISP_GPIO_CHECK		(ISP_GPIO_MODE | ISP_GPIO_DATA)
++
++/*
++ * Light the camera light before the sensor may stream: drive its pin as an
++ * output at the on level, with the input buffer on so the pin's level reads
++ * back, and refuse to stream unless it does.
++ */
++static int apple_isp_light_on(struct apple_isp *isp)
++{
++	u32 val, on = isp->cil_on_high ? ISP_GPIO_DATA : 0;
++
++	if (!isp->hw->camera_light)
++		return 0;
++	if (!isp->cil_lit)
++		isp->cil_saved = readl(isp->cil);
++	val = (isp->cil_config & ~ISP_GPIO_DATA) | ISP_GPIO_INPUT_ENABLE | on;
++	writel(val, isp->cil);
++	usleep_range(10, 20);
++	if ((readl(isp->cil) & ISP_GPIO_CHECK) != (val & ISP_GPIO_CHECK)) {
++		dev_err(isp->dev, "camera light did not come on (0x%x, wrote 0x%x), not streaming\n",
++			readl(isp->cil), val);
++		writel(isp->cil_saved, isp->cil);
++		return -EIO;
++	}
++	isp->cil_lit = true;
++	return 0;
++}
++
++/* Only once the sensor has stopped streaming. */
++void apple_isp_light_off(struct apple_isp *isp)
++{
++	if (!isp->hw->camera_light || !isp->cil_lit)
++		return;
++	apple_isp_wdt_stop(isp);
++	isp->cil_lit = false;
++	writel(isp->cil_saved, isp->cil);
++}
++
+ int apple_isp_start_capture(struct apple_isp *isp)
+ {
+ 	int err;
+ 
++	err = apple_isp_light_on(isp);
++	if (err)
++		return err;
++
+ 	/* Serviced from before the channel starts... */
+ 	apple_isp_wdt_start(isp);
+ 
+ 	err = isp_cmd_ch_start(isp, 0); // TODO channel mask
+-	if (err)
++	if (err) {
+ 		apple_isp_wdt_stop(isp);
++		apple_isp_light_off(isp);
++	}
+ 
+ 	return err;
+ }
+@@ -1206,6 +1259,7 @@ void apple_isp_stop_capture(struct apple_isp *isp)
+ 
+ 	/* ... until its buffers are back. */
+ 	apple_isp_wdt_stop(isp);
++	apple_isp_light_off(isp);
+ }
+ 
+ #if IS_ENABLED(CONFIG_VIDEO_APPLE_ISP_KUNIT_TEST)
+diff --git a/drivers/media/platform/apple/isp/isp-cam.h b/drivers/media/platform/apple/isp/isp-cam.h
+index 51c2f2ec6c07..b81efea0cb33 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.h
++++ b/drivers/media/platform/apple/isp/isp-cam.h
+@@ -22,6 +22,7 @@ int apple_isp_start_capture(struct apple_isp *isp);
+ void apple_isp_stop_capture(struct apple_isp *isp);
+ 
+ void apple_isp_wdt_init(struct apple_isp *isp);
++void apple_isp_light_off(struct apple_isp *isp);
+ void apple_isp_wdt_stop(struct apple_isp *isp);
+ 
+ #endif /* __ISP_CAM_H__ */
+diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
+index d7077996586d..58d22387e9bc 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.c
++++ b/drivers/media/platform/apple/isp/isp-drv.c
+@@ -763,6 +763,25 @@ static int apple_isp_probe(struct platform_device *pdev)
+ 		apple_isp_wdt_init(isp);
+ 	}
+ 
++	if (isp->hw->camera_light) {
++		res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cil");
++		if (!res ||
++		    of_property_read_u32(dev->of_node, "apple,cil-config",
++					 &isp->cil_config)) {
++			dev_err(dev, "no camera light described, not using the camera\n");
++			err = -ENODEV;
++			goto detach_genpd;
++		}
++		/* Not requested: the pin sits in a GPIO block Linux does not own. */
++		isp->cil = devm_ioremap(dev, res->start, resource_size(res));
++		if (!isp->cil) {
++			err = -ENOMEM;
++			goto detach_genpd;
++		}
++		isp->cil_on_high = of_property_read_bool(dev->of_node,
++							 "apple,cil-active-high");
++	}
++
+ 	isp->irq = platform_get_irq(pdev, 0);
+ 	if (isp->irq < 0) {
+ 		err = isp->irq;
+@@ -1370,6 +1389,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+ 	/* As macOS's appleh16camerad sets them for the J714c's IMX958 */
+ 	.lsc_ideal_percent = 84,
+ 	.ae_fd_scene_metering = true,
++	/* The camera light, from the device tree's "cil" register */
++	.camera_light = true,
+ };
+ 
+ static const struct of_device_id apple_isp_of_match[] = {
+diff --git a/drivers/media/platform/apple/isp/isp-drv.h b/drivers/media/platform/apple/isp/isp-drv.h
+index 5c64c3fbd814..52f0ad4766dc 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.h
++++ b/drivers/media/platform/apple/isp/isp-drv.h
+@@ -259,6 +259,11 @@ struct apple_isp_hw {
+ 	 * detected only once.
+ 	 */
+ 	bool deferred_start;
++	/*
++	 * The camera light is the driver's to drive: no stream starts unless
++	 * it is lit, and the capture watchdog is fed only while it is.
++	 */
++	bool camera_light;
+ 
+ 	/* The xx24 setfiles' lens shading strides need zeroing (T8142). */
+ 	bool setfile_stride_fixup;
+@@ -407,6 +412,12 @@ struct apple_isp {
+ 	void __iomem *gpio;
+ 	void __iomem *mbox2;
+ 	void __iomem *wdt;
++	/* The camera light's GPIO register (hw->camera_light) */
++	void __iomem *cil;
++	u32 cil_config;
++	u32 cil_saved;
++	bool cil_on_high;
++	bool cil_lit;
+ 	void __iomem *dapf;
+ 	struct hrtimer wdt_timer;
+ 	bool wdt_running;
+diff --git a/drivers/media/platform/apple/isp/isp-fw.c b/drivers/media/platform/apple/isp/isp-fw.c
+index 2527f712839e..4ec73511f6ec 100644
+--- a/drivers/media/platform/apple/isp/isp-fw.c
++++ b/drivers/media/platform/apple/isp/isp-fw.c
+@@ -1428,6 +1428,7 @@ void apple_isp_firmware_halt(struct apple_isp *isp)
+ 		return;
+ 
+ 	isp_firmware_shutdown(isp);
++	apple_isp_light_off(isp);
+ 	pm_runtime_put_sync(isp->dev);
+ 	isp->ipc_stale = NULL;
+ 	isp->fw_idle = false;
+-- 
+2.56.0
+
+
+From e51e678c0221d445650e256f689ef5e738d3433a Mon Sep 17 00:00:00 2001
+From: Eduard Moldovan <edimoldovan@gmail.com>
+Date: Sun, 8 Nov 2026 12:56:36 +0100
+Subject: [PATCH 6/7] media: apple: isp: Turn the J714c camera light off after
+ a firmware halt
+
+A firmware that dies mid-start can leave the sensor powered, and a
+powered sensor lights the camera light with its pin released: after a
+failed start the light stayed on until the next reset. Once the firmware
+is halted no frame can reach the host, so drive the light off then. A
+halted resident firmware does not start again. Remember the boot
+loader's pin setting at probe instead of at the first stream.
+
+Signed-off-by: Eduard Moldovan <edimoldovan@gmail.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 04606609e94c7af8daa464048388a4cd8f9e0af4)
+---
+ drivers/media/platform/apple/isp/isp-cam.c | 21 ++++++++++++++++++---
+ drivers/media/platform/apple/isp/isp-cam.h |  1 +
+ drivers/media/platform/apple/isp/isp-drv.c |  1 +
+ drivers/media/platform/apple/isp/isp-fw.c  |  2 +-
+ 4 files changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/platform/apple/isp/isp-cam.c b/drivers/media/platform/apple/isp/isp-cam.c
+index b7ee5fff119b..07321993843d 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.c
++++ b/drivers/media/platform/apple/isp/isp-cam.c
+@@ -1205,8 +1205,6 @@ static int apple_isp_light_on(struct apple_isp *isp)
+ 
+ 	if (!isp->hw->camera_light)
+ 		return 0;
+-	if (!isp->cil_lit)
+-		isp->cil_saved = readl(isp->cil);
+ 	val = (isp->cil_config & ~ISP_GPIO_DATA) | ISP_GPIO_INPUT_ENABLE | on;
+ 	writel(val, isp->cil);
+ 	usleep_range(10, 20);
+@@ -1220,7 +1218,10 @@ static int apple_isp_light_on(struct apple_isp *isp)
+ 	return 0;
+ }
+ 
+-/* Only once the sensor has stopped streaming. */
++/*
++ * Only once the sensor has stopped streaming. The pin goes back to how the
++ * boot loader left it, where a powered sensor still lights the light.
++ */
+ void apple_isp_light_off(struct apple_isp *isp)
+ {
+ 	if (!isp->hw->camera_light || !isp->cil_lit)
+@@ -1230,6 +1231,20 @@ void apple_isp_light_off(struct apple_isp *isp)
+ 	writel(isp->cil_saved, isp->cil);
+ }
+ 
++/*
++ * Once the firmware is halted no frame can reach the host, but a sensor
++ * the dead firmware left powered would keep the light on until reset:
++ * drive it off. A halted resident firmware does not start again.
++ */
++void apple_isp_light_force_off(struct apple_isp *isp)
++{
++	if (!isp->hw->camera_light)
++		return;
++	apple_isp_light_off(isp);
++	writel((isp->cil_config & ~ISP_GPIO_DATA) | (isp->cil_on_high ? 0 : ISP_GPIO_DATA),
++	       isp->cil);
++}
++
+ int apple_isp_start_capture(struct apple_isp *isp)
+ {
+ 	int err;
+diff --git a/drivers/media/platform/apple/isp/isp-cam.h b/drivers/media/platform/apple/isp/isp-cam.h
+index b81efea0cb33..8cdcd17e2088 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.h
++++ b/drivers/media/platform/apple/isp/isp-cam.h
+@@ -23,6 +23,7 @@ void apple_isp_stop_capture(struct apple_isp *isp);
+ 
+ void apple_isp_wdt_init(struct apple_isp *isp);
+ void apple_isp_light_off(struct apple_isp *isp);
++void apple_isp_light_force_off(struct apple_isp *isp);
+ void apple_isp_wdt_stop(struct apple_isp *isp);
+ 
+ #endif /* __ISP_CAM_H__ */
+diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
+index 58d22387e9bc..d7ba6ef52cc4 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.c
++++ b/drivers/media/platform/apple/isp/isp-drv.c
+@@ -780,6 +780,7 @@ static int apple_isp_probe(struct platform_device *pdev)
+ 		}
+ 		isp->cil_on_high = of_property_read_bool(dev->of_node,
+ 							 "apple,cil-active-high");
++		isp->cil_saved = readl(isp->cil);
+ 	}
+ 
+ 	isp->irq = platform_get_irq(pdev, 0);
+diff --git a/drivers/media/platform/apple/isp/isp-fw.c b/drivers/media/platform/apple/isp/isp-fw.c
+index 4ec73511f6ec..7185a62acb47 100644
+--- a/drivers/media/platform/apple/isp/isp-fw.c
++++ b/drivers/media/platform/apple/isp/isp-fw.c
+@@ -1428,8 +1428,8 @@ void apple_isp_firmware_halt(struct apple_isp *isp)
+ 		return;
+ 
+ 	isp_firmware_shutdown(isp);
+-	apple_isp_light_off(isp);
+ 	pm_runtime_put_sync(isp->dev);
++	apple_isp_light_force_off(isp);
+ 	isp->ipc_stale = NULL;
+ 	isp->fw_idle = false;
+ 	isp->fw_state = isp->hw->resident_fw && !isp->hw->fw_restart ?
+-- 
+2.56.0
+
+
+From 524c09adefb3070db61ac2c64f3f076b9c220552 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 05:03:13 -0500
+Subject: [PATCH 7/7] arm64: dts: apple: t6050-j714s: Describe the camera light
+
+edimoldovan's camera light driver (omacom/linux-aurora #422, 5a3e9d8a5f0b
+and 04606609e94c) needs the light's pin: ADT eic cil-gpio-offset 141 in
+the eic's own GPIO block (eic mmio-gpio 0x2dc000000; the AP's gpio0 at
+0x29c000000 faults at that offset), cil-gpio-config 0x474002, active high,
+as on the J714c.
+
+Tested on the J714s (macOS 27.3 beta 1 firmware): the pin reads back at
+its on level before every stream, and 1920x1080 and 2560x1440 stream at
+30 fps.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ arch/arm64/boot/dts/apple/t6050-j714s.dts | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+index 680c934ccfaa..122fca2a5155 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+@@ -557,6 +557,24 @@ fan-F1Ac {
+  * window; 2560x1440 is the centre 1:1.
+  */
+ &isp0 {
++	/*
++	 * The camera light, as on the J714c (#422): ADT eic cil-gpio-offset 141
++	 * in the eic's own GPIO block (eic mmio-gpio 0x2dc000000, not the AP's
++	 * gpio0 at 0x29c000000, whose pin 141 faults), cil-gpio-config 0x474002,
++	 * active high.
++	 * The driver lights it before every stream and feeds the eic ISP
++	 * watchdog only while it is on.
++	 */
++	reg = <0x5 0x80000000 0 0x1604000>,
++	      <0x5 0x82924000 0 0x40>,
++	      <0x5 0x829241d0 0 0x20>,
++	      <0x5 0x82924464 0 0x10>,
++	      <0x5 0xc3b50000 0 0x8000>,
++	      <0x2 0xdc000234 0 0x4>;
++	reg-names = "coproc", "mbox", "gpio", "mbox2", "wdt", "cil";
++	apple,cil-config = <0x474002>;
++	apple,cil-active-high;
++
+ 	/delete-node/ sensor-presets;
+ 
+ 	sensor-presets {
 -- 
 2.56.0
 
