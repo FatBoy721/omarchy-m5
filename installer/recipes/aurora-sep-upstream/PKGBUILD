@@ -1,0 +1,149 @@
+# aurora-silicon's Secure Enclave / Touch ID userspace (tools/aurora-sep), read-only by default
+#
+# For the experimental J714s upstream image. Upstream's own Arch package is
+# tools/aurora-sep/packaging/arch/aurora-sep (pkgver 1, pkgrel 17 at this commit);
+# this one installs the same loader, CLI, ready/setup services and calibration
+# tool, pinned by commit and sha256, with three changes so the image never
+# writes Secure Enclave or xART state unless the owner opts in (README.md):
+#   - aurora-sep-xart.conf: options apple_sep xart_writes=0 provision_keybag=0
+#     (the driver's defaults are 1 and 1);
+#   - aurora-sep-load-read-only.patch: the loader no longer passes
+#     xart_writes=1 provision_keybag=1 to modprobe (they would override
+#     modprobe.d), and a read-only attach ends it cleanly;
+#   - fprintd-aurora-sep.conf: fprintd is ordered after the loader instead of
+#     Requires= it, so starting fprintd does not load the driver.
+# No unit is enabled and there is no preset.
+
+pkgname=aurora-sep
+_commit=8679514f4dff40a7c907daf834208e6afca427f1
+_short=${_commit:0:12}
+pkgver=1.17.g${_short}
+pkgrel=1
+pkgdesc="Loader and Touch ID integration for the Apple SEP driver (read-only unless the owner opts in)"
+url="https://github.com/aurora-silicon/linux/tree/${_commit}/tools/aurora-sep"
+arch=(any)
+license=(GPL-2.0-only)
+depends=(
+  coreutils
+  fprintd
+  keyutils
+  kmod
+  # sep-bio interface 5; libfprint-git (v4 only) must not replace it.
+  libfprint-aurora
+  python
+  sh
+)
+
+_raw=https://raw.githubusercontent.com/aurora-silicon/linux/${_commit}/tools/aurora-sep
+_upstream=(load-driver aurora-sep.service aurora-sep-ready aurora-sep-ready.service aurora-sep.timer
+  aurora-sep-load.conf sensor-present touchid-setup-needed aurora-touchid-setup
+  aurora-touchid-setup.service extract-mesa-calibration.py aurora-sep sep-bio-identities
+  aurora-sep-policy-change apfs-xart-inspect.py logind-aurora-sep.conf
+  README.md XART-SAFETY.md HOST-STATE.md OS-IDENTITY.md)
+source=()
+for _i in "${!_upstream[@]}"; do
+  source[_i]="${_short}-${_upstream[_i]}::${_raw}/${_upstream[_i]}"
+done
+source+=(aurora-sep-load-read-only.patch aurora-sep-xart.conf fprintd-aurora-sep.conf
+  README.md test-read-only-loader.sh)
+# The upstream files: sha256 of `git show 8679514f4dff:tools/aurora-sep/<file>`.
+sha256sums=('13aae91619958aece2d080d99db316a0534bf972b8b2eb08801a9c9c3e091285'
+            'a618f79fcf5e4dd0fead1596fe957becb9aec03429fc7663c5d914fe3052703a'
+            'af59a2c93d1ab42d5300a294a45271541647b86d8e39f97eb38037b5c07b1f00'
+            '4946f3581d068023b453ca162068bb363514caa257f0ebf087640570832cffb8'
+            '87de46450fe3322b74b50db64861cf42eeb725a0460a04f2a034c62e21f8f72f'
+            '122147a26a700532efebeb8bd70536909352b7b3a0f7c61d64fba38c1ff5e097'
+            '1a10476157907f7a68cc2a432ab3801e602a8f1431e9c1a92e4741f7dbb8b4f7'
+            '371a0f8d874692a74581f884d7cc3db9e9e52fedaa7f099c0930a7c3a4080408'
+            '43b61c8ae7c0b08f033cfb5fec4515c4e946700a6142064d0e576b116931a7c1'
+            'a87fe2a71d2b6b8c7b8f21da99f1496d93c8f6b1a32530f3ba4360d8b735558e'
+            '15a878dcf382a22c5d807f0f2c754fe70d39baec88f65aea183b1fe56cf69441'
+            'f8a2eadd5b55be5aedda79e5d1a629b93f13a64fb4ebb8f280aa86d22b6d3a06'
+            '6209d874a8d2950e5c6a68e2a9c19ffd4ba6e86a27bde3351f37e69290830349'
+            'b0850e2f5b1a168f325d23abfa41b6f2950cca044bb2225bf365da333ccc5cf0'
+            'e022d3dfc62c9c1a04d9d765feaa3c0b7edae1b27ca70167921e53d0fc39e0d8'
+            '0695bd9ce4c207241db13c3ea07819a032d8213417021378f5015ab9317cde12'
+            'bb59f6a6c8d06d652165c0d1a06873126ebbc9ff6736679ca26fac07194a26e7'
+            'af4b8249f52d8b4eb4a6d3427d1258499061c5e06a8d2511bb4c14b81a03d704'
+            'b20ec9e7a46bd3fe970ec8b79e46a3780bf7ad5b167e0d358c7f6bf34ee8b875'
+            '52020e636e62b60f0c3e6251c3b67b8a8c409bff0486bc3463f356fd3073384b'
+            'bf72eb50725d3bf20be92362bb103d3f7a09302034333c06498aa06cff437bb2'
+            '97385185c62fbc5ea3fe0307a1151517124ae618b21412cfe25fae7c072fa903'
+            '94762af4819c128072a6d734e361de8b3308e7894cff91fb2a3deb4660c7c857'
+            '78855adacc5f40b6aa04fa36724cb5b6d79dc4795259ca311406101d6ebc71bb'
+            'bb73d9d27c7c1038678e471574fedc0b4208c7e73ee910d623b8f22b74d046b6')
+
+prepare() {
+  # A copy, so the patch never touches the downloaded file makepkg checks.
+  cp -L "${_short}-load-driver" aurora-sep-load
+  patch -Np1 -i aurora-sep-load-read-only.patch
+  if grep -nE '(xart_writes|provision_keybag)=1' aurora-sep-load; then
+    echo "the loader still turns enclave writes on" >&2
+    return 1
+  fi
+}
+
+check() {
+  bash test-read-only-loader.sh aurora-sep-load
+}
+
+# A unit and the helper it runs, pointed at the packaged helper (upstream's _unit).
+_unit() {
+  local unit="$pkgdir/usr/lib/systemd/system/$2"
+
+  install -Dm755 "$1" "$pkgdir/usr/lib/aurora-sep/$3"
+  install -Dm644 "${_short}-$2" "$unit"
+  sed -i "s|^\(Exec[A-Za-z]*=\)/usr/local/sbin/|\1/usr/lib/aurora-sep/|" "$unit"
+  ! grep -q /usr/local "$unit"
+}
+
+package() {
+  _unit aurora-sep-load aurora-sep.service aurora-sep-load
+  _unit "${_short}-aurora-sep-ready" aurora-sep-ready.service aurora-sep-ready
+  install -Dm644 "${_short}-aurora-sep.timer" "$pkgdir/usr/lib/systemd/system/aurora-sep.timer"
+  install -Dm755 "${_short}-sensor-present" "$pkgdir/usr/lib/aurora-sep/aurora-sep-sensor-present"
+
+  # The Touch ID calibration setup, run when a file is missing or refused.
+  install -Dm755 "${_short}-touchid-setup-needed" "$pkgdir/usr/lib/aurora-sep/aurora-touchid-setup-needed"
+  install -Dm755 "${_short}-aurora-touchid-setup" "$pkgdir/usr/bin/aurora-touchid-setup"
+  install -Dm755 "${_short}-extract-mesa-calibration.py" "$pkgdir/usr/libexec/aurora/extract-mesa-calibration"
+  install -Dm644 "${_short}-aurora-touchid-setup.service" "$pkgdir/usr/lib/systemd/system/aurora-touchid-setup.service"
+  sed -i -e "s|^\(Exec[A-Za-z]*=\)/usr/local/sbin/aurora-touchid-setup |\1/usr/bin/aurora-touchid-setup |" \
+    -e "s|^\(Exec[A-Za-z]*=\)/usr/local/sbin/|\1/usr/lib/aurora-sep/|" \
+    "$pkgdir/usr/lib/systemd/system/aurora-touchid-setup.service"
+
+  # Read-only tools, and the root-only recovery tools XART-SAFETY.md describes.
+  install -Dm755 "${_short}-aurora-sep" "$pkgdir/usr/bin/aurora-sep"
+  install -Dm755 "${_short}-sep-bio-identities" "$pkgdir/usr/bin/sep-bio-identities"
+  install -Dm755 "${_short}-aurora-sep-policy-change" "$pkgdir/usr/bin/aurora-sep-policy-change"
+  install -Dm755 "${_short}-apfs-xart-inspect.py" "$pkgdir/usr/lib/aurora-sep/apfs-xart-inspect.py"
+
+  # fprintd: ordering only (fprintd-aurora-sep.conf says why).
+  install -Dm644 fprintd-aurora-sep.conf "$pkgdir/usr/lib/systemd/system/fprintd.service.d/aurora-sep.conf"
+
+  # No udev load (upstream's blacklist), and read-only unless the owner replaces
+  # aurora-sep-xart.conf with /etc/modprobe.d/aurora-sep-xart.conf.
+  install -Dm644 "${_short}-aurora-sep-load.conf" "$pkgdir/usr/lib/modprobe.d/aurora-sep-load.conf"
+  install -Dm644 aurora-sep-xart.conf "$pkgdir/usr/lib/modprobe.d/aurora-sep-xart.conf"
+
+  # An example only: it changes the power key for everyone.
+  install -Dm644 "${_short}-logind-aurora-sep.conf" "$pkgdir/usr/share/aurora-sep/logind-aurora-sep.conf"
+
+  local doc
+  for doc in README.md XART-SAFETY.md HOST-STATE.md OS-IDENTITY.md; do
+    install -Dm644 "${_short}-$doc" "$pkgdir/usr/share/doc/$pkgname/$doc"
+  done
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.omarchy-m5.md"
+
+  # Nothing outside the docs may turn writes on (comments aside), and nothing is enabled.
+  if grep -rlE '^[^#]*(xart_writes|provision_keybag)=1' "$pkgdir/usr/lib" "$pkgdir/usr/bin" "$pkgdir/usr/libexec"; then
+    echo "a packaged file turns enclave writes on" >&2
+    return 1
+  fi
+  grep -qx 'options apple_sep xart_writes=0 provision_keybag=0' "$pkgdir/usr/lib/modprobe.d/aurora-sep-xart.conf"
+  if [[ -e $pkgdir/etc || -d $pkgdir/usr/lib/systemd/system-preset ]] ||
+    find "$pkgdir/usr/lib/systemd/system" -name '*.wants' | grep -q .; then
+    echo "the package enables a unit" >&2
+    return 1
+  fi
+}

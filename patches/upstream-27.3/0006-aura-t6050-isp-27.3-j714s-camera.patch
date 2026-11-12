@@ -1,4 +1,4 @@
-From a70c39ba951d44a0e85010aa0fbc9e2686fcbe3e Mon Sep 17 00:00:00 2001
+From 4847ec5e42ab1da527474e84fcba066a2d9045b7 Mon Sep 17 00:00:00 2001
 From: Jens Axboe <axboe@kernel.dk>
 Date: Wed, 11 Nov 2026 13:30:32 -0700
 Subject: [PATCH 1/2] kboot: T6050: hand the K116s camera over on 27.2
@@ -24,10 +24,10 @@ Signed-off-by: Thomas Glanzmann <thomas@glanzmann.de>
  1 file changed, 37 insertions(+), 13 deletions(-)
 
 diff --git a/src/kboot.c b/src/kboot.c
-index 180fb019..b491206d 100644
+index 5679295b..cb012e84 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
-@@ -9004,7 +9004,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+@@ -9373,7 +9373,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
   * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
   * snapshot physical addresses. The kernel allocates the small main-memory
   * tail and owns all power, DART and firmware-start operations. J716c's camera
@@ -37,7 +37,7 @@ index 180fb019..b491206d 100644
   */
  __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
                                                                                  const char *name)
-@@ -9018,26 +9019,45 @@ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(
+@@ -9387,26 +9388,45 @@ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(
      return 0;
  }
  
@@ -92,7 +92,7 @@ index 180fb019..b491206d 100644
      if (chosen < 0 || isp < 0)
          return -1;
      const struct adt_segment_ranges *seg = adt_getprop(adt, isp, "segment-ranges", &len);
-@@ -9050,6 +9070,7 @@ static int dt_set_t6050_isp(void)
+@@ -9419,6 +9439,7 @@ static int dt_set_t6050_isp(void)
          return -1;
      ADT_GETPROP(adt, isp, "cam-connections-scheme", &scheme);
  
@@ -100,7 +100,7 @@ index 180fb019..b491206d 100644
      uint32_t owner = fdt_get_phandle(dt, node);
      if (!owner && (fdt_generate_phandle(dt, &owner) || fdt_setprop_u32(dt, node, "phandle", owner)))
          return -1;
-@@ -9088,25 +9109,28 @@ static int dt_set_t6050_isp(void)
+@@ -9457,25 +9478,28 @@ static int dt_set_t6050_isp(void)
          if (node < 0 || fdt_setprop_string(dt, node, "status", "okay"))
              return -1;
      }
@@ -136,7 +136,7 @@ index 180fb019..b491206d 100644
 2.56.0
 
 
-From d09a16a9764f61e25599021b251278f6adcd4027 Mon Sep 17 00:00:00 2001
+From c880806559a5347e85602b60e94a959232ea9e86 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 03:36:02 -0500
 Subject: [PATCH 2/2] kboot: T6050: hand the J714s camera over on 27.3 beta 1
@@ -157,10 +157,10 @@ Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
  1 file changed, 11 insertions(+), 5 deletions(-)
 
 diff --git a/src/kboot.c b/src/kboot.c
-index b491206d..22b7f2ff 100644
+index cb012e84..e0956adb 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
-@@ -9004,8 +9004,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+@@ -9373,8 +9373,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
   * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
   * snapshot physical addresses. The kernel allocates the small main-memory
   * tail and owns all power, DART and firmware-start operations. J716c's camera
@@ -171,7 +171,7 @@ index b491206d..22b7f2ff 100644
   */
  __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
                                                                                  const char *name)
-@@ -9026,6 +9026,11 @@ static const struct {
+@@ -9395,6 +9395,11 @@ static const struct {
  } t6050_isp_boards[] = {
      {"apple,j716c", 0x75, V27_0},
      {"apple,j714s", 0x74, V27_0},
@@ -183,7 +183,7 @@ index b491206d..22b7f2ff 100644
      /*
       * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
       * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.
-@@ -9044,11 +9049,12 @@ static int dt_set_t6050_isp(const char **why)
+@@ -9413,11 +9418,12 @@ static int dt_set_t6050_isp(const char **why)
      u32 want = 0;
      *why = "board or firmware not in the table";
      for (unsigned int i = 0; i < ARRAY_SIZE(t6050_isp_boards); i++) {

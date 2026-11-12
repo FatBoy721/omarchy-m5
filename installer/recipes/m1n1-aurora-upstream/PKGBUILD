@@ -1,17 +1,20 @@
 # Aura (aurora-silicon/aura) as the J714s image's Stage 2, for the upstream kernel base.
 #
-# Experimental, paired with linux-aurora 7.3.0.aurora17.up273. Aura 1.0.0b11, main dbf088e151 (T6050 ANE
-# and AVE hand-offs #169/#171, M5 Pro boot-path fixes #173, DART #180) plus
+# Experimental, paired with linux-aurora 7.3.0.aurora17.up273. Aura main d35655304e (after 1.0.0b12:
+# T6050 ANE and AVE hand-offs #169/#171, M5 Pro boot-path fixes #173, DART #180, the MTE tag storage
+# reserved or MTE kept off #184, DWC3 transfers retired before their memory is released #196) plus
 # aura-up273-image.patch: patches/upstream-27.3/0002 (GPU and DCP hand-off on macOS 27.2/27.3
 # beta 1) and 0003 (notch rows shown by default on M5, chosen.asahi,show-notch=0 opts out; the
 # M5 Max 27.3 GPU digest from aura #172, joshuaswarren) and 0006 (the T6050 camera hand-off:
-# Jens Axboe's board table from aura #188, ported by Thomas Glanzmann, plus a J714s 27.3 beta 1 row).
+# Jens Axboe's board table from aura #188, ported by Thomas Glanzmann, plus a J714s 27.3 beta 1 row)
+# and 0007 (the GP PCIe bring-up lets the auto-PM storage domain APCIE_SYS_ST0 gate itself instead
+# of stopping: that stop left the N1 Wi-Fi down, or refused the boot when it hit a shared stage).
 # Packaged as m1n1-aurora so the image builder, update-m1n1 and the update pin treat it as
 # the image's Stage 2; the version sorts above the channel's 1.6.1.aurora23-2.
 # Ordinary updates refresh ESP Stage 2, never enroll Stage 1.
 pkgname=m1n1-aurora
 pkgver=1.6.1.aurora24.up273
-pkgrel=2
+pkgrel=3
 pkgdesc='Aura bootloader (Stage 2) for the J714s on the aurora-silicon kernel, macOS 27.3'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
@@ -22,11 +25,11 @@ conflicts=('m1n1' 'aura' 'm1n1-neo')
 replaces=('aura' 'm1n1-neo')
 makedepends=('git' 'clang' 'lld' 'llvm' 'rustup' 'make' 'python')
 options=('!strip' '!debug')
-_commit=dbf088e1510ec9b5a0b41178145c6e2636f135ef
+_commit=d35655304e89330a268be88788c76793b86b058e
 source=("aura::git+$url.git#commit=$_commit"
         aura-up273-image.patch bootlogo_48.bin bootlogo_128.bin bootlogo_256.bin)
 sha256sums=('SKIP'
-            '61fb0b83ae58a118e80b0e3703ffa09b980153622a8e77fffa904f0217e9ae77'
+            '9258c4d63cb78ce8ca89c4a2456667f34e396501312bacfba7b770b8b1877db3'
             '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
             'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'
             '9c659b392aacfa31c62c638003d2257abfdbe17919b5c90cde4c4e62f87addab')

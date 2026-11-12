@@ -1,0 +1,45 @@
+From ee2fba9324e3452daa0bcb4b98397535ec59b069 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 13:17:37 -0500
+Subject: [PATCH] kboot: T6050: PCIe: let an auto-PM storage domain gate itself
+ during port bring-up
+
+storage_check() stopped the GP bring-up when a storage power-state register changed outside its
+actual-state and was-gated bits. APCIE_SYS_ST0 runs under auto power management (AUTO_ENABLE,
+bit 28), and its hardware gates it while storage is idle: on a J714s (macOS 27.3 beta 1) it read
+0x1f0003ff -> 0x1000030f after stage F, PS_AUTO (27:24) and the actual state both 0xf -> 0. The
+check reported "storage changed after F" and left port 0, the N1 Wi-Fi, down (2 of 14 RAM test
+boots on 2026-11-12). A domain with AUTO_ENABLE set before and after may now also move PS_AUTO; target,
+auto-enable and every other bit still stop the bring-up, as do the ANS and NVMe checks after it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/pcie_t6050.c | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/pcie_t6050.c b/src/pcie_t6050.c
+index 861b9959..f0bc22f3 100644
+--- a/src/pcie_t6050.c
++++ b/src/pcie_t6050.c
+@@ -350,8 +350,16 @@ static int storage_check(const char *tag, bool reference)
+         printf("pcie-t6050: storage %s: 0x%lx 0x%08x -> 0x%08x\n", tag, storage_addr[i],
+                storage_ref[i], cur[i]);
+         changed++;
+-        /* PS actual state and was-gated flags may move; target and auto must not */
+-        if (i >= ST_PS && i < ST_SART && !((cur[i] ^ storage_ref[i]) & ~0x3f0))
++        /*
++         * PS actual state and was-gated flags may move; target and auto-enable must not. A
++         * domain under auto power management (AUTO_ENABLE, bit 28, set before and after) also
++         * moves its auto state (bits 27:24) on its own: on a J714s APCIE_SYS_ST0 went 0x1f0003ff
++         * -> 0x1000030f while the N1's link came up (storage idle, gated by the hardware).
++         */
++        u32 may_move = 0x3f0;
++        if (storage_ref[i] & cur[i] & BIT(28))
++            may_move |= 0x0f000000;
++        if (i >= ST_PS && i < ST_SART && !((cur[i] ^ storage_ref[i]) & ~may_move))
+             continue;
+         if (i >= ST_PS || i == ST_BOOT_STATUS || i == ST_CC)
+             FAIL("storage changed %s\n", tag);
+-- 
+2.56.0
+

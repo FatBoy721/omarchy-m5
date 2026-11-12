@@ -1,5 +1,5 @@
 diff --git a/src/firmware.c b/src/firmware.c
-index d932f0fb..ac6a8423 100644
+index 5908beda..57d71a3a 100644
 --- a/src/firmware.c
 +++ b/src/firmware.c
 @@ -215,6 +215,10 @@ const struct fw_version_info fw_versions[NUM_FW_VERSIONS] = {
@@ -14,7 +14,7 @@ index d932f0fb..ac6a8423 100644
  };
  
 diff --git a/src/firmware.h b/src/firmware.h
-index 864fe46e..2f092983 100644
+index 347f12d5..24144bd4 100644
 --- a/src/firmware.h
 +++ b/src/firmware.h
 @@ -192,6 +192,8 @@ enum fw_version {
@@ -27,10 +27,10 @@ index 864fe46e..2f092983 100644
  };
  
 diff --git a/src/kboot.c b/src/kboot.c
-index 3a8ec270..22b7f2ff 100644
+index 99b087c7..e0956adb 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
-@@ -169,7 +169,8 @@ static bool kboot_show_notch(void)
+@@ -171,7 +171,8 @@ static bool kboot_show_notch(void)
          if (!strcmp(chosen_params[i][0], "asahi,show-notch"))
              return chosen_params[i][1] && !strcmp(chosen_params[i][1], "1");
      }
@@ -40,7 +40,7 @@ index 3a8ec270..22b7f2ff 100644
  }
  
  static int dt_set_rng_seed_sep(int node)
-@@ -878,6 +879,13 @@ static int dt_set_chosen(void)
+@@ -1149,6 +1150,13 @@ static int dt_set_chosen(void)
          printf("FDT: set chosen.%s\n", name);
      }
  
@@ -54,7 +54,7 @@ index 3a8ec270..22b7f2ff 100644
      if (dt_set_stdout_path(node))
          return -1;
  
-@@ -8996,7 +9004,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+@@ -9365,7 +9373,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
   * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
   * snapshot physical addresses. The kernel allocates the small main-memory
   * tail and owns all power, DART and firmware-start operations. J716c's camera
@@ -64,7 +64,7 @@ index 3a8ec270..22b7f2ff 100644
   */
  __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
                                                                                  const char *name)
-@@ -9010,26 +9019,51 @@ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(
+@@ -9379,26 +9388,51 @@ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(
      return 0;
  }
  
@@ -125,7 +125,7 @@ index 3a8ec270..22b7f2ff 100644
      if (chosen < 0 || isp < 0)
          return -1;
      const struct adt_segment_ranges *seg = adt_getprop(adt, isp, "segment-ranges", &len);
-@@ -9042,6 +9076,7 @@ static int dt_set_t6050_isp(void)
+@@ -9411,6 +9445,7 @@ static int dt_set_t6050_isp(void)
          return -1;
      ADT_GETPROP(adt, isp, "cam-connections-scheme", &scheme);
  
@@ -133,7 +133,7 @@ index 3a8ec270..22b7f2ff 100644
      uint32_t owner = fdt_get_phandle(dt, node);
      if (!owner && (fdt_generate_phandle(dt, &owner) || fdt_setprop_u32(dt, node, "phandle", owner)))
          return -1;
-@@ -9080,25 +9115,28 @@ static int dt_set_t6050_isp(void)
+@@ -9449,25 +9484,28 @@ static int dt_set_t6050_isp(void)
          if (node < 0 || fdt_setprop_string(dt, node, "status", "okay"))
              return -1;
      }
@@ -166,10 +166,10 @@ index 3a8ec270..22b7f2ff 100644
      free(scratch);
      return 0;
 diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
-index cf73a042..e4e0b78e 100644
+index f7a71965..d9e3fd3a 100644
 --- a/src/kboot_display_handoff.c
 +++ b/src/kboot_display_handoff.c
-@@ -3218,7 +3218,11 @@ static bool dcp6_dt_describes(void *dt)
+@@ -3229,7 +3229,11 @@ static bool dcp6_dt_describes(void *dt)
   * iBoot leaves the DCP running and both of its DARTs locked on four-level roots. The kernel adopts
   * that session and resolves firmware DVAs through the live tables, so this publishes no
   * iommu-addresses: only what the ADT says, checked against the device tree and the registers.
@@ -182,7 +182,7 @@ index cf73a042..e4e0b78e 100644
   */
  #define T6050_DCP_UUID  "64863924-B56B-3E32-87FE-038677F52709"
  #define T6050_NDISP     5       /* disp0 reg[0..4] are the dcp's disp-0..disp-4 */
-@@ -3242,8 +3246,12 @@ static struct {
+@@ -3253,8 +3257,12 @@ static struct {
      u64 coproc, pmc, pmc_size, vram, vram_size;
      u32 bw_offset, nits, nclk, clk_id[T6050_CLOCKS], clk_hz[T6050_CLOCKS], pmc_ph;
      const char *gamut;
@@ -195,7 +195,7 @@ index cf73a042..e4e0b78e 100644
  /* The dcp's reg entries and the ADT reg each equals (coproc: a prefix of it) */
  static const struct {
      char name[10];
-@@ -3296,10 +3304,14 @@ static T6050_INIT int t6050_check_adt(void)
+@@ -3307,10 +3315,14 @@ static T6050_INIT int t6050_check_adt(void)
      int disp0 = adt_path_offset(adt, "/arm-io/disp0");
      const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
  
@@ -213,7 +213,7 @@ index cf73a042..e4e0b78e 100644
      if (dcp6_adt_u32(nub, "running", &val) || val != 1 || disp0 < 0 ||
          adt_getprop(adt, disp0, "external", NULL))
          bail("the DCP is not running an internal panel\n");
-@@ -3476,8 +3488,8 @@ static T6050_TEXT int t6050_publish(void *dt)
+@@ -3487,8 +3499,8 @@ static T6050_TEXT int t6050_publish(void *dt)
      if (firmware_set_fdt(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DCP]),
                           "apple,firmware-version", &os_firmware) ||
          firmware_set_fdt(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DCP]),
@@ -224,7 +224,7 @@ index cf73a042..e4e0b78e 100644
          return -1;
  
      /* The bandwidth scratch, in the PMC metadata (disp0 reg[4]), as register window 5 */
-@@ -3557,7 +3569,7 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
+@@ -3568,7 +3580,7 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
      snprintf(a, sizeof(a), "/arm-io/dcpext%d/iop-dcpext%d-nub", n, n);
      int nub = adt_path_offset(adt, a);
      const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
@@ -233,7 +233,7 @@ index cf73a042..e4e0b78e 100644
          dcp6_adt_u32(nub, "running", &val) || val != 1)
          bail("dcpext%d: not running the pinned image\n", n);
      snprintf(a, sizeof(a), "/arm-io/dcpext%d", n);
-@@ -3655,9 +3667,9 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
+@@ -3666,9 +3678,9 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
      if (firmware_set_fdt(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-version",
                           &os_firmware) ||
          firmware_set_fdt(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-compat",
@@ -349,3 +349,26 @@ index 471ccdec..164569de 100644
  }
  
  /* Enables every node of t6050_gpu.on, in order, if they all exist */
+diff --git a/src/pcie_t6050.c b/src/pcie_t6050.c
+index 861b9959..f0bc22f3 100644
+--- a/src/pcie_t6050.c
++++ b/src/pcie_t6050.c
+@@ -350,8 +350,16 @@ static int storage_check(const char *tag, bool reference)
+         printf("pcie-t6050: storage %s: 0x%lx 0x%08x -> 0x%08x\n", tag, storage_addr[i],
+                storage_ref[i], cur[i]);
+         changed++;
+-        /* PS actual state and was-gated flags may move; target and auto must not */
+-        if (i >= ST_PS && i < ST_SART && !((cur[i] ^ storage_ref[i]) & ~0x3f0))
++        /*
++         * PS actual state and was-gated flags may move; target and auto-enable must not. A
++         * domain under auto power management (AUTO_ENABLE, bit 28, set before and after) also
++         * moves its auto state (bits 27:24) on its own: on a J714s APCIE_SYS_ST0 went 0x1f0003ff
++         * -> 0x1000030f while the N1's link came up (storage idle, gated by the hardware).
++         */
++        u32 may_move = 0x3f0;
++        if (storage_ref[i] & cur[i] & BIT(28))
++            may_move |= 0x0f000000;
++        if (i >= ST_PS && i < ST_SART && !((cur[i] ^ storage_ref[i]) & ~may_move))
+             continue;
+         if (i >= ST_PS || i == ST_BOOT_STATUS || i == ST_CC)
+             FAIL("storage changed %s\n", tag);

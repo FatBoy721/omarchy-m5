@@ -1,0 +1,56 @@
+--- a/aurora-sep-load
++++ b/aurora-sep-load
+@@ -51,9 +51,52 @@
+             exit 1
+         fi
+         ;;
+-    *) modprobe apple_sep xart_writes=1 provision_keybag=1 ;;
++    # omarchy-m5: no options here. Options given to modprobe come after
++    # modprobe.d's and win, so upstream's options here (writes and keybag
++    # provisioning on) would override the image's read-only default
++    # (/usr/lib/modprobe.d/aurora-sep-xart.conf). Whether the enclave may
++    # write is the owner's modprobe.d choice alone.
++    *) modprobe apple_sep ;;
+ esac
+ 
++# omarchy-m5: with xART writes off there is no identity keybag to create or
++# unlock, so the trusted-key probe below cannot pass. Say what this boot is
++# and stop before it. diag/xart is fixed at probe (enabled or disabled, see
++# Documentation/ABI/testing/sysfs-driver-apple-sep).
++xart_state() {
++    for attribute in /sys/bus/platform/devices/*.sep/diag/xart; do
++        if [ -r "$attribute" ]; then
++            cat "$attribute" 2>/dev/null || echo unreadable
++            return 0
++        fi
++    done
++    echo absent
++}
++# The xart_writes value modprobe.d gives the driver; the driver's own default
++# is 1 when nothing sets it.
++configured_writes=$(modprobe -c 2>/dev/null | awk '
++    $1 == "options" && ($2 == "apple_sep" || $2 == "apple-sep") {
++        for (i = 3; i <= NF; i++)
++            if ($i ~ /^xart_writes=/)
++                value = substr($i, length("xart_writes=") + 1)
++    }
++    END { print (value == "" ? 1 : value) }')
++xart=$(xart_state)
++xart_wait_end=$(($(uptime_s) + 10))
++while [ "$xart" = absent ] && [ "$(uptime_s)" -lt "$xart_wait_end" ]; do
++    sleep 0.1
++    xart=$(xart_state)
++done
++if [ "$configured_writes" = 0 ] && [ "$xart" != enabled ]; then
++    log "read-only: apple_sep runs with xART writes off (xART $xart), as modprobe.d asks. Nothing is written to the enclave's xART store and no identity keybag is created, so Touch ID stays off. To opt in, see /usr/share/doc/aurora-sep/README.omarchy-m5.md"
++    exit 0
++elif [ "$xart" = absent ]; then
++    log "this kernel does not report diag/xart; going on as upstream does"
++elif [ "$xart" != enabled ]; then
++    log "modprobe.d asks for xART writes, but the driver reports xART $xart: it was loaded earlier this boot with other options (reboot), or the xART store did not validate for writing (journalctl -k -g apple_sep; XART-SAFETY.md). Not probing trusted keys"
++    exit 1
++fi
++
+ work=$(mktemp -d /run/aurora-sep-load.XXXXXX)
+ cleanup() {
+     case "$work" in

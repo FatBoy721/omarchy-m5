@@ -503,14 +503,14 @@ index 37fde4f8c4f1..44669342197e 100644
  	},
  };
  
-+static bool ave_t6050_27_3_hevc;
++static bool ave_t6050_27_3_hevc = true;
 +module_param(ave_t6050_27_3_hevc, bool, 0444);
 +MODULE_PARM_DESC(ave_t6050_27_3_hevc,
-+		 "Allow HEVC on the T6050 macOS 27.3 (26C5035r) firmware (unqualified; testing only)");
++		 "HEVC on the T6050 macOS 27.3 (26C5035r) firmware (default on; 0 refuses it)");
 +
 +/*
-+ * HEVC on the macOS 27.3 build is not qualified: only its H.264 was checked
-+ * on hardware with the 26A428 layout.
++ * HEVC on the macOS 27.3 build encoded cleanly on two J714s boots (Main with
++ * B-frames); ave_t6050_27_3_hevc=0 refuses it again.
 + */
 +bool ave_layout_hevc_refused(u32 crc)
 +{
@@ -526,8 +526,8 @@ index 37fde4f8c4f1..44669342197e 100644
  		return &ave_layout_26a428;
 +	/*
 +	 * The macOS 27.3 build speaks 26A428's command layout: H.264 (Main with
-+	 * B-frames, Baseline) encodes on a J714s on two boots. HEVC stays refused
-+	 * there unless ave_t6050_27_3_hevc is set (ave_layout_hevc_refused()).
++	 * B-frames, Baseline) encodes on a J714s on two boots, and HEVC too, unless
++	 * ave_t6050_27_3_hevc=0 (ave_layout_hevc_refused()).
 +	 */
 +	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
 +		return &ave_layout_26a428;

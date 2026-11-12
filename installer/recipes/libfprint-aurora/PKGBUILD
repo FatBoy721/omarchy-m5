@@ -1,0 +1,112 @@
+# libfprint with the aurora driver for Apple Touch ID (/dev/sep-bio interface 4 and 5)
+#
+# For the experimental J714s upstream image, with aurora-sep (../aurora-sep-upstream).
+# The kernel at aurora-silicon/linux 8679514f4dff (and the image's 2b4523cb)
+# reports sep-bio interface 5 (include/uapi/linux/apple-sep.h:17). Two existing
+# aarch64 builds accept only interface 4, so neither can be used:
+#   - Omarchy's libfprint-git 1:1.94.100.r10.g6f9479c-5 (its PKGBUILD says so);
+#   - omacom/linux-aurora's libfprint-1.94.100-1.1 (logs "interface version %u,
+#     expected %u").
+# This is libfprint 1.94.100 with aurora-silicon/aurora-sep-userspace's patch
+# series, as its Fedora libfprint.spec (Release 1.aurora12) applies it, at
+# 2ea454e0a222. The patches add the driver, its v4/v5 support (0005), retries,
+# hiding the reader when the lid is closed, lockout and password reasons.
+# Build-time apple-sep.h comes from the same commit.
+# The build steps follow Arch's libfprint and Omarchy's libfprint-git.
+
+pkgname=libfprint-aurora
+pkgver=1.94.100
+pkgrel=1
+_userspace=2ea454e0a222aea7b970f9bf061ee6ea3cd326ec
+# Tag v1.94.100.
+_libfprint=80a4b5ec612892c5c056c48dddaa561452cf37ec
+pkgdesc="Library for fingerprint readers, with the aurora driver for Apple Touch ID (sep-bio v4 and v5)"
+url="https://github.com/aurora-silicon/aurora-sep-userspace/tree/${_userspace}/libfprint"
+arch=(aarch64)
+# libfprint/nbis is NIST-PD (Fedora's spec), the rest LGPL-2.1-or-later.
+license=(LGPL-2.1-or-later LicenseRef-NIST-PD)
+depends=(
+  gcc-libs
+  glib2
+  glibc
+  libgudev
+  libgusb
+  openssl
+  pixman
+)
+makedepends=(
+  git
+  glib2-devel
+  gobject-introspection
+  gtk-doc
+  meson
+  python-cairo
+  python-gobject
+  systemd
+)
+checkdepends=(
+  cairo
+  umockdev
+)
+provides=("libfprint=$pkgver" libfprint-2.so)
+conflicts=(libfprint libfprint-git)
+groups=(fprint)
+
+_raw=https://raw.githubusercontent.com/aurora-silicon/aurora-sep-userspace/${_userspace}/libfprint
+_patches=(
+  libfprint-1.94.100-apple-sep.patch
+  0002-aurora-report-unusable-captures-as-retries.patch
+  0003-hide-lid-covered-readers-while-the-lid-is-closed.patch
+  0004-aurora-refuse-unbound-enrollment.patch
+  0005-aurora-support-v4-and-v5.patch
+  0006-aurora-report-finger-lift-and-lockout.patch
+  0007-aurora-name-retry-causes-and-keep-waiting.patch
+  0008-aurora-report-the-touch-id-lockout-as-locked-out.patch
+  0009-aurora-say-why-touch-id-needs-the-password.patch
+  0010-let-a-front-end-ask-whether-the-reader-needs-the-password.patch
+)
+source=("git+https://gitlab.freedesktop.org/libfprint/libfprint.git#commit=${_libfprint}")
+for _p in "${_patches[@]}" apple-sep.h fprintd-aurora-touchid.conf; do
+  source+=("${_userspace:0:12}-${_p}::${_raw}/${_p}")
+done
+sha256sums=('SKIP'
+            '55aef4a2019568a13aea48064ed83858a7ce4902636f8e85e46877ce9d8ef172'
+            '6a594471084ce5d6e65e3edaccc7f10a62dd3bb1cfc2bcdfa6b3f2357906620a'
+            '58b3ec841207942bd48819a8e91a8cc7992e5ffae34285b7e9d3617c2750043f'
+            '55793f885982b140beb5fc1b2ade65190a5bc73762369935327155eb7190c6b8'
+            '8024015e227ad9172dd5eec2fbe128e6c32f7621571c49f869386123cc08585d'
+            'ab7883751d087e11f192a18f8744500eb271de6b7737837c7da398ddb11da246'
+            'e14bc4fb3a63ee28d3418d7c7e4823d3bd86e9da784f6e34fd2bef8b11a5f510'
+            '0c75bf129d7416ac534caec4a780dc25a50c478180747213f71c1148e279796b'
+            'd3f31fb55bf9c55173123c48192f85b9dd1e8f0db1157d7bb77a785d90490253'
+            '9aa370942c571cfe1e3ea7cd851b7056477c0b9d29c6a72f02c6ca28431b0ffb'
+            'ce2ac6209e5034f402536b72f59d1048b6bb77ca98490d8c7d509bb187ee7a21'
+            '4d3ddca1db4816ba6e7d809096cb758153a25db02e995cfe4720b7e98b82e4d6')
+
+prepare() {
+  cd libfprint
+  local p
+  for p in "${_patches[@]}"; do
+    echo "Applying $p..."
+    patch -Np1 -i "../${_userspace:0:12}-$p"
+  done
+  install -Dm644 "../${_userspace:0:12}-apple-sep.h" "$srcdir/aurora-uapi/linux/apple-sep.h"
+}
+
+build() {
+  # The distribution's kernel headers do not carry <linux/apple-sep.h>.
+  CFLAGS+=" -I$srcdir/aurora-uapi"
+  arch-meson libfprint build -D drivers=all -D installed-tests=false
+  meson compile -C build
+}
+
+check() {
+  meson test -C build --print-errorlogs
+}
+
+package() {
+  meson install -C build --destdir "$pkgdir"
+  # fprintd's sandbox: open /dev/sep-bio, and read the lid switch libfprint follows.
+  install -Dm644 "${_userspace:0:12}-fprintd-aurora-touchid.conf" \
+    "$pkgdir/usr/lib/systemd/system/fprintd.service.d/50-libfprint-aurora-touchid.conf"
+}

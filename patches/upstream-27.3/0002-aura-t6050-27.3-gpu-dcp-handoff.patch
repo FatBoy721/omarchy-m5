@@ -1,4 +1,4 @@
-From fdca5c461c7236b5c4b675c1131914265261e73c Mon Sep 17 00:00:00 2001
+From b987bd1b472cf33d7563424da4be0257d6bac5fe Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Wed, 11 Nov 2026 17:02:15 -0500
 Subject: [PATCH] kboot: T6050: hand the GPU and the internal display over on
@@ -27,7 +27,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  4 files changed, 71 insertions(+), 32 deletions(-)
 
 diff --git a/src/firmware.c b/src/firmware.c
-index d932f0fb..ac6a8423 100644
+index 5908beda..57d71a3a 100644
 --- a/src/firmware.c
 +++ b/src/firmware.c
 @@ -215,6 +215,10 @@ const struct fw_version_info fw_versions[NUM_FW_VERSIONS] = {
@@ -42,7 +42,7 @@ index d932f0fb..ac6a8423 100644
  };
  
 diff --git a/src/firmware.h b/src/firmware.h
-index 864fe46e..2f092983 100644
+index 347f12d5..24144bd4 100644
 --- a/src/firmware.h
 +++ b/src/firmware.h
 @@ -192,6 +192,8 @@ enum fw_version {
@@ -55,10 +55,10 @@ index 864fe46e..2f092983 100644
  };
  
 diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
-index cf73a042..e4e0b78e 100644
+index f7a71965..d9e3fd3a 100644
 --- a/src/kboot_display_handoff.c
 +++ b/src/kboot_display_handoff.c
-@@ -3218,7 +3218,11 @@ static bool dcp6_dt_describes(void *dt)
+@@ -3229,7 +3229,11 @@ static bool dcp6_dt_describes(void *dt)
   * iBoot leaves the DCP running and both of its DARTs locked on four-level roots. The kernel adopts
   * that session and resolves firmware DVAs through the live tables, so this publishes no
   * iommu-addresses: only what the ADT says, checked against the device tree and the registers.
@@ -71,7 +71,7 @@ index cf73a042..e4e0b78e 100644
   */
  #define T6050_DCP_UUID  "64863924-B56B-3E32-87FE-038677F52709"
  #define T6050_NDISP     5       /* disp0 reg[0..4] are the dcp's disp-0..disp-4 */
-@@ -3242,8 +3246,12 @@ static struct {
+@@ -3253,8 +3257,12 @@ static struct {
      u64 coproc, pmc, pmc_size, vram, vram_size;
      u32 bw_offset, nits, nclk, clk_id[T6050_CLOCKS], clk_hz[T6050_CLOCKS], pmc_ph;
      const char *gamut;
@@ -84,7 +84,7 @@ index cf73a042..e4e0b78e 100644
  /* The dcp's reg entries and the ADT reg each equals (coproc: a prefix of it) */
  static const struct {
      char name[10];
-@@ -3296,10 +3304,14 @@ static T6050_INIT int t6050_check_adt(void)
+@@ -3307,10 +3315,14 @@ static T6050_INIT int t6050_check_adt(void)
      int disp0 = adt_path_offset(adt, "/arm-io/disp0");
      const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
  
@@ -102,7 +102,7 @@ index cf73a042..e4e0b78e 100644
      if (dcp6_adt_u32(nub, "running", &val) || val != 1 || disp0 < 0 ||
          adt_getprop(adt, disp0, "external", NULL))
          bail("the DCP is not running an internal panel\n");
-@@ -3476,8 +3488,8 @@ static T6050_TEXT int t6050_publish(void *dt)
+@@ -3487,8 +3499,8 @@ static T6050_TEXT int t6050_publish(void *dt)
      if (firmware_set_fdt(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DCP]),
                           "apple,firmware-version", &os_firmware) ||
          firmware_set_fdt(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DCP]),
@@ -113,7 +113,7 @@ index cf73a042..e4e0b78e 100644
          return -1;
  
      /* The bandwidth scratch, in the PMC metadata (disp0 reg[4]), as register window 5 */
-@@ -3557,7 +3569,7 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
+@@ -3568,7 +3580,7 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
      snprintf(a, sizeof(a), "/arm-io/dcpext%d/iop-dcpext%d-nub", n, n);
      int nub = adt_path_offset(adt, a);
      const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
@@ -122,7 +122,7 @@ index cf73a042..e4e0b78e 100644
          dcp6_adt_u32(nub, "running", &val) || val != 1)
          bail("dcpext%d: not running the pinned image\n", n);
      snprintf(a, sizeof(a), "/arm-io/dcpext%d", n);
-@@ -3655,9 +3667,9 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
+@@ -3666,9 +3678,9 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
      if (firmware_set_fdt(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-version",
                           &os_firmware) ||
          firmware_set_fdt(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-compat",

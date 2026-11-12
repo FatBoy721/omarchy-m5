@@ -1,4 +1,4 @@
-From 27bd807abf6007c2a7f34f2a6a31aa6b99da0a6f Mon Sep 17 00:00:00 2001
+From f06ac68a5a7fe18f75a63cdb0c43ac6618bc62a7 Mon Sep 17 00:00:00 2001
 From: TripleU <usher@gentechsolution.com>
 Date: Wed, 11 Nov 2026 18:39:56 -0500
 Subject: [PATCH 1/2] kboot: M5: show the notch rows by default
@@ -13,10 +13,10 @@ opts out.
  1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/src/kboot.c b/src/kboot.c
-index 3a8ec270..180fb019 100644
+index 99b087c7..5679295b 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
-@@ -169,7 +169,8 @@ static bool kboot_show_notch(void)
+@@ -171,7 +171,8 @@ static bool kboot_show_notch(void)
          if (!strcmp(chosen_params[i][0], "asahi,show-notch"))
              return chosen_params[i][1] && !strcmp(chosen_params[i][1], "1");
      }
@@ -26,7 +26,7 @@ index 3a8ec270..180fb019 100644
  }
  
  static int dt_set_rng_seed_sep(int node)
-@@ -878,6 +879,13 @@ static int dt_set_chosen(void)
+@@ -1149,6 +1150,13 @@ static int dt_set_chosen(void)
          printf("FDT: set chosen.%s\n", name);
      }
  
@@ -44,7 +44,7 @@ index 3a8ec270..180fb019 100644
 2.56.0
 
 
-From 1317243025a0b542638a7ec21404a22518cca708 Mon Sep 17 00:00:00 2001
+From 08001c333cdb23f30272158bdb7df02fa4548985 Mon Sep 17 00:00:00 2001
 From: TripleU <usher@gentechsolution.com>
 Date: Wed, 11 Nov 2026 19:25:29 -0500
 Subject: [PATCH 2/2] kboot: T6050: also admit the M5 Max's 27.3 GPU build
