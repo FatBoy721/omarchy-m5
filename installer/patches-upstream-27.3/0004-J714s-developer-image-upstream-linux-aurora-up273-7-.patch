@@ -1,7 +1,7 @@
 From 55535e37275ae9275ce7adfd8d5022ca91d7aa75 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 12:47:22 -0500
-Subject: [PATCH 4/4] J714s developer image (upstream): linux-aurora up273-7,
+Subject: [PATCH 4/5] J714s developer image (upstream): linux-aurora up273-7,
  Aura up273-3, Touch ID userspace read-only
 
 linux-aurora 7.3.0.aurora17.up273-7 (aurora-silicon/linux integration/aurora 8679514f plus

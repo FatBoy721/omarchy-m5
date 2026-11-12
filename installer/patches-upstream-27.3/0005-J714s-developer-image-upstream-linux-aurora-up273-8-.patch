@@ -1,0 +1,116 @@
+From 2f02e217021bab1ccb2f3a3ac4cade2e6a1e095b Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 15:42:20 -0500
+Subject: [PATCH 5/5] J714s developer image (upstream): linux-aurora up273-8
+ (integration/aurora 3766943238bd, panel VRR opt-in)
+
+linux-aurora 7.3.0.aurora17.up273-8 (aurora-silicon/linux integration/aurora 3766943238bd plus
+betizzel/omarchy-m5 patches/upstream-27.3/0001, 0004, 0005 and 0008, rolotrealanis98's firmware 27
+panel VRR, opt-in with appledrm.fw27_panel_vrr=1), recipe at betizzel/omarchy-m5 e0b6d1c. The J714s
+kernel pins follow the new release 7.3.0-17.up273-8-ARCH. Aura (m1n1-aurora up273-3) and the other
+packages unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../candidate-package-manifest.json                | 14 +++++++-------
+ image-builder/builder/stage1_qualification.py      |  4 ++--
+ image-builder/test/test_candidate_set.py           |  4 ++--
+ image-builder/test/test_stage1_qualification.py    |  4 ++--
+ 4 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index 7ecf0d7..64981d7 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-69f623ab6e61",
++  "set": "j714s-dev-runtime-f42a2e2eb85c",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -102,15 +102,15 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora17.up273-7",
++      "version": "7.3.0.aurora17.up273-8",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora17.up273-7-aarch64.pkg.tar.zst",
+-      "sha256": "b421c86bcbeb88a63b7f9d175cb53ec41913b61d8afc7eecf62b2e2e5e3fa5e8",
++      "filename": "linux-aurora-7.3.0.aurora17.up273-8-aarch64.pkg.tar.zst",
++      "sha256": "544512a9b60934ccffff465015008f4cdf2b8ddafbfb42446307c621aae242be",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "222a68992d1dbea936d2e9462b40deed688a4547"
++        "commit": "e0b6d1cb441fdf75227b256384e6d895cb4c924c"
+       },
+-      "size_bytes": 44113037
++      "size_bytes": 44114654
+     },
+     {
+       "name": "m1n1-aurora",
+@@ -240,5 +240,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "69f623ab6e6194fb97d64e00a7565708da026187094131548ff317546660c2e9"
++  "set_sha256": "f42a2e2eb85c3ab065fc8bc2288c797a15180af4465ffe05e08be703126140d0"
+ }
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index c82ad62..e303b08 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -18,8 +18,8 @@ from image_profile import select as select_image_profile
+ COMMON_STAGE1 = "esp/aurora/stage1.bin"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+-J714S_KERNEL_VERSION = "7.3.0.aurora17.up273-7"
+-J714S_KERNEL_RELEASE = "7.3.0-17.up273-7-ARCH"
++J714S_KERNEL_VERSION = "7.3.0.aurora17.up273-8"
++J714S_KERNEL_RELEASE = "7.3.0-17.up273-8-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
+ # What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
+ # with on bare metal, besides the budgets: PMGR domains read-only except the ones its
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index 923f9a6..03b53ea 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -113,7 +113,7 @@ class CandidateSetTest(unittest.TestCase):
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+         self.assertEqual(len(names), 18)
+-        release = "7.3.0-17.up273-7-ARCH"
++        release = "7.3.0-17.up273-8-ARCH"
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+         kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
+@@ -126,7 +126,7 @@ class CandidateSetTest(unittest.TestCase):
+                     package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+-                                    versions={"linux-aurora": "7.3.0.aurora17.up273-7", "hyprland-m5": "0.57.2-2",
++                                    versions={"linux-aurora": "7.3.0.aurora17.up273-8", "hyprland-m5": "0.57.2-2",
+                                               "aurora-sep": "1.17.g8679514f4dff-1", "libfprint-aurora": "1.94.100-1"},
+                                     arches={"aurora-sep": "any"},
+                                     contents=contents, manifest_edit=developer_sources)
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+index d8c4989..2c508bb 100644
+--- a/image-builder/test/test_stage1_qualification.py
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -32,8 +32,8 @@ class Stage1QualificationTest(unittest.TestCase):
+         trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
+         policy = json.loads((trust / 'policy.json').read_text())
+         self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
+-        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora17.up273-7')
+-        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-17.up273-7-ARCH')
++        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora17.up273-8')
++        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-17.up273-8-ARCH')
+         self.assertEqual(policy['primary_fingerprint'], '0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1')
+         self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
+         self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
+-- 
+2.56.0
+
