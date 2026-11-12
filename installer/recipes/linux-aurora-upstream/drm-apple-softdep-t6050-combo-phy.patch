@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 18:30:00 -0500
+Subject: [PATCH] drm/apple: load the T6050 combo PHYs before appledrm
+
+appledrm already soft-depends on the display crossbar, because a DCP
+probe that defers after the deferred probe timeout gives up its Type-C
+routes for the boot. The routes' PHYs need the same: on T6050 they are
+the combo PHYs of atc-t6050-dp, which appledrm does not otherwise pull
+in.
+
+On a J714s on macOS 27.3 (up273-8), appledrm probed from the root
+filesystem at about 62 s, long after the 10 s timer, and dcpext0 and
+dcpext2, the two engines with Type-C routes, failed with "deferred probe
+timeout, ignoring dependency" and -110. dcpext1 and dcpext3 have no
+routes and came up.
+
+The same softdep as a modprobe.d line on up273-8 made all four
+external DCPs bind and DRM offer DP-1..DP-4.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+diff --git a/drivers/gpu/drm/apple/apple_drv.c b/drivers/gpu/drm/apple/apple_drv.c
+--- a/drivers/gpu/drm/apple/apple_drv.c
++++ b/drivers/gpu/drm/apple/apple_drv.c
+@@ -2120,7 +2120,9 @@
+  * crossbar. Without this, initramfs generators leave it out, it loads only
+  * from the root filesystem, and a DCP probe that waits past the deferred
+  * probe timeout (an encrypted root's passphrase prompt) gives up its routes.
++ * The same holds for the PHYs of the routes: on T6050 they are the combo
++ * PHYs of atc-t6050-dp, which nothing else pulls in before this module.
+  * DCP also asks for the battery temperature once while it starts (see
+  * dcp_pmu_temperature()), so have the SMC battery registered by then.
+  */
+-MODULE_SOFTDEP("pre: mux-apple-display-crossbar macsmc-power");
++MODULE_SOFTDEP("pre: mux-apple-display-crossbar atc-t6050-dp macsmc-power");
+-- 
+2.47.0

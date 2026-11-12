@@ -15,8 +15,8 @@ dcpext2, the two engines with Type-C routes, failed with "deferred probe
 timeout, ignoring dependency" and -110. dcpext1 and dcpext3 have no
 routes and came up.
 
-Candidate. Compiled on ush (the module info carries the new softdep);
-not booted.
+The same softdep as a modprobe.d line on up273-8 made all four
+external DCPs bind and DRM offer DP-1..DP-4.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
