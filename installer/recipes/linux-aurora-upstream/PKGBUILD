@@ -136,10 +136,18 @@ _package_kernel() {
   _make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
 
   echo "Installing device trees..."
-  # Only the M5 (T6050) trees: update-m1n1 appends every installed tree to Aura in m1n1/boot.bin,
-  # and with all 137 Apple trees boot.bin (13.6 MB) overlaps the Stage 1 heap (the RAM test refused
-  # it); the J714s image needs only its own SoC's.
+  # update-m1n1 appends every installed tree to Aura in m1n1/boot.bin. All 137 Apple trees make it
+  # 13.6 MB, which overlaps the Stage 1 heap (the RAM test refused it); the stable image's 11.5 MB
+  # boots. So: the M5 (T6050) trees plus the boards the image builder's policy requires (10 MB).
+  local _tree _trees=(t6000-j314s t6000-j316s t6001-j314c t6001-j316c t6001-j375c t6002-j375d
+    t6020-j414s t6020-j416s t6020-j474s t6021-j414c t6021-j416c t6021-j475c t6022-j180d t6022-j475d
+    t6030-j514s t6030-j516s t6031-j514c t6031-j516c t6034-j514m t6034-j516m t8103-j274 t8103-j293
+    t8103-j313 t8103-j456 t8103-j457 t8112-j413 t8112-j415 t8112-j473 t8112-j493 t8122-j433
+    t8122-j434 t8122-j504 t8122-j613 t8122-j615 t8140-j700)
   install -Dt "$modulesdir/dtbs" "$O"/arch/arm64/boot/dts/apple/t6050-*.dtb
+  for _tree in "${_trees[@]}"; do
+    install -Dt "$modulesdir/dtbs" "$O/arch/arm64/boot/dts/apple/$_tree.dtb"
+  done
   # Upstream builds t6050-j714s.dtb itself; boot loaders pick it by that name.
   [[ -f "$modulesdir/dtbs/t6050-j714s.dtb" ]]
 
