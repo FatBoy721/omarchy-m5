@@ -28,7 +28,8 @@ test it on a real J714s, and say who made each part.
 | USB 3, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
 | Quiet fans at idle | ✅ in the image | edimoldovan |
 | Updates (`omarchy update`) | ✅ keep the J714s kernel, m1n1, Mesa, Hyprland and firmware (checked in CI with [`update-check`](.github/workflows/update-check.yml)) | this repo |
-| Camera, Touch ID | ❌ not yet | |
+| Front camera | 🔜 works on the upstream base on 27.3 (tested from RAM on a J714s); coming in the experimental upstream image | edimoldovan, sithglan, aurora-silicon |
+| Touch ID | ❌ not yet | |
 
 ✅ works · 🟡 partly · 🔜 coming · ❌ no
 
