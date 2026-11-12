@@ -1,4 +1,4 @@
-From 280396fa51db6be69dcb169f8c77fbff87cf812f Mon Sep 17 00:00:00 2001
+From fdca5c461c7236b5c4b675c1131914265261e73c Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Wed, 11 Nov 2026 17:02:15 -0500
 Subject: [PATCH] kboot: T6050: hand the GPU and the internal display over on

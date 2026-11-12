@@ -27,7 +27,7 @@ index 864fe46e..2f092983 100644
  };
  
 diff --git a/src/kboot.c b/src/kboot.c
-index 8e44a46a..1c0ccc99 100644
+index 3a8ec270..180fb019 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
 @@ -169,7 +169,8 @@ static bool kboot_show_notch(void)
