@@ -1,5 +1,5 @@
 diff --git i/drivers/accel/ane/ane_fw_cold.c w/drivers/accel/ane/ane_fw_cold.c
-index 6f447afa7..8e63fdacb 100644
+index 6f447afa7..bd62013b2 100644
 --- i/drivers/accel/ane/ane_fw_cold.c
 +++ w/drivers/accel/ane/ane_fw_cold.c
 @@ -74,6 +74,8 @@ struct ane_fw_backend {
@@ -39,7 +39,54 @@ index 6f447afa7..8e63fdacb 100644
  			return -EKEYREJECTED;
  	}
  	/* Preserve every personalized DATA byte, including the iBoot TLV table. */
-@@ -2125,7 +2128,7 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+@@ -1670,7 +1673,11 @@ static int ane_fw_prepare(struct ane_fw_backend *b)
+ 			      IOMMU_READ | IOMMU_WRITE, &b->pool);
+ 	if (ret)
+ 		return ret;
+-	ret = ane_fw_alloc_at(b, ANE_FW_IPC_DVA, SZ_64K,
++	/*
++	 * The whole window up to the heap: the firmware names its IPC size at
++	 * boot (0xc441 bytes on 27.0, 0x10441 on T6050 27.3).
++	 */
++	ret = ane_fw_alloc_at(b, ANE_FW_IPC_DVA, ANE_FW_HEAP_DVA - ANE_FW_IPC_DVA,
+ 			      IOMMU_READ | IOMMU_WRITE, &b->ipc);
+ 	if (ret)
+ 		return ret;
+@@ -1691,7 +1698,7 @@ static int ane_fw_boot(struct ane_fw_backend *b)
+ {
+ 	void __iomem *scratch = b->engine + b->soc->scratch;
+ 	u8 *init = b->pool.cpu + 0x180;
+-	u64 table;
++	u64 table, ipc_bytes;
+ 	unsigned int i;
+ 	int ret;
+ 
+@@ -1707,15 +1714,22 @@ static int ane_fw_boot(struct ane_fw_backend *b)
+ 	if (ret)
+ 		return ret;
+ 	dev_dbg(&b->pdev->dev, "ANE boot: READY\n");
+-	if (ane_rd32(b, scratch) != 8 || ane_rd32(b, scratch + 4) != 0xc440 ||
++	/*
++	 * The firmware's requests: 8 channels, its IPC size minus one, the heap
++	 * and the mode. The IPC must fit the window mapped for it.
++	 */
++	ipc_bytes = (u64)ane_rd32(b, scratch + 4) + 1;
++	if (ane_rd32(b, scratch) != 8 || ipc_bytes < ANE_FW_TABLE_SIZE ||
++	    ipc_bytes > b->ipc.size ||
+ 	    ane_rd32(b, scratch + 12) != 0xf00000 || ane_rd32(b, scratch + 16))
+ 		return -EPROTO;
++	dev_info(&b->pdev->dev, "H17 ANE: READY; IPC %#llx bytes requested\n", ipc_bytes);
+ 	put_unaligned_le64(b->ipc.dva, init + 8);
+ 	put_unaligned_le64(ANE_FW_SPAN, init + 0x10);
+ 	put_unaligned_le64(0xfc80000, init + 0x18);
+ 	put_unaligned_le64(b->heap.dva, init + 0x20);
+ 	put_unaligned_le64(b->heap.size, init + 0x28);
+-	put_unaligned_le64(0xc441, init + 0x50);
++	put_unaligned_le64(ipc_bytes, init + 0x50);
+ 	put_unaligned_le64(b->pool.dva, init + 0x58);
+ 	put_unaligned_le64(b->pool.size, init + 0x60);
+ 	put_unaligned_le32(64, init + 0x68);
+@@ -2125,7 +2139,7 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
  	struct device_node *np = pdev->dev.of_node;
  	struct device_node *chosen __free(device_node) = of_find_node_by_path("/chosen");
  	struct ane_fw_handoff h = {};
@@ -48,7 +95,7 @@ index 6f447afa7..8e63fdacb 100644
  	unsigned int i;
  
  	if (chosen)
-@@ -2142,13 +2145,16 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+@@ -2142,13 +2156,16 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
  			       !strcmp(name, i ? "firmware-data" : "firmware-text") &&
  			       !ane_fw_preload_range(np, i, &h.phys[i], &h.size[i]);
  	}
@@ -68,7 +115,7 @@ index 6f447afa7..8e63fdacb 100644
  		}
  	}
  	*hp = h;
-@@ -2157,10 +2163,14 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+@@ -2157,10 +2174,14 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
  	dev_info(&pdev->dev, "H17 ANE: no loader hand-off (%s); leaving the engine alone\n",
  		 !h.marker || strcmp(h.marker, ANE_FW_COLD_BOOT_EVIDENCE) ? "raw-boot marker" :
  		 !h.preloaded || !h.regions_ok ? "preload reservations" :
@@ -86,7 +133,36 @@ index 6f447afa7..8e63fdacb 100644
  	return false;
  }
  
-@@ -2354,7 +2364,10 @@ int ane_fw_staged_init(struct platform_device *pdev, const struct ane_fw_platfor
+@@ -2169,6 +2190,15 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+  * on every boot with a loader hand-off. A failure stops at that stage; after
+  * acquisition it quarantines, as from the stage file.
+  */
++/*
++ * How many of the boot bring-up stages (probe, map, boot, startup, program)
++ * run when the device binds; the rest can be stepped from firmware_stage.
++ * For finding the stage a new firmware build stops at.
++ */
++static unsigned int boot_stages = 5;
++module_param(boot_stages, uint, 0444);
++MODULE_PARM_DESC(boot_stages, "H17: bring-up stages run at bind (0-5, default 5); step the rest from firmware_stage");
++
+ /* The staged bring-up at boot, for SoCs without macos_sleep. */
+ static void ane_fw_start_staged(struct ane_fw_backend *b)
+ {
+@@ -2177,6 +2207,12 @@ static void ane_fw_start_staged(struct ane_fw_backend *b)
+ 	ssize_t ret;
+ 
+ 	for (i = 0; i < ARRAY_SIZE(steps); i++) {
++		if (i >= boot_stages) {
++			dev_info(&b->pdev->dev,
++				 "H17 ANE: boot bring-up held before %s (boot_stages=%u)\n",
++				 steps[i], boot_stages);
++			return;
++		}
+ 		flags = lock_system_sleep();
+ 		ret = ane_fw_stage_action(&b->pdev->dev, steps[i], strlen(steps[i]));
+ 		unlock_system_sleep(flags);
+@@ -2354,7 +2390,10 @@ int ane_fw_staged_init(struct platform_device *pdev, const struct ane_fw_platfor
  		ane_backend = NULL;
  		goto fail;
  	}
