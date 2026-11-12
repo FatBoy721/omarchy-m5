@@ -25,7 +25,7 @@ ROOT_MIN_SECTORS=8388608  # 32 GiB
 die() { echo "install-from-linux: $*" >&2; exit 1; }
 [[ $EUID == 0 ]] || die "run as root"
 grep -q 'apple,j714s' /proc/device-tree/compatible 2>/dev/null || die "not a J714s (MacBook Pro 14-inch, M5 Pro)"
-for t in sgdisk mkfs.fat unzip partx python3 tar; do command -v $t >/dev/null || die "missing $t"; done
+for t in sgdisk mkfs.fat unzip partx python3 tar cpio; do command -v $t >/dev/null || die "missing $t"; done
 [[ -f $FW/apple/centauri/j714s-ftab.bin && -f $FW/apple/tpmtfw-j714s.bin ]] || die "firmware not found in $FW"
 [[ $(blockdev --getss $DISK) == 4096 ]] || die "expected 4 KiB sectors on $DISK"
 unzip -l "$ZIP" | grep -q ' root.img$' || die "$ZIP is not the J714s image zip"
@@ -74,7 +74,15 @@ FILES=(apple/centauri/j714s-ftab.bin apple/tpmtfw-j714s.bin)
 for f in "$FW"/apple/isp_*.dat; do [[ -f $f ]] && FILES+=("apple/${f##*/}"); done
 tar -C "$FW" -cf "$WORK/esp/vendorfw/firmware.tar" "${FILES[@]}"
 (cd "$FW" && sha256sum "${FILES[@]}" | awk '{print "FILE "$2" SHA256 "$1}') > "$WORK/esp/vendorfw/manifest.txt"
-echo "vendor firmware packed: ${FILES[*]}"
+# firmware.cpio is what the image's initramfs "asahi" hook unpacks into /lib/firmware/vendor before
+# the root mounts; the upstream kernel's N1 (Wi-Fi + Bluetooth) driver needs it that early, and
+# without it both are missing on an installed upstream image.
+CPIO=$(mktemp -d); mkdir -p "$CPIO/vendorfw"
+tar -C "$CPIO/vendorfw" -xf "$WORK/esp/vendorfw/firmware.tar"
+cp "$WORK/esp/vendorfw/manifest.txt" "$CPIO/vendorfw/.vendorfw.manifest"
+(cd "$CPIO" && find vendorfw | sort | cpio -o -H newc -R 0:0 2>/dev/null) > "$WORK/esp/vendorfw/firmware.cpio"
+rm -rf "$CPIO"
+echo "vendor firmware packed: ${FILES[*]} (firmware.tar and firmware.cpio)"
 sync; umount "$WORK/esp"
 
 for img in boot.img:$P8 root.img:$P9; do
