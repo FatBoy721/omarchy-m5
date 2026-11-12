@@ -107,7 +107,7 @@ What upstream merged for the M5 after f1b79c4b: panel EDR on firmware 27 (#1659)
 
 - **0001:** one conflict, in `dcp_swap_submit()` (`iomfb_template.c`). Upstream now stamps the external HDR hints (#1614) and prepares the panel EDR fields (#1659) on `present_v27` before the push; #1174 converts that record to the 27.3 wire layout. Both are kept, and the conversion runs last. The new swap fields (`bl_flags` 0x358, `bl_limit` 0x376, `edr_scale` 0x37e, `edr_headroom` 0x3e6) lie between the 27.3 layout's second and third gaps, so the conversion moves them 0x60 bytes further. Nobody has checked whether 27.3 keeps them there. Every swap submit, including the paired-display path (#1613), goes through `iomfb_v27_swap_wire()`, and upstream added no new method IDs that the 27.3 table would lack. The rest of 0001 applies unchanged; the patch bytes are identical on 44ff52a2 and f8581cba.
 - **0004, 0005:** apply unchanged with `patch -Np1` (0005 in order after 0004). `patch -Np1` of the three on the f8581cba tarball gives exactly the tree that was built and tested.
-- **Config:** the recipe config plus `CONFIG_ACPI_PLATFORM_PROFILE=y`, which `APPLE_CLPC` now selects. Upstream's new `asahi.config` lines are not taken: the DP855 panel bus, TMP103, and the boot-chain lockdown (`APPLE_AURORA_BOOT_SECURITY_LOCKDOWN`, `SECURITY_LOCKDOWN_LSM_EARLY`), which would refuse this package's unsigned modules on a boot it judges secure.
+- **Config:** the recipe config plus `CONFIG_ACPI_PLATFORM_PROFILE=y`, which `APPLE_CLPC` now selects. Upstream's new `asahi.config` lines are not taken: the DP855 panel bus, TMP103, and the boot-chain lockdown (`APPLE_AURORA_BOOT_SECURITY_LOCKDOWN`, `SECURITY_LOCKDOWN_LSM_EARLY`), which could refuse this package's unsigned modules on a boot it judges secure (not tried).
 - **Device tree** (J714s, against up273cam-2): ProRes and its DART are enabled, the `scodec` and `fab7-soc` power states are on (`fab7-soc` firmware-owned), and the CLPC points at the SMC. The SEP node stays `disabled` (#1325, which enables it, merged after f8581cba).
 - **Aura** stays 1.0.0b11 + 0002/0003/0006. 1.0.0b12 (ea20cedb) has nothing for the T6050: the Neo's encoder 0, M4 Pro EL2/hibernation, the J604 AOP and J813 `arm64.nomte`. Its PMP boot-argument change touches every chip and has not been tried on a J714s.
 
@@ -126,17 +126,18 @@ RAM test of `7.3.0-17.up273-5-ARCH` (built on ush, the source of linux-aurora up
 | Panel brightness (#1659) | `apple-panel-bl` swept 250 → 1000 → 300: the DCP ramps it (`brightness_changed`), no errors |
 | Platform profile (#1655, #1656) | `/sys/class/platform-profile/platform-profile-0`: `apple-clpc`, `low-power balanced performance`, `balanced` |
 | ProRes (#1586) | binds its DART, then `no apple/prores-t6050-init.bin and no built-in rows, engine not used` |
-| AOP (#1521) | Same as up273cam-2: `apple_aop` RTKit up, `aop-sensors-las` (lid angle reads 130) and `aop-sensors-als` (`no ALS calibration named in the device tree; the sensor stays off`). Sound cards `AppleJ714` (Primary, Secondary, Speaker Sense) and `AppleJ714HPAI` (Microphone Array). speakersafetyd and speakerguardd inactive, so the speakers stay held |
-| SEP / Touch ID (#1587) | no probe: the J714s `sep` node is `disabled` in this tree; only the `sep-firmware` reserved memory from Aura |
+| AOP (#1521) | Same as up273cam-2: `apple_aop` RTKit up, `aop-sensors-las` (lid angle reads 130) and `aop-sensors-als` (present but off: `no ALS calibration named in the device tree; the sensor stays off`). Sound cards `AppleJ714` (Primary, Secondary, Speaker Sense) and `AppleJ714HPAI` (Microphone Array). speakersafetyd and speakerguardd inactive, so the speakers stay held |
+| SEP / Touch ID (#1587) | no probe: the J714s `sep` node is `disabled` in this tree; only the `sep-firmware` reserved memory from Aura. The fingerprint sensor enumerates on SPI (`spi0.0`, `mesa-fingerprint`), but no driver in this kernel binds it |
 | Errors | no SError, Oops, WARNING or call trace |
 
 Not tested on 27.3: external displays (VRR, the HDR hints and formats), EDR with HDR content.
 
 **AVE encoding on 27.3 works with the 27.0 command layout.** `apple-ave` reloaded with `ave_t6050_try_26a428=1` on the same boot:
-- ffmpeg's `h264_v4l2m2m` is refused at session setup (-EOPNOTSUPP). That is the driver's own limit for the 26A428 layout, not the firmware: that layout takes 30 fps H.264 with B-frames, baseline or intra only, and ffmpeg asks for no B-frames.
+- ffmpeg's `h264_v4l2m2m` is refused at session setup (-EOPNOTSUPP). That is the driver's own limit for the 26A428 layout, not the firmware: that layout takes 30 fps H.264 with B-frames, baseline or intra only (`ave-sess.c`). `v4l2-ctl` with Main and `video_b_frames=0` gets the same -95, which matches how ffmpeg sets up the encoder.
 - `v4l2-ctl` with the driver defaults (Main, 3 B-frames, 30 fps), NV12 1920x1080 `testsrc2`: 30 frames give a 528 KB H.264 stream. ffprobe reads 30 frames, Main, 1920x1080; ffmpeg decodes it with no errors; luma PSNR against the source frames is 40.8-44.5 dB.
 - 300 frames (the input looped) give 5.0 MB; all 300 decode with no errors. The kernel log has no DART fault, timeout or error.
-- HEVC: refused by the driver for this layout (`ave-sess.c`: no slice-header slot is known), as on 27.0.
+- GStreamer `videotestsrc ! v4l2h264enc` (60 frames, 1920x1080 NV12, 30 fps) picks Baseline: a 1.0 MB stream, all 60 frames decode with no errors.
+- HEVC (`pixelformat=HEVC`): session setup fails with -95. The driver refuses HEVC for this layout (`ave-sess.c`: no slice-header slot is known), as on 27.0.
 - So the 27.3 firmware (26C5035, TEXT CRC c25b4ddb) speaks 26A428's H.264 command layout. The proposal is to admit it by default (for H.264) in the next 0004, after a second encode on another boot. Image -4 keeps the default probe-only, which is what was RAM-tested.
 
 Dev Mac state: p4 `m5local/up273b` now holds up273-5 (Image.gz, dtb; the initrd is unchanged and carries no modules). up273cam-2's files are in `/root/up273b-backup-up273cam-2` on p5. Modules for `7.3.0-17.up273-5-ARCH` are in p5's `/usr/lib/modules`, and the test logs and the 30-frame stream are in `/var/lib/m5test`.
