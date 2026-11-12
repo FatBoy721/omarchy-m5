@@ -20,6 +20,7 @@ under `/usr` instead.
 | `0006-aura-t6050-isp-27.3-j714s-camera.patch` | Aura, after 0002 + 0003 | The camera hand-off on 27.3. Aura's T6050 camera hand-off (`dt_set_t6050_isp`) admitted only macOS 27.0. Jens Axboe's board table from aura #188 (9ece8137fa, K116s on 27.2, ported by Thomas Glanzmann), plus a J714s row for 27.3 beta 1: its ADT isp0 keeps sensor type 0x74 and the same two segments (TEXT 0xc1c000 at phys 0x100010cc000, DATA 0x13d0000 at 0x100026a4000). A board may have one row per firmware. |
 | `0007-aura-t6050-pcie-storage-auto-pm.patch` | Aura, after 0006 | Aura's T6050 GP PCIe bring-up compares the storage registers before and after each stage and stops on a change. The storage-side domain APCIE_SYS_ST0 runs under auto power management and gates itself while storage is idle (`0x1f0003ff -> 0x1000030f`: PS_AUTO and the actual state go 0xf -> 0, target and auto-enable unchanged). After stage F that stop left port 0, the N1 Wi-Fi, down; after the shared stages A or S it refuses the whole hand-off (`kboot: refusing T6050 handoff`, "No valid payload found"), which looks like an early hang until the watchdog. 0007 lets a domain with AUTO_ENABLE set before and after move PS_AUTO; target, auto-enable and the ANS/NVMe checks still stop it. See the image -6 section. |
 | `0008-linux-drm-apple-fw27-panel-vrr.patch` | after 0001, 0004, 0005 | rolotrealanis98's j716s-next 8ab10100a4 "drm/apple: Offer VRR on the firmware 27 panel and apply VRR_ENABLED" (Rolando Trevino; his rebase onto integration/aurora 34a447be), unchanged. The firmware 27 ProMotion panel reports its adaptive-sync range fields as zero, so the parser now reads them as 24-120 Hz, the connector says `vrr_capable`, and a plain page flip that changes `VRR_ENABLED` selects the current mode again with adaptive sync at 24 Hz (`minRR = 0x180000`) or off; a swap that does not complete within a second turns it off for good. Opt-in: `appledrm.fw27_panel_vrr=1`. His J716s DT, config and audio commits are left out. Image -7. |
+| `0009-linux-drm-apple-softdep-t6050-combo-phy.candidate.patch` | after 0008 (up273-9 tree) | **Candidate, not in the recipe, not booted.** appledrm also soft-depends on `atc-t6050-dp`, the T6050 combo PHY module, as it already does on the display crossbar. Without it, appledrm can probe dcpext0/dcpext2 before their route PHYs exist, after the deferred-probe timer, and they give up with -110. See "External displays on 27.3". |
 
 Kernel: `0001` is on `integration/aurora` f8581cbaa87f since image -4 (f1b79c4beaef before), cross-built on ush, which the image's kernel recipe (`installer/recipes/linux-aurora-upstream`) builds. The f8581cba tree is `~/m5-build/up273-4/src` on ush, branch `up-274` (0001, 0004 and 0005 as three commits). The f1b79c4b branch was `build/linux-up` `up-273c` (merges 0929f4f5c93b, 8a0eb8647062, fix e0516e36058b). Aura branch: `~/m5/work/up/aura-isp` `up-273-image-main-isp` (0002 + 0003 + 0006 + 0007 on main d35655304e, image -6; the uncommitted test watchdog and payload retry in its working tree are for RAM tests only). `up-273-image-b11-isp` was images -3 to -5 (on main dbf088e1). Packaged by `installer/recipes/m1n1-aurora-upstream`.
 
@@ -425,15 +426,36 @@ Already in -7's 3766943238bd: #1679 (WoWLAN), #1707, #1713, and the external dis
 
 ## External displays on 27.3: why dcpext0/dcpext2 time out, and HDMI (offline, 2026-11-12)
 
-The test (up273-8, 22:48): HDMI plugged in, no hotplug. In the log:
-- `2b2e00000.dcp` and `302e00000.dcp` print `deferred probe timeout, ignoring dependency` and then `external display processor unusable (probe failed: -110)` at **61.67 s**.
-- `392e00000` and `306e00000` come up.
+The test (up273-8, 22:48): HDMI plugged in, no hotplug. `2b2e00000.dcp` and `302e00000.dcp` print `deferred probe timeout, ignoring dependency` and `external display processor unusable (probe failed: -110)` at 61.67 s; `392e00000` and `306e00000` come up.
 
-File:line references below are in the up273-9 tree (e661192638a3 + patches) and the J714sAP 27.3 ADT dump (`~/m5/private/postupdate-27.3-20261108/04-j714s-full-27.3.txt`). The DCP-side code is the same in 3766943238bd.
+File:line references below are in the up273-9 tree (e661192638a3 + patches, DCP code unchanged from 3766943238bd), the J714sAP 27.3 ADT dump (`~/m5/private/postupdate-27.3-20261108/04-j714s-full-27.3.txt`) and Aura main.
 
 ### Two separate problems
 
-**1. HDMI is not described in the J714s device tree at all.** No hotplug is possible even with every dcpext up. *Confidence: high.*
+**1. dcpext0 and dcpext2: a module load-order race with the T6050 combo PHY.** *Confidence: the mechanism is high; which of the four suppliers lost the race (most likely the PHY, see below) still needs RAM-test step 1.*
+
+- **Only the engines with Type-C routes fail.**
+  - dcpext0 (`2b2e00000`, `t6050-dieX.dtsi:152`) and dcpext2 (`302e00000`, `t6050-peripherals.dtsi:2839`) have `typec-routes`: route@1 to the left-front port through `<&atc1_phy 6>` and `<&atc1_dpxbar 0>`, and dcpext2's route@0 through `<&atc2_phy 6>` and `<&atc2_xbar 0>` (`t6050-j714s-display.dtsi:17-104`; dcpext0's route@0 is disabled in `t6050-max-atc2.dtsi:74-86`).
+  - dcpext1 and dcpext3 have no routes.
+- **The -110 path.** A T6050 dcpext is "failsafe" (`dcp.c:5977`). `dcp_platform_probe()` (`dcp.c:6954`) first needs `dcp_ext_route_suppliers()` (`dcp.c:6850`: `of_phy_get` and `mux_control_get` on each route), then `dcp_ext_bind_suppliers()` (`dcp.c:6904`: the PIODMA DART and the mailbox). On -EPROBE_DEFER it asks `driver_deferred_probe_check_state()`. Once the deferred-probe timer has expired, that returns -ETIMEDOUT on the very first deferral (`drivers/base/dd.c:292-294`), and `dcp_ext_give_up(..., "probe")` (`dcp.c:7011`) prints the line seen.
+- **Why the timer had expired.**
+  - The timer is 10 s (`CONFIG_DRIVER_DEFERRED_PROBE_TIMEOUT=10`), restarted by each driver registration.
+  - The test initrd loads these modules from p5's root, and systemd on the root starts at about 60 s.
+  - In the saved log of an earlier up273 boot, the internal DCP `48ae00000` and dcpext1 also first appear at 62.048 s, between dcpext0's and dcpext2's timeout lines: appledrm itself was only loaded at about 62 s. So the dcpexts did not wait a minute; their first probe deferred and was final.
+- **Why a route supplier was not there yet.**
+  - `appledrm.ko` already soft-depends on the crossbar: `MODULE_SOFTDEP("pre: mux-apple-display-crossbar macsmc-power")` (`apple_drv.c:2118-2126`). Its comment describes exactly this failure for the crossbar ("a DCP probe that waits past the deferred probe timeout ... gives up its routes").
+  - On T6050 the routes' PHYs come from a different module, `atc-t6050-dp.ko` (`drivers/phy/apple/atc-t6050-dp.c`, which binds `apple,t6050-combo-phy`). appledrm has no hard dependency on it (`modules.dep`: appledrm needs apple-pmp, dcp-fabric-core, snd, typec, thunderbolt) and no softdep.
+  - So udev loads the PHY module and appledrm in parallel. If appledrm probes a dcpext before `atc1_phy`/`atc2_phy` have registered their PHY provider, the route lookup defers, and the expired timer makes that final.
+  - USB on those ports still comes up afterwards, because dwc3 keeps deferring normally.
+- **What it is not.**
+  - **Not Aura's dcpext hand-off.** In the static dtb all four dcpext nodes, their mailboxes and DARTs are `disabled`. Aura's `t6050_ext_one()` (aura `src/kboot_display_handoff.c:3567-3688`) is the only thing that enables them, and all four probed. So Aura handed all four over on 27.3 (0002 makes it accept the 27.3 DCP image for dcpext too).
+  - **Not the DART or mailbox.** dcpext1 and dcpext3 pass the same `dcp_ext_bind_suppliers()` check.
+  - **Not a static DT problem.** A supplier walk over `t6050-j714s.dtb` finds all four route suppliers `okay`, with `okay` power domains and parents.
+  - **Probably not Aura's PHY tunables**, though only partly checked. `t6050_setup_atc()` (`src/kboot_atc.c:1184`) exports by compatible for ports 1-5. Every ADT name it reads is in the 27.3 ADT for atc-phy1 and atc-phy2. The banks it checks against `reg[]` match for reg[40..43], reg[0] and usb-drdN reg[3]. Not checked: the core sub-banks, and that usb-drdN's `atc-phy-parent` equals the PHY's phandle.
+- **aura #166** (petrskuta, merged in Aura main, f0adc275) hands over the J614s's dcpext2 firmware memory on T6041 (`t6041_exts`). That is the T6041 path, where Linux needs carve-outs filled; T6050's dcpexts are adopted running and already handed over. It does not apply here.
+- **The earlier "the panel waits a minute" note is withdrawn.** Here appledrm itself loaded late, so the panel was not held up by the dcpexts. On an installed image whose initramfs loads appledrm in the first seconds, the race may or may not show.
+
+**2. HDMI is not described in the J714s device tree.** No hotplug is possible even with every dcpext up. *Confidence: high.*
 
 - **The ADT has the HDMI path.**
   - `atc3-dpphy`: `port-type` 6, the same as `port-hdmi0`; `dp-switch-dfp-endpoint` 3 on `display-crossbar0`; `dpxbar-parent` = `atc3-dpxbar@8B24C000`; `dp2hdmi-gpio-parent` = `dp2hdmi-gpio0`. ADT lines 7421-7437.
@@ -442,82 +464,61 @@ File:line references below are in the up273-9 tree (e661192638a3 + patches) and 
     - `function-hdmi_pwr_en` is SMC pcIO (0x800000, 0xf0000).
     - `function-dp2hdmi_pwr_en` is pcIO (0x0, 0x1a0000).
     - These are the same templates as J716s (`t6050-j716s.dts:178-180`) and J775d (`t6050-j775d.dts:352-357`).
-  - The `parade,DP855` on spi4 (line 3605) is the panel TCON (`device_type` tcon), not the HDMI converter. The converter has no ADT node of its own.
+  - The `parade,DP855` on spi4 (line 3605) is the panel TCON, not the HDMI converter.
 - **The DT has none of it.**
-  - `t6050-j714s.dts:306-312` disables `atc3_phy` and its mailbox ("ATC3's USB chain ... stay off"). That is right for USB, but ATC3 is the HDMI PHY.
+  - `t6050-j714s.dts:306-312` disables `atc3_phy` and its mailbox ("ATC3's USB chain ... stay off").
   - `atc3_dpxbar` (`t6050-peripherals.dtsi:1660`) stays disabled.
-  - No dcpext has `apple,connector-type = "HDMI-A"`, `hdmi-hpd-gpios` or a `dp-phy`/`dp-xbar` (`t6050-j714s-display.dtsi`).
+  - No dcpext has `apple,connector-type = "HDMI-A"`, `hdmi-hpd-gpios` or a `dp-phy`/`dp-xbar`.
   - `smc_pcio` drives only `sd_pwr_en` (`t6050-j714s.dts:291-292`).
-- **Nobody upstream has T6050 HDMI working.**
-  - DjDeveloperr's #1515 was validated on a J714s with a USB-C display on the left-front port and a Thunderbolt dock on the right. HDMI was not tried, and the PR says nothing of it.
-  - The only T6050 HDMI description is J775d's, through die 1's LPDPTX PHY, marked "No output yet" (`t6050-j775d.dts:676-680`).
+- **Nobody upstream has T6050 HDMI output.**
+  - DjDeveloperr's #1515 was validated on a J714s with a USB-C display (left-front) and a Thunderbolt dock (right), not HDMI.
+  - J775d's HDMI description (die 1's LPDPTX) is marked "No output yet" (`t6050-j775d.dts:676-680`).
   - No open PR or branch covers J714s/J716s HDMI. erikwb's `ewb/j716c-public-*` branches are USB4/Type-C.
-  - The T6050 PHY driver binds an ATC PHY only as a Type-C combo PHY: `apple,t6050-combo-phy` needs `mode-switch` and `apple,guest-port-reserved` (`drivers/phy/apple/atc-t6050-dp.c:873-881`). Its fixed-bridge compatible `apple,t6050-dp-phy` wants a 0x2c400 core (`:888`), and ATC3's is 0x2c000.
-  - So a fixed HDMI output on ATC3 needs a DP-only mode in that driver, as `atc.c` has for T8122 (`atc.c:6360-6365`). That is driver work nobody has published, not a DT port.
+- **The PHY driver has a fixed-bridge mode, but no board uses it.**
+  - `atc-t6050-dp.c` also binds `apple,t6050-dp-phy` (DjDeveloperr's d1ccc586855d, in `apple,combo-phy.yaml`): no Type-C, no PHY firmware, three domains, `of_phy_simple_xlate`.
+  - For ATC3 as a fixed HDMI PHY, it needs:
+    - its core `reg` sized to 0x2c400 (`atc-t6050-dp.c:888`; the die0 node has 0x2c000);
+    - the nine non-Type-C tunables (`:972-981`), which Aura's `t6050_setup_atc()` fills only for `apple,t6050-combo-phy`. They would have to come from the ADT statically, or Aura's export would have to cover the DP compatible.
 
-**2. dcpext0 and dcpext2 wait for a Type-C route supplier that never binds.** *Confidence: high for the class of supplier, unknown which one.*
+### Candidate 0009 (not in the recipe)
 
-- **The two that fail have Type-C routes, the two that come up have none.**
-  - dcpext0 (`2b2e00000`, `t6050-dieX.dtsi:152`) and dcpext2 (`302e00000`, `t6050-peripherals.dtsi:2839`) have `typec-routes`. Both have route@1 to the left-front port: `<&atc1_phy 6>` and `<&atc1_dpxbar 0>`. dcpext2's route@0 adds `<&atc2_phy 6>` and `<&atc2_xbar 0>`. See `t6050-j714s-display.dtsi:17-104`; dcpext0's route@0 is disabled in `t6050-max-atc2.dtsi:74-86`.
-  - dcpext1 and dcpext3 have no routes.
-- **The -110 path.**
-  - A T6050 dcpext is "failsafe" (`dcp.c:5977`). `dcp_platform_probe()` (`dcp.c:6954`) first waits for `dcp_ext_route_suppliers()` (`dcp.c:6850`), which calls `of_phy_get`/`mux_control_get` on each route.
-  - It then waits for `dcp_ext_bind_suppliers()` (`dcp.c:6904`): the PIODMA DART and the mailbox.
-  - While any of them returns -EPROBE_DEFER it keeps deferring. When the deferred-probe timer fires, `driver_deferred_probe_check_state()` returns -ETIMEDOUT (`drivers/base/dd.c:292-294`) and `dcp_ext_give_up(..., "probe")` (`dcp.c:7011`) prints the line seen.
-  - The timeout came at 61.7 s. The dcpexts deferred for the whole minute, so this is a supplier that never bound, not a late module load.
-- **What it is not.**
-  - **Not Aura's dcpext hand-off on 27.3.** In the static dtb all four dcpext nodes, their mailboxes and DARTs are `disabled`. Aura's `t6050_ext_one()` (aura `src/kboot_display_handoff.c:3567-3688` on main) is the only thing that enables them. Since all four probed, Aura handed all four over on 27.3 (0002 makes it accept the 27.3 DCP image for dcpext too).
-  - **Not the DART or mailbox.** dcpext1 and dcpext3 pass the same `dcp_ext_bind_suppliers()` check with the same kind of DART and mailbox.
-  - **Not the firmware's method table.** That is only reached in bind, after probe.
-- **What it is:** one of the four route suppliers.
-  - `atc1_phy` `2ab000000.phy`, `atc2_phy` `383000000.phy`, `atc1_dpxbar` `2ab24c000.mux`, `atc2_xbar` `38324c000.mux`.
-  - Both failing engines share the ATC1 pair, so ATC1 is the first suspect.
-  - In the compiled dtb all four are `okay`, with `okay` power domains and parents (checked with a supplier walk over `t6050-j714s.dtb`).
-  - Aura fills the PHYs' tunables by compatible on 27.3. `t6050_setup_atc()` covers ports 1-5, `src/kboot_atc.c:1184`. Every ADT name it needs is in the 27.3 ADT for atc-phy1/2 (`tunable_ATC0AXI2AF`, `_FABRIC`, `_COMMON_CFG`, `_LIOA`, the lane, PLL and USB2 lists, usb-drdN `tunable_PIPE_HANDLER_DEFAULT`). The DT banks equal the ADT `reg[]` entries it checks (reg[40..43], reg[0], usb-drdN reg[3]).
-  - So no static reason was found. One of the four probes and fails at run time (the PHY's probe returns -EINVAL on a missing tunable or a failed register-step check; the crossbar's on its power domains), or never gets a driver.
-  - The boot log saved from the test has no PHY or crossbar lines, so it cannot say which.
-- **Side effect.** The panel's DRM device waits for every dcpext component: `apple-drm display-subsystem: bound 2b2e00000.dcp` is at 61.68 s in the same log. Fixing this should take about a minute off the time to the desktop.
+`0009-linux-drm-apple-softdep-t6050-combo-phy.candidate.patch`: appledrm's softdep becomes `pre: mux-apple-display-crossbar atc-t6050-dp macsmc-power`, the same fix upstream already made for the crossbar.
+- One line; applies on the up273-9 tree after 0001/0004/0005/0008.
+- Compiled on ush: `apple_drv.o`'s modinfo carries the new softdep.
+- Not booted.
+- mkinitcpio also follows `MODULE_SOFTDEP`, so on an installed image the PHY module would go into the initramfs with appledrm.
 
 ### RAM test for the next free slot
 
-No kernel change is needed for the first round. up273-8 or up273-9, through `loader-up273-8-bm.bin`'s template on p4 `m5local/up273b`.
-
-1. **Which supplier is it?** After boot, run:
+1. **Without any change (up273-8 or up273-9).** After boot, run:
    ```
-   for d in 2ab000000.phy 383000000.phy 2ab24c000.mux 38324c000.mux \
-            2b2e08000.mailbox 2b2340000.iommu 2b2300000.iommu \
-            302e08000.mailbox 302340000.iommu 302300000.iommu; do
+   for d in 2ab000000.phy 383000000.phy 2ab24c000.mux 38324c000.mux; do
      printf '%s -> %s\n' $d "$(readlink /sys/bus/platform/devices/$d/driver)"; done
-   cat /sys/kernel/debug/devices_deferred
-   lsmod | grep -E 'phy_apple|mux_apple'
-   dmesg | grep -E '2ab000000|383000000|24c000|t6050-dp-phy|display-crossbar|tunable'
+   dmesg | grep -nE 'apple-dcp|atc-t6050|t6050-dp-phy|2ab000000|383000000|24c000|systemd\[1\]: Started'
    ```
-   The one without a `driver` link is the supplier. Its dmesg line gives the probe error: `missing or invalid apple,tunable-*` means the Aura export; `cannot attach ... domain` or `cannot power crossbar controls` means power domains.
-
-   Also keep Aura's ring lines: `FDT: T6050 ATC1/ATC2 tunables copied|unavailable` and `dcpextN handed off`.
-2. **Never binds, or binds late?** Boot once with `deferred_probe_timeout=120`. If dcpext0/2 then come up, the supplier binds late; if they still give -110, it never binds.
-3. **Then test with a USB-C display**, left-front and right: the path #1515 validated. Don't use HDMI for this; see 1 above.
-4. **Watch the time to `eDP-1`** in the same boots (side effect above).
+   - All four bound after boot, with appledrm's first line before the PHY's bind, means it is the race (expected).
+   - A supplier that is still unbound points to a real probe failure. Its dmesg line names it (`missing or invalid apple,tunable-*`, `cannot attach ... domain`, `cannot power crossbar controls`). Then also keep Aura's `FDT: T6050 ATCn tunables copied|unavailable` lines.
+2. **The no-code workaround.** In the loader bootargs, either:
+   - `/etc/modprobe.d/` on p5: `softdep appledrm pre: atc-t6050-dp`; or
+   - `deferred_probe_timeout=120`.
+   
+   dcpext0 and dcpext2 should then probe. Look for no -110, and `apple-drm display-subsystem: bound` without "unusable".
+3. **Then 0009 itself** (kernel up273-9 + 0009), with no modprobe.d line.
+4. **Display test:** a USB-C display on the left-front port and on the right port. HDMI will stay dark until problem 2 is done.
 
 ### Proposal
 
-- **Problem 2: no patch yet.** The fix depends on which supplier step 1 finds:
-  - An Aura tunable export → an Aura patch.
-  - A PHY probe check → a kernel patch to `atc-t6050-dp.c`.
-  - The crossbar's domains → a DT fix in `t6050-j714s-display.dtsi`.
-  
-  Writing one now would be a guess.
-- **Problem 1: needs driver work, so not in this round.** What it takes, in the J614s HDMI layout (petrskuta's #1585, `t6040-j614s-extdisp-hdmi.dtsi`):
-  - A DP-only mode for an ATC3 `apple,t6050-combo-phy` in `atc-t6050-dp.c`, with no USB, Type-C or firmware mailbox. That is the missing piece.
-  - Then DT: `atc3_phy` on as DP-only, and `atc3_dpxbar` on with `power-domains = <&ps_atc3_usb_aon>, <&ps_atc3_common>`.
-  - dcpext1 (it probes today and has no routes) as the HDMI engine:
+- **Problem 1:** RAM-test 0009. If it passes, put it in the recipe for -8 and send it upstream as a one-line PR next to the crossbar softdep.
+- **Problem 2:** a DT port onto the existing, but unused, `apple,t6050-dp-phy` mode. It is not a new driver, but it is untested on any board, so it waits for someone upstream, unless the user wants us to try it. The pieces, in the J614s HDMI layout (petrskuta's #1585, `t6040-j614s-extdisp-hdmi.dtsi`):
+  - **The PHY:** `atc3_phy` as `apple,t6050-dp-phy` with the 0x2c400 core and the ADT's ATC3 tunables, and three domains (usb-aon, common, wrapper).
+  - **The crossbar:** `atc3_dpxbar` on with `power-domains = <&ps_atc3_usb_aon>, <&ps_atc3_common>`.
+  - **The engine:** dcpext1 (no routes), with:
     - `apple,connector-type = "HDMI-A"`
-    - `phys = <&atc3_phy PHY_TYPE_DP>` named `dp-phy`
+    - `phys = <&atc3_phy>` named `dp-phy`
     - `mux-controls = <&atc3_dpxbar 0>` named `dp-xbar`
-    - `mux-index = <2>` (2 × ufp 1 + port 0, the J614s rule)
+    - `mux-index = <2>` (2 × ufp 1 + port 0)
     - `apple,dptx-phy = <3>`, `apple,dptx-die = <0>`
     - `hdmi-hpd-gpios = <&pinctrl_aop 14 GPIO_ACTIVE_HIGH>`
     - `hdmi-pwren-gpios = <&smc_pcio 1 GPIO_ACTIVE_HIGH>`, `dp2hdmi-pwren-gpios = <&smc_pcio 2 GPIO_ACTIVE_HIGH>`
-  - `smc_pcio` `apple,output-commands` = `<0x0019000000000000 0x000f000000800000 0x001a000000000000>`.
-  - The DCP's fixed-output code (`dcp.c:6630-6760`: HPD IRQ, converter power, `dp-xbar` select) is generic. Whether the firmware 27 dcpext drives an HDMI DPTX port is untested anywhere (J775d: "No output yet").
-  - Under the gather-don't-develop rule, this waits for someone upstream to do the PHY's DP-only mode, unless the user decides otherwise.
+  - **The SMC outputs:** `smc_pcio` `apple,output-commands` = `<0x0019000000000000 0x000f000000800000 0x001a000000000000>`.
+  - **The DCP side is generic** (`dcp.c:6630-6766`: HPD IRQ, converter power, `dp-xbar` select). Whether the firmware 27 dcpext drives an HDMI DPTX port is untested anywhere.
