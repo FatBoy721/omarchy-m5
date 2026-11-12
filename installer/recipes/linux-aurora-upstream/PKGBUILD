@@ -9,7 +9,7 @@
 
 _auroraver=7.3.0
 _aurorarel=17.up273
-pkgrel=1
+pkgrel=2
 
 # aurora-silicon/linux integration/aurora at f1b79c4beaef, plus upstream-27.3.patch.
 _commit=f1b79c4beaef1a4a48738f1c820b0bbc16e84bb3
@@ -42,7 +42,7 @@ sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             'fb9a4d96baf0eb0610b5d60208a0ed1f77d50db81ad94ef3baffcae49e9218d0'
-            '2dc43361664d7553e3762cd5c10cf0395cd415ac73f1269b15910e412a8e2d42'
+            '55d1ab8e03b8236193f662a5ab02f620e195d0cf74c78df9cf75c7b959e85213'
             'c812ed7ea8a9c482de07526896c249fa16c833e0f5679aeaff9e40133292c44f'
             'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7')
 
