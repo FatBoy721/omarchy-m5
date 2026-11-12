@@ -1,0 +1,275 @@
+# AArch64 Apple Silicon (Aurora Silicon), upstream base for the J714s on macOS 27.3
+#
+# Experimental. aurora-silicon/linux integration/aurora (USB4, external displays, SEP, AOP
+# audio, CLPC, ...) with #1173 (GPU on 27.2/27.3) and #1174 (DCP 27.3) merged, as
+# patches/upstream-27.3/0001. Booted with Aura (patches/upstream-27.3/0002) on TripleU613's
+# J714s on the 27.3 beta 1 stub: GPU, DCP 120 Hz incl. notch rows, Wi-Fi, trackpad, NVMe, USB.
+# Same package name as the image's kernel (linux-aurora) so the image and its update pin
+# treat it the same; the version sorts above the rolo-based 7.3.0.aurora16.j714s3-10.
+
+_auroraver=7.3.0
+_aurorarel=17.up273
+pkgrel=1
+
+# aurora-silicon/linux integration/aurora at 447b7522c70f, plus upstream-27.3.patch.
+_commit=447b7522c70f8456e55e656d13824049789b2e30
+
+# Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
+# image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
+_m1n1_version=1.6.1
+
+pkgbase=linux-aurora
+_srcname=linux-${_commit}
+_kernelname=${pkgbase#linux}
+_desc="AArch64 Apple Silicon (Aurora kernel)"
+pkgver="${_auroraver}.aurora${_aurorarel}"
+arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
+url="https://github.com/aurora-silicon/linux"
+license=('GPL2')
+
+makedepends=(
+  base-devel bc dtc kmod libelf pahole cpio perl rustup clang llvm lld
+  tar xz xmlto python git patch
+)
+options=('!strip')
+source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github.com/aurora-silicon/linux/archive/${_commit}.tar.gz"
+        rust-toolchain.toml bindgen-kernel.py config upstream-27.3.patch j714s-required.config
+        speakersafetyd-hold.conf)
+sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
+            'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
+            '5f3ed1084f077a3340b40fa6bc441706a237549b49fd22e433b126cb8919b42e'
+            'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
+            '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
+            'bcc2f8ac20c7293ebdc77402508d12fbc5a9edf3d432bc1aae61cb39ffa4c092'
+            '83c0c8665934f2ae1804bd3a2c6d595f0554c945bc42de1e22bbee53b2175017'
+            'c812ed7ea8a9c482de07526896c249fa16c833e0f5679aeaff9e40133292c44f'
+            'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7')
+
+# Kbuild takes ARCH literally and knows arm64, not aarch64.
+export ARCH=arm64
+export KBUILD_BUILD_HOST=archlinux
+export KBUILD_BUILD_USER=$pkgbase
+export KBUILD_BUILD_TIMESTAMP="$(date -Ru${SOURCE_DATE_EPOCH:+d @$SOURCE_DATE_EPOCH})"
+
+# Kbuild assigns BINDGEN itself, so an environment-only value is ignored.
+# Supply the wrapper and its real tool in every makepkg phase, not just prepare.
+_make() {
+  RUSTUP_TOOLCHAIN=1.98.1 RUSTFMT="$(rustup which --toolchain 1.98.1 rustfmt)" \
+    make LLVM=1 BINDGEN="$srcdir/private-bindgen/bin/bindgen" LOCALVERSION= "$@"
+}
+
+_check_kernelrelease() {
+  [[ $1 == *-ARCH ]] || {
+    echo "Kernel release must end in -ARCH for boot-bundle DTB discovery: $1" >&2
+    return 1
+  }
+}
+
+prepare() {
+  cd $_srcname
+
+  echo "Setting version..."
+  echo "-$_aurorarel-$pkgrel" > localversion.10-pkgrel
+
+  local src
+  for src in "${source[@]}"; do
+    src="${src%%::*}"
+    src="${src##*/}"
+    [[ $src = *.patch ]] || continue
+    echo "Applying patch $src..."
+    patch -Np1 < "../$src"
+  done
+
+  # Keep the public generator's pinned source checks and layout assertions.
+  rustup toolchain install 1.98.1 --profile minimal --component rust-src,rustfmt
+  clang --version | head -1 | grep -Eq 'clang version 23\.' || {
+    echo 'This candidate requires the LLVM 23 toolchain used by its source baseline' >&2
+    return 1
+  }
+  RUSTUP_TOOLCHAIN=1.98.1 python3 tools/aurora-bindgen/build.py --output-dir "$srcdir/private-bindgen"
+  mkdir -p build/base
+  cp ../config build/base/.config
+  _make O="$PWD/build/base" olddefconfig
+  python3 ../validate-config.py ../j714s-required.config build/base/.config
+  _make O="$PWD/build/base" prepare
+  _make -s O="$PWD/build/base" kernelrelease > build/base/version
+
+  _check_kernelrelease "$(<build/base/version)"
+  echo "Prepared $pkgbase version $(<build/base/version)"
+}
+
+build() {
+  cd $_srcname
+  echo "Building base..."
+  _make O="$PWD/build/base" -j"${OMARCHY_BUILD_JOBS:-10}" Image modules dtbs
+}
+
+check() {
+  cd $_srcname
+  python -I tools/aurora-sep/tests/test_extract_mesa_calibration.py
+}
+
+_package_kernel() {
+  pkgdesc="The $pkgdesc kernel and modules"
+  depends=(coreutils kmod initramfs $2 "m1n1>=$_m1n1_version")
+  optdepends=('crda: to set the correct wireless channels of your country'
+              'linux-firmware: firmware images needed for some devices'
+              'python: extract-mesa-calibration, for Touch ID')
+  # No generic linux provide: on a shared aarch64 repository it would compete
+  # with linux-aarch64 for any dependency on linux.
+  provides=(WIREGUARD-MODULE linux-asahi=${pkgver})
+  conflicts=(linux-asahi)
+
+  local kernver="$(<$O/version)"
+  local modulesdir="$pkgdir/usr/lib/modules/$kernver"
+
+  echo "Installing boot image..."
+  # systemd expects to find the kernel here to allow hibernation
+  # https://github.com/systemd/systemd/commit/edda44605f06a41fb86b7ab8128dcf99161d2344
+  install -Dm644 "$O"/arch/arm64/boot/Image "$modulesdir/vmlinuz"
+
+  # Used by mkinitcpio to name the kernel
+  echo "$1" | install -Dm644 /dev/stdin "$modulesdir/pkgbase"
+
+  echo "Installing modules..."
+  _make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
+
+  echo "Installing device trees..."
+  # Only the M5 (T6050) trees: update-m1n1 appends every installed tree to Aura in m1n1/boot.bin,
+  # and with all 137 Apple trees boot.bin (13.6 MB) overlaps the Stage 1 heap (the RAM test refused
+  # it); the J714s image needs only its own SoC's.
+  install -Dt "$modulesdir/dtbs" "$O"/arch/arm64/boot/dts/apple/t6050-*.dtb
+  # Upstream builds t6050-j714s.dtb itself; boot loaders pick it by that name.
+  [[ -f "$modulesdir/dtbs/t6050-j714s.dtb" ]]
+
+  # Touch ID needs this Mac's Mesa calibration, which the SEP driver loads as
+  # firmware. The extractor ships with the kernel it was written for, at a path
+  # of its own, so the platform package can run it without carrying a copy.
+  echo "Installing the Mesa calibration extractor..."
+  install -Dm755 tools/aurora-sep/extract-mesa-calibration.py \
+    "$pkgdir/usr/lib/linux-aurora/extract-mesa-calibration"
+
+  # The J714s speakers stay under this kernel's lock until the speaker profile is checked on it.
+  install -Dm644 "$srcdir/speakersafetyd-hold.conf" \
+    "$pkgdir/usr/lib/systemd/system/speakersafetyd.service.d/60-linux-aurora-j714s-hold.conf"
+
+  # remove build and source links
+  rm -f "$modulesdir"/{source,build}
+}
+
+_package() {
+  cd $_srcname
+  export O="$PWD/build/base"
+  _package_kernel "$pkgbase"
+}
+
+_package-headers() {
+  pkgdesc="Headers and scripts for building modules for the $pkgdesc kernel"
+  depends=(pahole)
+  provides=(linux-asahi-headers=${pkgver})
+  conflicts=(linux-asahi-headers)
+
+  KARCH=arm64
+
+  cd $_srcname
+  O=build/base
+  local builddir="$pkgdir/usr/lib/modules/$(<${O}/version)/build"
+
+  echo "Installing build files..."
+  install -Dt "$builddir" -m644 $O/.config Makefile $O/Module.symvers $O/System.map \
+    localversion.* $O/version $O/vmlinux
+  install -Dt "$builddir/kernel" -m644 kernel/Makefile
+  cp -t "$builddir" -a scripts $O/scripts
+
+  # required when STACK_VALIDATION is enabled
+  #install -Dt "$builddir/tools/objtool" tools/objtool/objtool
+
+  # required when DEBUG_INFO_BTF_MODULES is enabled
+  if grep -qx 'CONFIG_DEBUG_INFO_BTF=y' "$O/.config"; then
+    [[ -x $O/tools/bpf/resolve_btfids/resolve_btfids ]] || {
+      echo 'BTF is enabled but resolve_btfids was not built' >&2; return 1;
+    }
+    install -Dt "$builddir/tools/bpf/resolve_btfids" "$O/tools/bpf/resolve_btfids/resolve_btfids"
+  fi
+
+  echo "Installing headers..."
+  cp -t "$builddir" -a include $O/include
+
+  install -Dt "${builddir}/arch/${KARCH}" -m644 arch/${KARCH}/Makefile
+  install -Dt "${builddir}/arch/${KARCH}/kernel" -m644 $O/arch/${KARCH}/kernel/asm-offsets.s
+  cp -t "${builddir}/arch/${KARCH}" -a arch/${KARCH}/include $O/arch/${KARCH}/include
+
+  install -Dt "$builddir/drivers/md" -m644 drivers/md/*.h
+  install -Dt "$builddir/net/mac80211" -m644 net/mac80211/*.h
+
+  # https://bugs.archlinux.org/task/13146
+  install -Dt "$builddir/drivers/media/i2c" -m644 drivers/media/i2c/msp3400-driver.h
+
+  # https://bugs.archlinux.org/task/20402
+  install -Dt "$builddir/drivers/media/usb/dvb-usb" -m644 drivers/media/usb/dvb-usb/*.h
+  install -Dt "$builddir/drivers/media/dvb-frontends" -m644 drivers/media/dvb-frontends/*.h
+  install -Dt "$builddir/drivers/media/tuners" -m644 drivers/media/tuners/*.h
+
+  # https://bugs.archlinux.org/task/71392
+  install -Dt "$builddir/drivers/iio/common/hid-sensors" -m644 drivers/iio/common/hid-sensors/*.h
+
+  echo "Installing KConfig files..."
+  find . -name 'Kconfig*' -exec install -Dm644 {} "$builddir/{}" \;
+
+  echo "Installing unstripped VDSO..."
+  _make O="$O" INSTALL_MOD_PATH="$pkgdir/usr" vdso_install link=
+
+  echo "Removing unneeded architectures..."
+  local arch
+  for arch in "$builddir"/arch/*/; do
+    [[ $arch = */${KARCH}/ ]] && continue
+    echo "Removing $(basename "$arch")"
+    rm -r "$arch"
+  done
+
+  echo "Removing documentation..."
+  rm -r "$builddir/Documentation"
+
+  echo "Removing broken symlinks..."
+  find -L "$builddir" -type l -printf 'Removing %P\n' -delete
+
+  echo "Removing loose objects..."
+  find "$builddir" -type f -name '*.o' -printf 'Removing %P\n' -delete
+
+  echo "Removing cmd files..."
+  find "$builddir" -type f -name '*.cmd' -printf 'Removing %P\n' -delete
+
+  echo "Stripping build tools..."
+  local file
+  while read -rd '' file; do
+    case "$(file --no-sandbox -bi "$file")" in
+      application/x-sharedlib\;*)      # Libraries (.so)
+        strip -v $STRIP_SHARED "$file" ;;
+      application/x-archive\;*)        # Libraries (.a)
+        strip -v $STRIP_STATIC "$file" ;;
+      application/x-executable\;*)     # Binaries
+        strip -v $STRIP_BINARIES "$file" ;;
+      application/x-pie-executable\;*) # Relocatable binaries
+        strip -v $STRIP_SHARED "$file" ;;
+    esac
+  done < <(find "$builddir" -type f -perm -u+x ! -name vmlinux -print0)
+
+  echo "Stripping vmlinux..."
+  strip -v $STRIP_STATIC "$builddir/vmlinux"
+
+  echo "Adding symlink..."
+  mkdir -p "$pkgdir/usr/src"
+  ln -sr "$builddir" "$pkgdir/usr/src/$pkgbase"
+
+}
+
+pkgname=("$pkgbase" "$pkgbase-headers")
+for _p in "${pkgname[@]}"; do
+  eval "package_$_p() {
+    $(declare -f "_package${_p#$pkgbase}")
+    _package${_p#$pkgbase}
+  }"
+done
+
+# vim:set ts=8 sts=2 sw=2 et:

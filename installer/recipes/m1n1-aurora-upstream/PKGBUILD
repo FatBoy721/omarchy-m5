@@ -1,0 +1,67 @@
+# Aura (aurora-silicon/aura) as the J714s image's Stage 2, for the upstream kernel base.
+#
+# Experimental, paired with linux-aurora 7.3.0.aurora17.up273. Aura at 1669cad0 plus
+# aura-up273-image.patch: patches/upstream-27.3/0002 (GPU and DCP hand-off on macOS 27.2/27.3
+# beta 1) and the notch rows shown by default on M5 (chosen.asahi,show-notch=0 opts out).
+# Packaged as m1n1-aurora so the image builder, update-m1n1 and the update pin treat it as
+# the image's Stage 2; the version sorts above the channel's 1.6.1.aurora23-2.
+# Ordinary updates refresh ESP Stage 2, never enroll Stage 1.
+pkgname=m1n1-aurora
+pkgver=1.6.1.aurora24.up273
+pkgrel=1
+pkgdesc='Aura bootloader (Stage 2) for the J714s on the aurora-silicon kernel, macOS 27.3'
+arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
+url='https://github.com/aurora-silicon/aura'
+license=('MIT' 'GPL-2.0-only')
+provides=("m1n1=$pkgver" "m1n1-neo=$pkgver" "aura=$pkgver")
+conflicts=('m1n1' 'aura' 'm1n1-neo')
+replaces=('aura' 'm1n1-neo')
+makedepends=('git' 'clang' 'lld' 'llvm' 'rustup' 'make' 'python')
+options=('!strip' '!debug')
+_commit=1669cad01a3c0129d4019f6240a293b7707c6895
+source=("aura::git+$url.git#commit=$_commit"
+        aura-up273-image.patch bootlogo_48.bin bootlogo_128.bin bootlogo_256.bin)
+sha256sums=('SKIP'
+            'e60e9a1628ffaf4bc8befd0513acca3470e7513babf6e7199b34793dd2ad43f8'
+            '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
+            'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'
+            '9c659b392aacfa31c62c638003d2257abfdbe17919b5c90cde4c4e62f87addab')
+
+prepare() {
+  [[ $(git -C "$srcdir/aura" rev-parse HEAD) == "$_commit" ]]
+  patch -d "$srcdir/aura" -p1 --fuzz=0 --batch --no-backup-if-mismatch < "$srcdir/aura-up273-image.patch"
+  rustup toolchain install 1.89.0 --profile minimal --target aarch64-unknown-none-softfloat
+  # Omarchy's boot logo, the same artwork m1n1-aurora ships.
+  mkdir -p "$srcdir/logo"
+  for size in 48 128 256; do
+    cp "$srcdir/bootlogo_$size.bin" "$srcdir/logo/omarchy_$size.bin"
+  done
+}
+
+build() {
+  cd "$srcdir/aura"
+  export RUSTUP_TOOLCHAIN=1.89.0
+  local flags=(RELEASE=1 CHAINLOADING=1 USE_CLANG=1 LOGO_DIR="$srcdir/logo" BUILTIN_LOGO=omarchy)
+  make clean
+  make -j"${OMARCHY_BUILD_JOBS:-10}" "${flags[@]}"
+  install -Dm644 build/aura.bin "$srcdir/stage1/aura-raw.bin"
+  install -Dm644 build/aura.macho "$srcdir/stage1/aura.macho"
+  make clean
+  make -j"${OMARCHY_BUILD_JOBS:-10}" "${flags[@]}" ESP_STAGE2=1
+}
+
+package() {
+  # Required on the installed system, not to build the bootloader.
+  depends=('asahi-scripts>=20260127.1' 'uboot-asahi')
+  install -Dm644 "$srcdir/aura/build/aura.bin" "$pkgdir/usr/lib/asahi-boot/m1n1.bin"
+  install -d "$pkgdir/usr/lib/m1n1-neo"
+  ln -s ../asahi-boot/m1n1.bin "$pkgdir/usr/lib/m1n1-neo/m1n1.bin"
+  # The image builder reads Stage 1 from m1n1-aurora's path; nothing enrolls it.
+  install -Dm644 "$srcdir/stage1/aura-raw.bin" "$pkgdir/usr/share/m1n1-aurora/stage1/m1n1-raw.bin"
+  install -Dm644 "$srcdir/stage1/aura.macho" "$pkgdir/usr/share/m1n1-aurora/stage1/m1n1.macho"
+  install -Dm644 "$srcdir/stage1/aura-raw.bin" "$pkgdir/usr/share/aura/stage1/aura-raw.bin"
+  install -Dm644 "$srcdir/stage1/aura.macho" "$pkgdir/usr/share/aura/stage1/aura.macho"
+  install -Dm644 "$srcdir/aura/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -m644 "$srcdir/aura/3rdparty_licenses/"* "$pkgdir/usr/share/licenses/$pkgname/"
+}
