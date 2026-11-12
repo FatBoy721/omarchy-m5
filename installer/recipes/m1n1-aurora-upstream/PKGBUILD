@@ -1,7 +1,7 @@
 # Aura (aurora-silicon/aura) as the J714s image's Stage 2, for the upstream kernel base.
 #
-# Experimental, paired with linux-aurora 7.3.0.aurora17.up273. Aura main at 87c31c2572 (T6050 ANE
-# and AVE firmware hand-offs, #169/#171) plus
+# Experimental, paired with linux-aurora 7.3.0.aurora17.up273. Aura main at bb45ca3b21 (T6050 ANE
+# and AVE hand-offs #169/#171, M5 Pro boot-path fixes #173, DART #180) plus
 # aura-up273-image.patch: patches/upstream-27.3/0002 (GPU and DCP hand-off on macOS 27.2/27.3
 # beta 1) and 0003 (notch rows shown by default on M5, chosen.asahi,show-notch=0 opts out; the
 # M5 Max 27.3 GPU digest from aura #172, joshuaswarren).
@@ -21,11 +21,11 @@ conflicts=('m1n1' 'aura' 'm1n1-neo')
 replaces=('aura' 'm1n1-neo')
 makedepends=('git' 'clang' 'lld' 'llvm' 'rustup' 'make' 'python')
 options=('!strip' '!debug')
-_commit=87c31c25720e5124e00ded3965b70729df8e7673
+_commit=bb45ca3b21aa3259e59271be45417ca4184959a9
 source=("aura::git+$url.git#commit=$_commit"
         aura-up273-image.patch bootlogo_48.bin bootlogo_128.bin bootlogo_256.bin)
 sha256sums=('SKIP'
-            '79b3b7c9199cebc7285ca43e48304af4237ccfa68b6e0cd067e6468fc763bc4f'
+            'b9932068bd5084b3f7b072adec0b6e8448e64db73ad718f48e7df5e26c1e630b'
             '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
             'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'
             '9c659b392aacfa31c62c638003d2257abfdbe17919b5c90cde4c4e62f87addab')
