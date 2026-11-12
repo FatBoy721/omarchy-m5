@@ -10,26 +10,33 @@ test it on a real J714s, and say who made each part.
 
 ## What works
 
-| Thing | Works? | Whose work |
-| --- | --- | --- |
-| Boots from the Mac's own disk, all 15 CPU cores | ✅ | Apple's firmware fix + rolotrealanis98, betizzel |
-| Keyboard, backlight | ✅ | rolotrealanis98, edimoldovan |
-| Trackpad (every boot) | ✅ | edimoldovan (the reset fix) |
-| Wi-Fi, Bluetooth | ✅ | rolotrealanis98, betizzel, TripleU613, DjDeveloperr |
-| Wi-Fi on 6 GHz | 🟡 allowed in the image; some units' Wi-Fi firmware has no 6 GHz channels | edimoldovan |
-| Speakers, headphone jack, microphones | ✅ in the image (speakers capped at -30 dB on purpose, with speaker protection) | rolotrealanis98, edimoldovan, kazuhidet |
-| GPU (Vulkan, and the desktop renders on it) | ✅ | TripleU613, betizzel, DjDeveloperr, rolotrealanis98 |
-| Screen: full panel incl. the notch, 3024x1964 at 120 Hz | ✅ in the image | FatBoy721, edimoldovan, rolotrealanis98, betizzel |
-| Hardware video decode (H.264/H.265) | ✅ in the image | DjDeveloperr |
-| Lid angle sensor | ✅ in the image | DjDeveloperr |
-| Ambient light sensor | 🟡 in the image; needs this Mac's calibration, saved once from macOS with [`tools/als-calibration/save-als-cal.py`](tools/als-calibration/save-als-cal.py) | DjDeveloperr, aurora-silicon |
-| Sleep (lid close) | ✅ in the image (lid-tested on one J714s, device test on another) | FatBoy721, betizzel |
-| USB host on all three USB-C ports | ✅ in the image (a USB stick mounts on TripleU613's J714s; USB 3 on the left-front port not tried yet) | edimoldovan |
-| USB 3, external displays, USB4 | 🔜 upstream has it; waits for upstream's GPU/display on the 27.3 firmware | DjDeveloperr, erikwb |
-| Quiet fans at idle | ✅ in the image | edimoldovan |
-| Updates (`omarchy update`) | ✅ keep the J714s kernel, m1n1, Mesa, Hyprland and firmware (checked in CI with [`update-check`](.github/workflows/update-check.yml)) | this repo |
-| Front camera | 🔜 works on the upstream base on 27.3 (tested from RAM on a J714s); coming in the experimental upstream image | edimoldovan, sithglan, aurora-silicon |
-| Touch ID | ❌ not yet | |
+Two images. **Stable** (`2026.11.11-7`) is the one to install. **Upstream** (`upstream-2026.11.12-7`,
+a prerelease) moves to aurora-silicon's kernel and the Aura bootloader on Apple's 27.3 firmware: every row
+below was tested on a real J714s by booting it from RAM, but nobody has installed it yet.
+
+| Thing | Stable | Upstream (experimental) | Whose work |
+| --- | --- | --- | --- |
+| Boots from the Mac's own disk, all 15 CPU cores | ✅ | ✅ (RAM-booted; install untested) | Apple's firmware fix, rolotrealanis98, betizzel, DjDeveloperr, aurora-silicon |
+| Keyboard, backlight, trackpad | ✅ | ✅ | rolotrealanis98, edimoldovan |
+| Wi-Fi, Bluetooth | ✅ | ✅ (boot fix in Aura, [aura#203](https://github.com/aurora-silicon/aura/pull/203)) | rolotrealanis98, betizzel, TripleU613, DjDeveloperr, edimoldovan |
+| GPU (Vulkan, the desktop renders on it) | ✅ | ✅ 27.3 firmware | TripleU613, betizzel, DjDeveloperr, rolotrealanis98, joshuaswarren |
+| Screen: full panel incl. the notch, 3024x1964 at 120 Hz | ✅ | ✅ | FatBoy721, edimoldovan, rolotrealanis98, betizzel |
+| Variable refresh (ProMotion) | ❌ | 🟡 opt-in (`appledrm.fw27_panel_vrr=1`) | rolotrealanis98 |
+| Speakers | ✅ (capped at -30 dB, with speaker protection) | ❌ held off until J714 speaker files are public | rolotrealanis98, edimoldovan, kazuhidet |
+| Headphone jack, microphones | ✅ | 🟡 cards show up, untested | rolotrealanis98, edimoldovan, kazuhidet |
+| Hardware video decode (H.264/H.265) | ✅ | ✅ | DjDeveloperr |
+| Hardware video encode (H.264/HEVC) | ❌ | ✅ (27.3 port here) | DjDeveloperr, this repo |
+| Front camera (1080p/1440p, 30 fps) | ❌ | ✅ needs [`save-camera-setfiles.py`](tools/camera-setfiles/save-camera-setfiles.py) once in macOS | edimoldovan, Jens Axboe, sithglan, Erik Bourget, DjDeveloperr |
+| Touch ID | ❌ | 🟡 enrol + match work on TripleU613's J714s (owner opt-in; writes the Secure Enclave store macOS shares, read [the warning](installer/recipes/aurora-sep-upstream/README.md)) | DjDeveloperr, aurora-silicon |
+| Neural Engine | ❌ | ✅ starts on 27.3 (27.3 port here) | DjDeveloperr, this repo |
+| Power profiles, brightness up to max | ❌ | ✅ | DjDeveloperr |
+| Lid angle sensor | ✅ | ✅ | DjDeveloperr |
+| Ambient light sensor | 🟡 needs this Mac's calibration ([`save-als-cal.py`](tools/als-calibration/save-als-cal.py)) | 🟡 same | DjDeveloperr, aurora-silicon |
+| Sleep (lid close) | ✅ | untested | FatBoy721, betizzel |
+| USB host on all three USB-C ports | ✅ | ✅ | edimoldovan, DjDeveloperr |
+| USB4, external displays | ❌ | untested on 27.3 | DjDeveloperr, erikwb |
+| Quiet fans at idle | ✅ | ✅ | edimoldovan |
+| Updates (`omarchy update`) | ✅ (checked in CI, [`update-check`](.github/workflows/update-check.yml)) | ✅ | this repo |
 
 ✅ works · 🟡 partly · 🔜 coming · ❌ no
 
