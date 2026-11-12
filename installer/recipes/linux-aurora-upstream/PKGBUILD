@@ -9,14 +9,16 @@
 
 _auroraver=7.3.0
 _aurorarel=17.up273
-pkgrel=7
+pkgrel=8
 
-# aurora-silicon/linux integration/aurora at 8679514f4dff, plus upstream-27.3.patch (#1173, GPU
+# aurora-silicon/linux integration/aurora at 3766943238bd, plus upstream-27.3.patch (#1173, GPU
 # 27.2/27.3; rolotrealanis98's full 27.3 IOMFB table and swap record on the merged #1174),
 # t6050-ane-ave-27.3.patch (patches/upstream-27.3/0004: ANE and AVE on the 27.3 firmware) and
 # t6050-isp-j714s-camera-27.3.patch (patches/upstream-27.3/0005: the front camera's IMX958
-# setfile 2226_02, image tuning, camera light and J714s presets; edimoldovan's J714c camera).
-_commit=8679514f4dff40a7c907daf834208e6afca427f1
+# setfile 2226_02, image tuning, camera light and J714s presets; edimoldovan's J714c camera) and
+# drm-apple-fw27-panel-vrr.patch (patches/upstream-27.3/0008: rolotrealanis98's j716s-next
+# 8ab10100a4, VRR on the firmware 27 panel, opt-in with appledrm.fw27_panel_vrr=1).
+_commit=3766943238bdbddf68b59f5d38c5eb11bbe33650
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -39,10 +41,11 @@ makedepends=(
 options=('!strip')
 source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github.com/aurora-silicon/linux/archive/${_commit}.tar.gz"
         rust-toolchain.toml bindgen-kernel.py config upstream-27.3.patch j714s-required.config
-        speakersafetyd-hold.conf t6050-ane-ave-27.3.patch t6050-isp-j714s-camera-27.3.patch)
+        speakersafetyd-hold.conf t6050-ane-ave-27.3.patch t6050-isp-j714s-camera-27.3.patch
+        drm-apple-fw27-panel-vrr.patch)
 sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
-            '70e313b5e51f598e540dc1d22f086cf0287dd3f09b7306008bc8cc29d71a34a6'
+            'bdea36c0f1f2c2701d80ce7a980427b3aecfd22da102d639514c04f2f61781c0'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '32507b46e6d2bd6bc3c9bd933cb0236e3c1887a977ea8aff3ab46d9ece5f4eae'
@@ -50,7 +53,8 @@ sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'c812ed7ea8a9c482de07526896c249fa16c833e0f5679aeaff9e40133292c44f'
             'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7'
             'ea95cce583c5b5a6c0d79914fcbcb5a0b454034bce126d4a52f688ec7dbd305d'
-            'b62b00e6b5d58008ed007f0f0fd22d255b734e59d3c85cfe008cfe5786a825aa')
+            '01e1bb1632e5384ab0e56fb81c095d7b5c2916126c4c8f1119843d345f9d37c2'
+            '087c1305a0abc0a230d3ec1880f03216a5227963d07a1132d10493d10c7cddb7')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64

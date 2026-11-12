@@ -446,7 +446,7 @@ diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/app
 index f5bea61b2efb..1a6feb4c86ca 100644
 --- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-@@ -602,6 +602,42 @@ fan-F1Ac {
+@@ -610,6 +610,42 @@ fan-F1Ac {
  /* The same T6050 camera as J716c (J714sAP ADT); the loader sets the J714s sensor type. */
  #include "t6050-j716c-isp.dtsi"
  
@@ -859,7 +859,7 @@ diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/app
 index 1a6feb4c86ca..a44ff27829d3 100644
 --- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-@@ -611,6 +611,24 @@ fan-F1Ac {
+@@ -619,6 +619,24 @@ fan-F1Ac {
   * window; 2560x1440 is the centre 1:1.
   */
  &isp0 {
