@@ -1,8 +1,8 @@
 diff --git a/drivers/gpu/drm/apple/dcp-internal.h b/drivers/gpu/drm/apple/dcp-internal.h
-index ac355dcd2c5c..0bf8b7b4e159 100644
+index f2ab6f88567f..d05792813a11 100644
 --- a/drivers/gpu/drm/apple/dcp-internal.h
 +++ b/drivers/gpu/drm/apple/dcp-internal.h
-@@ -457,6 +457,8 @@ struct apple_dcp {
+@@ -467,6 +467,8 @@ struct apple_dcp {
  	enum dcp_firmware_version fw_compat;
  	/* Bumped by every iomfb poweron; see afk_compact_slot(). */
  	u32 afk_power_gen;
@@ -11,20 +11,20 @@ index ac355dcd2c5c..0bf8b7b4e159 100644
  	bool external;
  	/* A desktop 26.x external processor (apple,t6041-dcpext) */
  	bool desktop_external;
-@@ -542,6 +544,8 @@ struct apple_dcp {
- 	struct dcp_swap_submit_req_v27 present_v27;
- 	/* Both paired wire records belong to the primary endpoint lock. */
- 	struct dcp_swap_submit_req_v27 peer_present_v27;
-+	/* The firmware 27.3 copy of either record (iomfb_v27_swap_wire()). */
-+	struct dcp_swap_submit_req_v27_3 present_v27_3;
- 
- 	/* DCP shared memory */
- 	void *shmem;
 diff --git a/drivers/gpu/drm/apple/dcp.c b/drivers/gpu/drm/apple/dcp.c
-index bc452a840da8..632ac9f93de4 100644
+index 05c22685393e..ad1863cb60b0 100644
 --- a/drivers/gpu/drm/apple/dcp.c
 +++ b/drivers/gpu/drm/apple/dcp.c
-@@ -5060,8 +5060,11 @@ static enum dcp_firmware_version dcp_check_firmware_version(struct device *dev)
+@@ -5190,6 +5190,8 @@ static enum dcp_firmware_version dcp_check_firmware_version(struct device *dev)
+ 	const struct dcp_v14_board *v14_board;
+ 	char compat_str[DCP_FW_VERSION_STR_LEN];
+ 	char fw_str[DCP_FW_VERSION_STR_LEN];
++	unsigned int num_missing;
++	const char *missing;
+ 	int ret;
+ 
+ 	/*
+@@ -5206,8 +5208,18 @@ static enum dcp_firmware_version dcp_check_firmware_version(struct device *dev)
  
  	if (hw->firmware_compat == DCP_FIRMWARE_V_27_0) {
  		ret = dcp_read_fw_version(dev, "apple,firmware-compat", compat_str);
@@ -34,10 +34,17 @@ index bc452a840da8..632ac9f93de4 100644
 +				ret < 0 ? "missing" : compat_str);
  			return DCP_FIRMWARE_UNKNOWN;
 +		}
++		missing = iomfb_v27_missing_method(iomfb_v27_methods(compat_str),
++						   &num_missing);
++		if (missing) {
++			dev_err(dev, "DCP firmware-compat %s not started: no ID known for %u methods (first: %s)\n",
++				compat_str, num_missing, missing);
++			return DCP_FIRMWARE_UNKNOWN;
++		}
  		return DCP_FIRMWARE_V_27_0;
  	}
  
-@@ -6174,6 +6177,13 @@ static int dcp_platform_probe_pipe(struct platform_device *pdev)
+@@ -6329,6 +6341,13 @@ static int dcp_platform_probe_pipe(struct platform_device *pdev)
  				return -ENOMEM;
  		}
  	}
@@ -52,91 +59,46 @@ index bc452a840da8..632ac9f93de4 100644
  		dcp->desktop = devm_kzalloc(dev, sizeof(*dcp->desktop), GFP_KERNEL);
  		if (!dcp->desktop)
 diff --git a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
-index 5d82c8826675..3ea9f4f4f979 100644
+index 5d82c8826675..2faa735d84fd 100644
 --- a/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
 +++ b/drivers/gpu/drm/apple/iomfb-peer-runtime-v27.inc
-@@ -60,6 +60,8 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
- 	struct dcp_swap_start_resp_h17p *resp = data;
- 	struct apple_dcp *peer = dcp_peer_scanout_v27(owner);
- 	u32 id = owner->swap.h17p.swap.swap_id;
-+	void *wire;
-+	u32 len;
- 
- 	lockdep_assert_held(&owner->iomfb.lock);
- 	if (IS_ERR_OR_NULL(peer) || peer != cookie || resp->ret || resp->swap_id != id) {
-@@ -83,13 +85,15 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
+@@ -83,12 +83,12 @@ static void dcp_peer_started_on_owner(struct apple_dcp *owner, void *data, void
  	dcp_peer_swap_armed_v27(owner, id);
  	trace_iomfb_swap_submit(owner, id);
  	trace_iomfb_swap_submit(peer, id);
 -	dcp_push(owner, false, &dcp_methods[dcpep_swap_submit], sizeof(owner->present_v27),
--		 sizeof(struct dcp_swap_submit_resp_v27), &owner->present_v27,
-+	wire = iomfb_v27_swap_wire(owner, &owner->present_v27, &owner->present_v27_3, &len);
-+	dcp_push(owner, false, &owner->v27_methods[dcpep_swap_submit], len,
-+		 sizeof(struct dcp_swap_submit_resp_v27), wire,
++	dcp_push(owner, false, &owner->v27_methods[dcpep_swap_submit], sizeof(owner->present_v27),
+ 		 sizeof(struct dcp_swap_submit_resp_v27), &owner->present_v27,
  		 dcp_peer_submitted, owner);
  	if (READ_ONCE(owner->crashed))
  		return;
 -	dcp_push(peer, false, &dcp_methods[dcpep_swap_submit], sizeof(owner->peer_present_v27),
--		 sizeof(struct dcp_swap_submit_resp_v27), &owner->peer_present_v27,
-+	wire = iomfb_v27_swap_wire(peer, &owner->peer_present_v27, &owner->present_v27_3, &len);
-+	dcp_push(peer, false, &peer->v27_methods[dcpep_swap_submit], len,
-+		 sizeof(struct dcp_swap_submit_resp_v27), wire,
++	dcp_push(peer, false, &peer->v27_methods[dcpep_swap_submit], sizeof(owner->peer_present_v27),
+ 		 sizeof(struct dcp_swap_submit_resp_v27), &owner->peer_present_v27,
  		 dcp_peer_submitted, owner);
  	if (READ_ONCE(peer->crashed))
- 		dcp_peer_swap_error(owner, "peer publication", -EIO);
 diff --git a/drivers/gpu/drm/apple/iomfb.h b/drivers/gpu/drm/apple/iomfb.h
-index 1021825209fb..31581bd6dff1 100644
+index 958b3b889ed1..3202cb0ca26b 100644
 --- a/drivers/gpu/drm/apple/iomfb.h
 +++ b/drivers/gpu/drm/apple/iomfb.h
-@@ -212,6 +212,9 @@ struct dcp_method_entry {
+@@ -213,6 +213,12 @@ struct dcp_method_entry {
  	char tag_h17g[4];
  };
  
 +/* The IOMFB method table of a firmware 27.x build, by its compat string; NULL if unknown. */
 +const struct dcp_method_entry *iomfb_v27_methods(const char *compat);
++/* The first method of a firmware 27.x table that has no ID, NULL if none. */
++const char *iomfb_v27_missing_method(const struct dcp_method_entry *methods,
++				     unsigned int *count);
 +
  #define IOMFB_MAX_CB (1000)
  
  bool iomfb_validate_callback_h17p(int tag, u32 in_len, u32 out_len);
 diff --git a/drivers/gpu/drm/apple/iomfb_template.c b/drivers/gpu/drm/apple/iomfb_template.c
-index 52235ecf334e..7508d96153bb 100644
+index cb4e6320751d..bc1d0015cc0c 100644
 --- a/drivers/gpu/drm/apple/iomfb_template.c
 +++ b/drivers/gpu/drm/apple/iomfb_template.c
-@@ -364,6 +364,11 @@ static void dcp_swap_submit(struct apple_dcp *dcp, bool oob,
- 			    dcp_callback_t cb, void *cookie)
- {
- 	const void *data = request;
-+#if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
-+	u32 len = sizeof(struct dcp_swap_submit_req_v27);
-+#else
-+	u32 len = sizeof(*request);
-+#endif
- 
- 	if (dcp->hw.iomfb_method_profile != DCP_IOMFB_METHODS_H17G) {
- 		iomfb_serialize_present_h17p(&dcp->present_h17p, request);
-@@ -378,18 +383,14 @@ static void dcp_swap_submit(struct apple_dcp *dcp, bool oob,
- 			dcp->present_h17p.swap[0x354] & 1;
- 		dcp->present_v27.swap.brightness_nits =
- 			get_unaligned_le64(dcp->present_h17p.swap + 0x35e);
--		data = &dcp->present_v27;
-+		data = iomfb_v27_swap_wire(dcp, &dcp->present_v27,
-+					   &dcp->present_v27_3, &len);
- #else
- 		data = &dcp->present_h17p;
- #endif
- 	}
- 
--	dcp_push(dcp, oob, &dcp_methods[dcpep_swap_submit],
--#if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
--		 sizeof(struct dcp_swap_submit_req_v27),
--#else
--		 sizeof(*request),
--#endif
-+	dcp_push(dcp, oob, &dcp_methods[dcpep_swap_submit], len,
- 		 sizeof(struct dcp_swap_submit_resp_h17p), (void *)data, cb, cookie);
- }
- #else
-@@ -1706,6 +1707,11 @@ static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
+@@ -1707,6 +1707,11 @@ static void boot_5(struct apple_dcp *dcp, void *out, void *cookie)
  {
  #if DCP_FW_H17(DCP_FW_VER)
  	/* H17P expects A380 right before set_display_refresh_properties */
@@ -149,7 +111,7 @@ index 52235ecf334e..7508d96153bb 100644
  #else
  	boot_5b(dcp, out, cookie);
 diff --git a/drivers/gpu/drm/apple/iomfb_v27.c b/drivers/gpu/drm/apple/iomfb_v27.c
-index 93d2fa72cc41..e64ceaa2dd72 100644
+index 93d2fa72cc41..2b527f2f2bf2 100644
 --- a/drivers/gpu/drm/apple/iomfb_v27.c
 +++ b/drivers/gpu/drm/apple/iomfb_v27.c
 @@ -69,7 +69,8 @@ static_assert(offsetof(struct dcp_swap_v27, brightness_update) == 0x354);
@@ -162,7 +124,7 @@ index 93d2fa72cc41..e64ceaa2dd72 100644
  	IOMFB_METHOD("A000", dcpep_late_init_signal),
  	IOMFB_METHOD("A027", dcpep_setup_video_limits),
  	IOMFB_METHOD("A136", iomfbep_a131_pmu_service_matched),
-@@ -113,6 +114,162 @@ static const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
+@@ -113,6 +114,132 @@ static const struct dcp_method_entry dcp_methods[dcpep_num_methods] = {
  	IOMFB_METHOD("A483", dcpep_register_dfb_surface),
  };
  
@@ -219,58 +181,37 @@ index 93d2fa72cc41..e64ceaa2dd72 100644
 +};
 +
 +/*
-+ * Firmware 27.3. The entries marked "traced" were seen, with the request and
-+ * reply sizes this driver uses, in a trace of the calls the macOS 27.3 display
-+ * driver makes to the DCP of a J716s while it starts. Three of them are one
-+ * above their 27.2 tags (set_display_refresh_properties A526,
-+ * flush_supports_power A529, register_dfb_surface A534) and create_default_fb
-+ * is still A504, so 27.3 has one more method somewhere between those. That
-+ * trace has no display client: it has no mode set, swap or power state call.
-+ * The entries not marked are 27.2's tags, taken as unmoved up to A517 and as
-+ * one higher above that, and have not been traced yet.
++ * Firmware 27.3: only the methods seen, with the request and reply sizes this
++ * driver uses, in a trace of the calls the macOS 27.3 display driver makes to
++ * the DCP of a J716s while it starts. Three are one above their 27.2 IDs
++ * (set_display_refresh_properties A526, flush_supports_power A529,
++ * register_dfb_surface A534) and create_default_fb is still A504, so 27.3 has
++ * one more method somewhere between those. That trace has no display client,
++ * so it has no mode set, swap or power state call, and the methods it does not
++ * show have no entry here. Until a trace shows them the table is incomplete
++ * and the driver does not start this firmware (iomfb_v27_missing_method()).
 + */
 +static const struct dcp_method_entry dcp_methods_27_3[dcpep_num_methods] = {
-+	IOMFB_METHOD("A000", dcpep_late_init_signal), /* traced */
-+	IOMFB_METHOD("A027", dcpep_setup_video_limits), /* traced */
-+	IOMFB_METHOD("A136", iomfbep_a131_pmu_service_matched), /* traced */
-+	IOMFB_METHOD("A137", iomfbep_a132_backlight_service_matched), /* traced */
-+	IOMFB_METHOD("A390", dcpep_set_create_dfb), /* traced */
-+	IOMFB_METHOD("A391", iomfbep_a358_vi_set_temperature_hint), /* traced */
-+	IOMFB_METHOD("A451", dcpep_start_signal), /* traced */
-+	IOMFB_METHOD("A456", dcpep_swap_start),
-+	IOMFB_METHOD("A458", dcpep_swap_submit),
-+	IOMFB_METHOD("A461", dcpep_set_display_device),
-+	IOMFB_METHOD("A462", dcpep_is_main_display),
-+	IOMFB_METHOD("A463", dcpep_set_digital_out_mode),
-+	IOMFB_METHOD("A473", iomfbep_set_matrix),
-+	IOMFB_METHOD("A477", iomfbep_get_color_remap_mode),
-+	IOMFB_METHOD("A500", dcpep_set_parameter_dcp),
-+	IOMFB_METHOD("A504", dcpep_create_default_fb), /* traced */
-+	IOMFB_METHOD("A037", dcpep_get_dfb_compression_info), /* traced */
-+	IOMFB_METHOD("A036", dcpep_get_dfb_info), /* traced */
-+	IOMFB_METHOD("A103", dcpep_get_dfb_layout), /* traced */
-+	IOMFB_METHOD("A503", dcpep_get_dfb_state), /* traced */
-+	IOMFB_METHOD("A104", dcpep_set_dfb_dimensions), /* traced */
-+	IOMFB_METHOD("A105", dcpep_commit_dfb_info), /* traced */
-+	IOMFB_METHOD("A035", dcpep_dfb_query), /* traced */
-+	IOMFB_METHOD("A385", dcpep_dfb_ready_query), /* traced */
-+	IOMFB_METHOD("A353", dcpep_pipe_query_353), /* traced */
-+	IOMFB_METHOD("A352", dcpep_pipe_set_352),
-+	IOMFB_METHOD("A465", dcpep_pipe_cfg_415),
-+	IOMFB_METHOD("A033", dcpep_pipe_cfg_031),
-+	IOMFB_METHOD("A464", dcpep_pipe_cfg_414),
-+	IOMFB_METHOD("A540", dcpep_pipe_query_478),
-+	IOMFB_METHOD("A536", dcpep_pipe_query_474),
-+	IOMFB_METHOD("A538", dcpep_pipe_set_476),
-+	IOMFB_METHOD("A478", iomfbep_set_brightness_correction),
-+	IOMFB_METHOD("A508", dcpep_enable_disable_video_power_savings),
-+	IOMFB_METHOD("A516", dcpep_first_client_open),
-+	IOMFB_METHOD("A517", iomfbep_last_client_close),
-+	IOMFB_METHOD("A526", dcpep_set_display_refresh_properties), /* traced */
-+	IOMFB_METHOD("A529", dcpep_flush_supports_power), /* traced */
-+	IOMFB_METHOD("A530", iomfbep_abort_swaps_dcp),
-+	IOMFB_METHOD("A535", dcpep_set_power_state),
-+	IOMFB_METHOD("A534", dcpep_register_dfb_surface), /* traced */
++	IOMFB_METHOD("A000", dcpep_late_init_signal),
++	IOMFB_METHOD("A027", dcpep_setup_video_limits),
++	IOMFB_METHOD("A136", iomfbep_a131_pmu_service_matched),
++	IOMFB_METHOD("A137", iomfbep_a132_backlight_service_matched),
++	IOMFB_METHOD("A390", dcpep_set_create_dfb),
++	IOMFB_METHOD("A391", iomfbep_a358_vi_set_temperature_hint),
++	IOMFB_METHOD("A451", dcpep_start_signal),
++	IOMFB_METHOD("A504", dcpep_create_default_fb),
++	IOMFB_METHOD("A037", dcpep_get_dfb_compression_info),
++	IOMFB_METHOD("A036", dcpep_get_dfb_info),
++	IOMFB_METHOD("A103", dcpep_get_dfb_layout),
++	IOMFB_METHOD("A503", dcpep_get_dfb_state),
++	IOMFB_METHOD("A104", dcpep_set_dfb_dimensions),
++	IOMFB_METHOD("A105", dcpep_commit_dfb_info),
++	IOMFB_METHOD("A035", dcpep_dfb_query),
++	IOMFB_METHOD("A385", dcpep_dfb_ready_query),
++	IOMFB_METHOD("A353", dcpep_pipe_query_353),
++	IOMFB_METHOD("A526", dcpep_set_display_refresh_properties),
++	IOMFB_METHOD("A529", dcpep_flush_supports_power),
++	IOMFB_METHOD("A534", dcpep_register_dfb_surface),
 +};
 +
 +const struct dcp_method_entry *iomfb_v27_methods(const char *compat)
@@ -285,38 +226,29 @@ index 93d2fa72cc41..e64ceaa2dd72 100644
 +}
 +
 +/*
-+ * The swap_submit request @dcp's firmware takes for @request: @request itself,
-+ * or on firmware 27.3 a copy in @scratch with the 27.3 IOMFBSwap. dcp_push()
-+ * copies the request it is given, so one scratch record serves consecutive
-+ * pushes.
++ * The driver sends every method of the 27.0 table. dfb_ready_query is the one
++ * it leaves out for a build whose table has no ID for it (boot_5()). Return
++ * the name of the first other method @methods has no ID for, with their number
++ * in @count, or NULL if the table is complete. A method without an ID would go
++ * out with an empty tag, which the firmware answers with a panic, so a build
++ * with an incomplete table must not be started.
 + */
-+void *iomfb_v27_swap_wire(const struct apple_dcp *dcp,
-+			  struct dcp_swap_submit_req_v27 *request,
-+			  struct dcp_swap_submit_req_v27_3 *scratch, u32 *len)
++const char *iomfb_v27_missing_method(const struct dcp_method_entry *methods,
++				     unsigned int *count)
 +{
-+	const u8 *swap = (const u8 *)&request->swap;
-+	u8 *out = scratch->swap;
++	const char *first = NULL;
++	unsigned int i;
 +
-+	if (dcp->v27_methods != dcp_methods_27_3) {
-+		*len = sizeof(*request);
-+		return request;
++	*count = 0;
++	for (i = 0; i < dcpep_num_methods; i++) {
++		if (!dcp_methods_27_0[i].tag[0] || methods[i].tag[0] ||
++		    i == dcpep_dfb_ready_query)
++			continue;
++		if (!first)
++			first = dcp_methods_27_0[i].name;
++		(*count)++;
 +	}
-+
-+	memset(out, 0, sizeof(scratch->swap));
-+	memcpy(out, swap, DCP_SWAP_V27_3_GAP0);
-+	out += DCP_SWAP_V27_3_GAP0 + DCP_SWAP_V27_3_GAP0_LEN;
-+	memcpy(out, swap + DCP_SWAP_V27_3_GAP0,
-+	       DCP_SWAP_V27_3_GAP1 - DCP_SWAP_V27_3_GAP0);
-+	out += DCP_SWAP_V27_3_GAP1 - DCP_SWAP_V27_3_GAP0 + DCP_SWAP_V27_3_GAP1_LEN;
-+	memcpy(out, swap + DCP_SWAP_V27_3_GAP1,
-+	       DCP_SWAP_V27_3_GAP2 - DCP_SWAP_V27_3_GAP1);
-+	out += DCP_SWAP_V27_3_GAP2 - DCP_SWAP_V27_3_GAP1 + DCP_SWAP_V27_3_GAP2_LEN;
-+	memcpy(out, swap + DCP_SWAP_V27_3_GAP2,
-+	       sizeof(request->swap) - DCP_SWAP_V27_3_GAP2);
-+	memcpy(scratch->surf, request->surf, sizeof(scratch->surf));
-+	memcpy(scratch->args, &request->surf_iova, sizeof(scratch->args));
-+	*len = sizeof(*scratch);
-+	return scratch;
++	return first;
 +}
 +
 +/* The template's calls resolve through the table probe chose for this build. */
@@ -325,56 +257,6 @@ index 93d2fa72cc41..e64ceaa2dd72 100644
  #define iomfb_modeset_h17p iomfb_modeset_v27
  #define iomfb_flush_h17p iomfb_flush_v27
  #define iomfb_poweron_h17p iomfb_poweron_v27
-diff --git a/drivers/gpu/drm/apple/iomfb_v27.h b/drivers/gpu/drm/apple/iomfb_v27.h
-index ac1ded5eb047..f09d77f5c4e7 100644
---- a/drivers/gpu/drm/apple/iomfb_v27.h
-+++ b/drivers/gpu/drm/apple/iomfb_v27.h
-@@ -78,8 +78,45 @@ static_assert(offsetof(struct dcp_swap_submit_req_v27, swap_null) == 0xfea);
- static_assert(offsetof(struct dcp_swap_v27, brightness_update) == 0x354);
- static_assert(offsetof(struct dcp_swap_v27, brightness_nits) == 0x35e);
- 
-+/*
-+ * Firmware 27.3 grew IOMFBSwap from 0x6e0 to 0x830 bytes, so its swap_submit
-+ * request is 0x150 bytes longer; the rest of the request is unchanged. Of the
-+ * 27.2 swap fields, those from swap_id (0x98) up to 0x298 are 0x40 bytes
-+ * further on, those from 0x2cc up to 0x534 0x60 bytes and those from 0x6b8 on
-+ * 0x150 bytes, so the new bytes lie before swap_id, between 0x298 and 0x2cc
-+ * and between 0x534 and 0x6b8. This driver sends zeros in all three ranges,
-+ * so the 27.3 swap is the 27.2 one with that many zeros inserted at one point
-+ * of each range. No swap of the macOS 27.3 driver has been traced yet, so a
-+ * trace does not confirm this layout; the 27.3 firmware of a J716s takes the
-+ * request and shows its frames.
-+ */
-+#define DCP_SWAP_V27_3_GAP0	0x098
-+#define DCP_SWAP_V27_3_GAP0_LEN	0x40
-+#define DCP_SWAP_V27_3_GAP1	0x2cc
-+#define DCP_SWAP_V27_3_GAP1_LEN	0x20
-+#define DCP_SWAP_V27_3_GAP2	0x6b8
-+#define DCP_SWAP_V27_3_GAP2_LEN	0xf0
-+#define DCP_SWAP_V27_3_SIZE	0x830
-+
-+struct dcp_swap_submit_req_v27_3 {
-+	u8 swap[DCP_SWAP_V27_3_SIZE];
-+	struct dcp_surface_v27 surf[SWAP_SURFACES];
-+	u8 args[sizeof(struct dcp_swap_submit_req_v27) -
-+		offsetof(struct dcp_swap_submit_req_v27, surf_iova)];
-+} __packed;
-+
-+static_assert(sizeof(struct dcp_swap_v27) + DCP_SWAP_V27_3_GAP0_LEN +
-+	      DCP_SWAP_V27_3_GAP1_LEN + DCP_SWAP_V27_3_GAP2_LEN ==
-+	      DCP_SWAP_V27_3_SIZE);
-+static_assert(sizeof(struct dcp_swap_submit_req_v27_3) == 0x1144);
-+static_assert(offsetof(struct dcp_swap_submit_req_v27_3, surf) == 0x830);
-+
- void iomfb_serialize_present_v27(struct dcp_swap_submit_req_v27 *wire,
- 				const struct dcp_swap_submit_req_h17p *request);
-+struct apple_dcp;
-+void *iomfb_v27_swap_wire(const struct apple_dcp *dcp,
-+			  struct dcp_swap_submit_req_v27 *request,
-+			  struct dcp_swap_submit_req_v27_3 *scratch, u32 *len);
- bool iomfb_v27_callback_size_valid(unsigned int tag, u32 input, u32 output);
- void iomfb_firmware_state_cleanup_v27(void *data);
- int iomfb_modeset_v27(struct apple_dcp *dcp, struct drm_crtc_state *state);
 diff --git a/drivers/gpu/drm/asahi/fwid.rs b/drivers/gpu/drm/asahi/fwid.rs
 index d646bff94cf1..f64e11f44068 100644
 --- a/drivers/gpu/drm/asahi/fwid.rs
@@ -1821,10 +1703,10 @@ index 5c3200fefce1..d1e26e0b44e6 100644
              let offset = shared.main_config[index];
              m::encode_main_config_for_profile(profile, role, &addresses, &instance,
 diff --git a/drivers/gpu/drm/asahi/g17/mod.rs b/drivers/gpu/drm/asahi/g17/mod.rs
-index 0b3b0641181b..e70fd236d479 100644
+index 250264e01ce1..eef6ff1d8fdf 100644
 --- a/drivers/gpu/drm/asahi/g17/mod.rs
 +++ b/drivers/gpu/drm/asahi/g17/mod.rs
-@@ -1534,6 +1534,16 @@ pub(crate) fn new(
+@@ -1614,6 +1614,16 @@ pub(crate) fn new(
          }
          let m5 = cfg.profile.is_m5();
          if m5 {
@@ -1841,7 +1723,7 @@ index 0b3b0641181b..e70fd236d479 100644
              let board = cfg.m5.ok_or(EINVAL)?;
              J813_FORMS.store(board.j813_forms(), core::sync::atomic::Ordering::Relaxed);
              // Hold the J813's GFX power domain for the session, as the G15 and G16 paths do
-@@ -1990,7 +2000,7 @@ fn boot_m5(
+@@ -2074,7 +2084,7 @@ fn boot_m5(
              .inspect_err(at("root adoption"))?;
          session
              .init
@@ -1851,11 +1733,11 @@ index 0b3b0641181b..e70fd236d479 100644
          session
              .init
 diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
-index ae2b48d9184d..686e68f3c080 100644
+index 949bd81d00ed..9e8b1392d94f 100644
 --- a/drivers/gpu/drm/asahi/hw/t6050.rs
 +++ b/drivers/gpu/drm/asahi/hw/t6050.rs
-@@ -42,33 +42,90 @@
-     fabric_bridge: false,
+@@ -43,33 +43,90 @@
+     sleep_restart: false,
      recovery_slot_keys: None,
      gpu_generation: GpuGen::G17,
 -    // The firmware in `fw-text` must be this build. iBoot loads the G17S build of both roles

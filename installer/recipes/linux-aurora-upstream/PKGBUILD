@@ -11,8 +11,8 @@ _auroraver=7.3.0
 _aurorarel=17.up273
 pkgrel=1
 
-# aurora-silicon/linux integration/aurora at 447b7522c70f, plus upstream-27.3.patch.
-_commit=447b7522c70f8456e55e656d13824049789b2e30
+# aurora-silicon/linux integration/aurora at f1b79c4beaef, plus upstream-27.3.patch.
+_commit=f1b79c4beaef1a4a48738f1c820b0bbc16e84bb3
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -38,11 +38,11 @@ source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github
         speakersafetyd-hold.conf)
 sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
-            '5f3ed1084f077a3340b40fa6bc441706a237549b49fd22e433b126cb8919b42e'
+            '76fad3693b582b8bda47b29cc91c7086e974f408191436d25f2fce1184984c99'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             'bcc2f8ac20c7293ebdc77402508d12fbc5a9edf3d432bc1aae61cb39ffa4c092'
-            '83c0c8665934f2ae1804bd3a2c6d595f0554c945bc42de1e22bbee53b2175017'
+            '2dc43361664d7553e3762cd5c10cf0395cd415ac73f1269b15910e412a8e2d42'
             'c812ed7ea8a9c482de07526896c249fa16c833e0f5679aeaff9e40133292c44f'
             'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7')
 
