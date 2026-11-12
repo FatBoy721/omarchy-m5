@@ -101,7 +101,9 @@ build() {
 }
 
 check() {
-  meson test -C build --print-errorlogs
+  # On the J714s (15 cores) egis_etu905's umockdev replay fails when the suite runs in
+  # parallel and passes on its own (3 of 3), so a failed parallel run is repeated serially.
+  meson test -C build --print-errorlogs || meson test -C build --print-errorlogs --num-processes 1
 }
 
 package() {
