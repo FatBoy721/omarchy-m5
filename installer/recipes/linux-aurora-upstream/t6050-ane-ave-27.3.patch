@@ -1,0 +1,487 @@
+diff --git i/drivers/accel/ane/ane_fw_cold.c w/drivers/accel/ane/ane_fw_cold.c
+index 6f447afa7..8e63fdacb 100644
+--- i/drivers/accel/ane/ane_fw_cold.c
++++ w/drivers/accel/ane/ane_fw_cold.c
+@@ -74,6 +74,8 @@ struct ane_fw_backend {
+ 	struct ane_fw_surface preload[2], heap_tail;
+ 	u64 preload_phys[2];
+ 	u8 data_digest[SHA256_DIGEST_SIZE];
++	/* The TEXT digest of the preloaded build, chosen by its layout. */
++	const u8 *text_pin;
+ 	/* Powered down for system sleep; a (cold or warm) boot is due. */
+ 	bool slept;
+ 	/*
+@@ -719,7 +721,7 @@ static int ane_fw_reload_segment(struct ane_fw_backend *b, unsigned int i)
+ 	memunmap(source);
+ 	dma_wmb();
+ 	sha256(s->cpu, s->size, digest);
+-	return memcmp(digest, i ? b->data_digest : b->soc->text_pin, sizeof(digest)) ?
++	return memcmp(digest, i ? b->data_digest : b->text_pin, sizeof(digest)) ?
+ 	       -EKEYREJECTED : 0;
+ }
+ 
+@@ -1552,7 +1554,8 @@ static int ane_fw_preload_metadata(struct ane_fw_backend *b, u64 physical[2],
+ 		if (ret)
+ 			return ret;
+ 	}
+-	if (!ane_fw_preload_ranges_valid(b->soc, physical, size, dva))
++	b->text_pin = ane_fw_preload_text_pin(b->soc, physical, size, dva);
++	if (!b->text_pin)
+ 		return -EINVAL;
+ 	return 0;
+ }
+@@ -1591,7 +1594,7 @@ static int ane_fw_preload(struct ane_fw_backend *b)
+ 		sha256_init(&hash);
+ 		sha256_update(&hash, snapshots[i].cpu, size[i]);
+ 		sha256_final(&hash, digest);
+-		if (memcmp(digest, i ? data_pin : b->soc->text_pin, sizeof(digest)))
++		if (memcmp(digest, i ? data_pin : b->text_pin, sizeof(digest)))
+ 			return -EKEYREJECTED;
+ 	}
+ 	/* Preserve every personalized DATA byte, including the iBoot TLV table. */
+@@ -2125,7 +2128,7 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+ 	struct device_node *np = pdev->dev.of_node;
+ 	struct device_node *chosen __free(device_node) = of_find_node_by_path("/chosen");
+ 	struct ane_fw_handoff h = {};
+-	u8 digest[SHA256_DIGEST_SIZE] = {};
++	const u8 *pin = NULL;
+ 	unsigned int i;
+ 
+ 	if (chosen)
+@@ -2142,13 +2145,16 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+ 			       !strcmp(name, i ? "firmware-data" : "firmware-text") &&
+ 			       !ane_fw_preload_range(np, i, &h.phys[i], &h.size[i]);
+ 	}
+-	if (h.regions_ok && ane_fw_preload_ranges_valid(soc, h.phys, h.size, h.dva)) {
++	if (h.regions_ok)
++		pin = ane_fw_preload_text_pin(soc, h.phys, h.size, h.dva);
++	if (pin) {
+ 		void *text = memremap(h.phys[0], h.size[0], MEMREMAP_WB);
+ 
++		h.build = ane_fw_preload_build(soc, h.phys, h.size, h.dva);
+ 		if (text) {
+-			sha256(text, h.size[0], digest);
++			sha256(text, h.size[0], h.text_digest);
+ 			memunmap(text);
+-			h.text_ok = !memcmp(digest, soc->text_pin, sizeof(digest));
++			h.text_ok = !memcmp(h.text_digest, pin, sizeof(h.text_digest));
+ 		}
+ 	}
+ 	*hp = h;
+@@ -2157,10 +2163,14 @@ static bool ane_fw_handoff_present(struct platform_device *pdev,
+ 	dev_info(&pdev->dev, "H17 ANE: no loader hand-off (%s); leaving the engine alone\n",
+ 		 !h.marker || strcmp(h.marker, ANE_FW_COLD_BOOT_EVIDENCE) ? "raw-boot marker" :
+ 		 !h.preloaded || !h.regions_ok ? "preload reservations" :
+-		 !h.text_ok ? "firmware TEXT pin" : "preload layout");
+-	if (h.regions_ok && !h.text_ok)
++		 !pin ? "preload layout" : !h.text_ok ? "firmware TEXT pin" : "preload layout");
++	if (h.regions_ok && !pin)
++		dev_info(&pdev->dev,
++			 "H17 ANE: no admitted build has TEXT %#llx@%#llx DATA %#llx@%#llx\n",
++			 h.size[0], h.dva[0], h.size[1], h.dva[1]);
++	else if (h.regions_ok && !h.text_ok)
+ 		dev_info(&pdev->dev, "H17 ANE: preloaded TEXT sha256 %*phN\n",
+-			 (int)sizeof(digest), digest);
++			 (int)sizeof(h.text_digest), h.text_digest);
+ 	return false;
+ }
+ 
+@@ -2354,7 +2364,10 @@ int ane_fw_staged_init(struct platform_device *pdev, const struct ane_fw_platfor
+ 		ane_backend = NULL;
+ 		goto fail;
+ 	}
+-	dev_info(&pdev->dev, "H17 ANE: loader hand-off verified; starting the engine\n");
++	dev_info(&pdev->dev,
++		 "H17 ANE: loader hand-off verified (%s build, TEXT sha256 %*phN); starting the engine\n",
++		 handoff.build ? handoff.build->name : "pinned", (int)sizeof(handoff.text_digest),
++		 handoff.text_digest);
+ 	INIT_WORK(&b->start, ane_fw_start_work);
+ 	return 0;
+ fail:
+diff --git i/drivers/accel/ane/ane_fw_cold.h w/drivers/accel/ane/ane_fw_cold.h
+index a9bea3958..d3497f50e 100644
+--- i/drivers/accel/ane/ane_fw_cold.h
++++ w/drivers/accel/ane/ane_fw_cold.h
+@@ -153,6 +153,9 @@ struct ane_fw_handoff {
+ 	bool regions_ok;
+ 	u64 phys[2], size[2], dva[2];
+ 	bool text_ok;
++	/* The admitted build the layout names and the measured TEXT digest. */
++	const struct ane_fw_preload_build *build;
++	u8 text_digest[32];
+ 	const struct ane_fw_cold_state *pmgr;
+ 	bool crash_kernel;
+ };
+diff --git i/drivers/accel/ane/ane_fw_platform.c w/drivers/accel/ane/ane_fw_platform.c
+index 5639f340d..c17656c17 100644
+--- i/drivers/accel/ane/ane_fw_platform.c
++++ w/drivers/accel/ane/ane_fw_platform.c
+@@ -49,6 +49,33 @@ static const u8 ane_t6050_text_pin_27_0[] = {
+ 	0xd1, 0xa2, 0x20, 0xd0, 0xee, 0x43, 0x8b, 0x8f,
+ };
+ 
++/* The macOS 27.3 build (26C5035r), as iBoot 20457.60.65 preloads it on a J714s. */
++static const u8 ane_t6050_text_pin_27_3[] = {
++	0x11, 0x55, 0x75, 0x86, 0x4d, 0x4c, 0x8d, 0x02,
++	0xd4, 0x8d, 0x83, 0x07, 0x71, 0x70, 0xe7, 0xe1,
++	0x60, 0x79, 0xaa, 0xf7, 0x0d, 0xad, 0xd6, 0x08,
++	0xc7, 0x19, 0x10, 0xac, 0x66, 0xdc, 0x60, 0x66,
++};
++
++/*
++ * T6050 builds, by their ADT ane0 segment-ranges. 27.3 moved 0x2c000 bytes
++ * from DATA into TEXT; the firmware span (heap tail, pool, IPC) is unchanged.
++ */
++static const struct ane_fw_preload_build ane_t6050_builds[] = {
++	{
++		.name = "27.0",
++		.dva = { 0x10000000000, 0x100000c0000 },
++		.size = { 0xc0000, 0x2ac000 },
++		.text_pin = ane_t6050_text_pin_27_0,
++	},
++	{
++		.name = "27.3",
++		.dva = { 0x10000000000, 0x100000ec000 },
++		.size = { 0xec000, 0x280000 },
++		.text_pin = ane_t6050_text_pin_27_3,
++	},
++};
++
+ const struct ane_fw_platform ane_h16_platform = {
+ 	.h16_profiles = ane_h16_profiles,
+ 	.h16_profile_count = ARRAY_SIZE(ane_h16_profiles),
+@@ -175,6 +202,8 @@ const struct ane_fw_platform ane_t6050_platform = {
+ 	.dart_revision = 0x204,
+ 	.dapf_count = 5,
+ 	.text_pin = ane_t6050_text_pin_27_0,
++	.preload_builds = ane_t6050_builds,
++	.preload_build_count = ARRAY_SIZE(ane_t6050_builds),
+ };
+ 
+ /*
+diff --git i/drivers/accel/ane/ane_fw_platform.h w/drivers/accel/ane/ane_fw_platform.h
+index e4afe348b..a2b11206e 100644
+--- i/drivers/accel/ane/ane_fw_platform.h
++++ w/drivers/accel/ane/ane_fw_platform.h
+@@ -24,6 +24,20 @@ enum ane_fw_irq_role {
+ 	ANE_FW_IRQ_CHANNELS,
+ };
+ 
++/*
++ * One firmware build the loader may preload: the device addresses and sizes
++ * of its TEXT and DATA segments and the digest of its TEXT. Apple moves the
++ * TEXT/DATA split between macOS releases (T6050: 27.0 TEXT 0xc0000 and DATA
++ * 0x2ac000, 27.3 TEXT 0xec000 and DATA 0x280000, both ending at 0x36c000),
++ * so the handed-off layout selects the build and the build its TEXT pin.
++ */
++struct ane_fw_preload_build {
++	const char *name;
++	u64 dva[2];
++	u64 size[2];
++	const u8 *text_pin;
++};
++
+ /* Later firmware generations must never enter the H14 staging path. */
+ struct ane_fw_platform {
+ 	const struct ane_h16_profile *h16_profiles;
+@@ -99,11 +113,17 @@ struct ane_fw_platform {
+ 	u16 dart_revision;
+ 	u8 dapf_count;
+ 	const u8 *text_pin;
++	/*
++	 * The preloaded builds this SoC admits. When set, they replace
++	 * preload_dva, preload_size and text_pin for the hand-off checks.
++	 */
++	const struct ane_fw_preload_build *preload_builds;
++	u8 preload_build_count;
+ };
+ 
+ /* Pure range check: the boot loader supplies the physical addresses. */
+ static inline bool
+-ane_fw_preload_ranges_valid(const struct ane_fw_platform *soc, const u64 phys[2],
++ane_fw_preload_layout_match(const u64 want_dva[2], const u64 want_size[2], const u64 phys[2],
+ 			    const u64 size[2], const u64 dva[2])
+ {
+ 	u64 end[2];
+@@ -111,14 +131,51 @@ ane_fw_preload_ranges_valid(const struct ane_fw_platform *soc, const u64 phys[2]
+ 
+ 	for (i = 0; i < 2; i++) {
+ 		if (!phys[i] || !IS_ALIGNED(phys[i], SZ_16K) ||
+-		    size[i] != soc->preload_size[i] ||
+-		    dva[i] != soc->preload_dva[i] ||
++		    size[i] != want_size[i] ||
++		    dva[i] != want_dva[i] ||
+ 		    check_add_overflow(phys[i], size[i], &end[i]))
+ 			return false;
+ 	}
+ 	return end[0] <= phys[1] || end[1] <= phys[0];
+ }
+ 
++/* The admitted build whose layout the loader handed off, or NULL. */
++static inline const struct ane_fw_preload_build *
++ane_fw_preload_build(const struct ane_fw_platform *soc, const u64 phys[2],
++		     const u64 size[2], const u64 dva[2])
++{
++	unsigned int i;
++
++	for (i = 0; i < soc->preload_build_count; i++)
++		if (ane_fw_preload_layout_match(soc->preload_builds[i].dva,
++						soc->preload_builds[i].size, phys, size, dva))
++			return &soc->preload_builds[i];
++	return NULL;
++}
++
++static inline bool
++ane_fw_preload_ranges_valid(const struct ane_fw_platform *soc, const u64 phys[2],
++			    const u64 size[2], const u64 dva[2])
++{
++	if (soc->preload_build_count)
++		return ane_fw_preload_build(soc, phys, size, dva);
++	return ane_fw_preload_layout_match(soc->preload_dva, soc->preload_size, phys, size, dva);
++}
++
++/* The TEXT digest the handed-off layout must carry, or NULL for none. */
++static inline const u8 *
++ane_fw_preload_text_pin(const struct ane_fw_platform *soc, const u64 phys[2],
++			const u64 size[2], const u64 dva[2])
++{
++	const struct ane_fw_preload_build *build;
++
++	if (!soc->preload_build_count)
++		return ane_fw_preload_layout_match(soc->preload_dva, soc->preload_size, phys,
++						   size, dva) ? soc->text_pin : NULL;
++	build = ane_fw_preload_build(soc, phys, size, dva);
++	return build ? build->text_pin : NULL;
++}
++
+ /*
+  * The system sleep path of a device the ane_t6021 driver bound. Devices of
+  * the shared firmware platform (H16, H17) carry the backend's drvdata and
+diff --git i/drivers/accel/ane/ane_fw_platform_test.c w/drivers/accel/ane/ane_fw_platform_test.c
+index 7fa82abf6..53eb20cb1 100644
+--- i/drivers/accel/ane/ane_fw_platform_test.c
++++ w/drivers/accel/ane/ane_fw_platform_test.c
+@@ -37,6 +37,40 @@ static void ane_preload_ranges_test(struct kunit *test)
+ 	KUNIT_EXPECT_FALSE(test, ane_fw_preload_ranges_valid(&soc, phys, size, dva));
+ }
+ 
++/*
++ * A SoC with several admitted builds: the handed-off layout picks the build
++ * and its TEXT pin; a mix of two layouts matches neither.
++ */
++static void ane_preload_builds_test(struct kunit *test)
++{
++	static const u8 pin_a[32] = { 0xa }, pin_b[32] = { 0xb };
++	static const struct ane_fw_preload_build builds[] = {
++		{ "a", { 0x10000000000, 0x100000c0000 }, { 0xc0000, 0x2ac000 }, pin_a },
++		{ "b", { 0x10000000000, 0x100000ec000 }, { 0xec000, 0x280000 }, pin_b },
++	};
++	const struct ane_fw_platform soc = {
++		.preload_dva = { 0x10000000000, 0x100000c0000 },
++		.preload_size = { 0xc0000, 0x2ac000 },
++		.text_pin = pin_a,
++		.preload_builds = builds,
++		.preload_build_count = ARRAY_SIZE(builds),
++	};
++	u64 phys[] = { 0x100000000, 0x200000000 };
++	u64 size[] = { 0xec000, 0x280000 };
++	u64 dva[] = { 0x10000000000, 0x100000ec000 };
++
++	KUNIT_EXPECT_TRUE(test, ane_fw_preload_ranges_valid(&soc, phys, size, dva));
++	KUNIT_EXPECT_PTR_EQ(test, ane_fw_preload_build(&soc, phys, size, dva), &builds[1]);
++	KUNIT_EXPECT_PTR_EQ(test, ane_fw_preload_text_pin(&soc, phys, size, dva), pin_b);
++	size[0] = 0xc0000;
++	size[1] = 0x2ac000;
++	dva[1] = 0x100000c0000;
++	KUNIT_EXPECT_PTR_EQ(test, ane_fw_preload_text_pin(&soc, phys, size, dva), pin_a);
++	size[0] = 0xec000;
++	KUNIT_EXPECT_FALSE(test, ane_fw_preload_ranges_valid(&soc, phys, size, dva));
++	KUNIT_EXPECT_NULL(test, ane_fw_preload_text_pin(&soc, phys, size, dva));
++}
++
+ /*
+  * H16 and H17 devices (any firmware platform) take the backend's sleep path,
+  * never the rtclient one; only the H13/H14 rtclient (no platform) does.
+@@ -70,6 +104,7 @@ static struct kunit_case ane_fw_platform_cases[] = {
+ 	KUNIT_CASE(ane_platform_staged_bind_test),
+ 	KUNIT_CASE(ane_platform_sleep_path_test),
+ 	KUNIT_CASE(ane_preload_ranges_test),
++	KUNIT_CASE(ane_preload_builds_test),
+ 	{}
+ };
+ 
+diff --git i/drivers/media/platform/apple/ave/ave-drv.c w/drivers/media/platform/apple/ave/ave-drv.c
+index b80ae4b78..e0654a8b8 100644
+--- i/drivers/media/platform/apple/ave/ave-drv.c
++++ w/drivers/media/platform/apple/ave/ave-drv.c
+@@ -125,10 +125,22 @@ static const struct ave_variant ave_t8140 = {
+  * A18 Pro, after clearing the SVE idle word at mailbox +0x118. Its boot configuration names
+  * device 28, and so does its handshake's device type.
+  */
++static const struct ave_fw_build ave_t6050_builds[] = {
++	{ "26A428", 0x154000, 0x134000, AVE_FW_TEXT_CRC_T6050_26A428 },
++	/*
++	 * macOS 27.3 beta 1: TEXT grew by 0x4000 (ADT ave0 segment-ranges on a J714s with
++	 * iBoot 20457.60.65), DATA kept its size. The firmware starts as 26A428 does; its
++	 * command payloads are not qualified, so it probes without a command layout.
++	 */
++	{ "26C5035", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26C5035 },
++};
++
+ static const struct ave_variant ave_t6050 = {
+ 	.regs = &ave_coproc_v40,
+ 	.fw_text_size = 0x154000,
+ 	.fw_data_size = 0x134000,
++	.builds = ave_t6050_builds,
++	.build_count = ARRAY_SIZE(ave_t6050_builds),
+ 	.boot_device_id = 28,
+ 	.boot_arg_value = AVE_COPROC_BOOT_ARG_VALUE,
+ 	.timebase_multiplier = 1,
+diff --git i/drivers/media/platform/apple/ave/ave-fw.c w/drivers/media/platform/apple/ave/ave-fw.c
+index 4671803fa..a8671206d 100644
+--- i/drivers/media/platform/apple/ave/ave-fw.c
++++ w/drivers/media/platform/apple/ave/ave-fw.c
+@@ -40,6 +40,7 @@ static const u32 ave_known_text_crc[] = {
+ 	0x69c54454, /* AppleAVE2FW 9003.78.0 (macOS 26.0.x) */
+ 	AVE_FW_TEXT_CRC_T6040_25G83, /* AppleAVE2FW 9003.78.0 / T6040 */
+ 	AVE_FW_TEXT_CRC_T6050_26A428, /* AppleAVE2FW, macOS 27.0 26A428 / T6050 */
++	AVE_FW_TEXT_CRC_T6050_26C5035, /* AppleAVE2FW, macOS 27.3 26C5035r / T6050 */
+ 	0x460c7a7c, /* AppleAVE2FW 6070.11.1 / T6000 */
+ 	0x25bfd039, /* AppleAVE2FW 6070.11.1 / T8112 */
+ };
+@@ -173,10 +174,21 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
+  * Find the firmware, check that it is a build we speak to and that DATA is
+  * still as the bootloader left it, and keep a copy of DATA for restarts.
+  */
++/* The variant's build with these segment sizes, or NULL. */
++static const struct ave_fw_build *ave_fw_find_build(const struct ave_variant *v,
++						    size_t text, size_t data)
++{
++	for (unsigned int i = 0; i < v->build_count; i++)
++		if (text == v->builds[i].text_size && data == v->builds[i].data_size)
++			return &v->builds[i];
++	return NULL;
++}
++
+ int ave_fw_probe(struct ave_dev *ave)
+ {
+ 	struct device *dev = ave->dev;
+-	u32 text_crc, data_crc, want;
++	const struct ave_fw_build *build = NULL;
++	u32 text_crc, data_crc, want, want_crc = ave->variant->text_crc;
+ 	bool known = !ave->variant->boot_qualified;
+ 	int ret;
+ 
+@@ -190,10 +202,18 @@ int ave_fw_probe(struct ave_dev *ave)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "bad firmware reservation\n");
+ 
+-	if (ave->text.size != ave->variant->fw_text_size ||
+-	    ave->data.size != ave->variant->fw_data_size)
++	if (ave->variant->build_count) {
++		build = ave_fw_find_build(ave->variant, ave->text.size, ave->data.size);
++		if (!build)
++			return dev_err_probe(dev, -EINVAL,
++					     "unexpected firmware segment sizes (TEXT %#zx DATA %#zx)\n",
++					     ave->text.size, ave->data.size);
++		want_crc = build->text_crc;
++	} else if (ave->text.size != ave->variant->fw_text_size ||
++		   ave->data.size != ave->variant->fw_data_size) {
+ 		return dev_err_probe(dev, -EINVAL,
+ 				     "unexpected firmware segment sizes\n");
++	}
+ 	if ((ave->text.phys < ave->data.phys + ave->data.size &&
+ 	     ave->data.phys < ave->text.phys + ave->text.size) ||
+ 	    (ave->text.iova < ave->data.iova + ave->data.size &&
+@@ -232,13 +252,15 @@ int ave_fw_probe(struct ave_dev *ave)
+ 				     "firmware text link cell is not the DATA address\n");
+ 	for (unsigned int i = 0; i < ARRAY_SIZE(ave_known_text_crc); i++)
+ 		known |= text_crc == ave_known_text_crc[i];
+-	if (!known ||
+-	    (ave->variant->text_crc && text_crc != ave->variant->text_crc))
++	if (!known || (want_crc && text_crc != want_crc))
+ 		return dev_err_probe(dev, -ENODEV,
+ 				     "unsupported firmware (text CRC %08x)\n",
+ 				     text_crc);
+ 	ave->text_crc = text_crc;
+ 	ave->layout = ave_layout_for_crc(text_crc);
++	if (build)
++		dev_info(dev, "firmware build %s (TEXT %#zx CRC %08x, DATA %#zx)\n",
++			 build->name, ave->text.size, text_crc, ave->data.size);
+ 
+ 	ave->data_pristine = vmalloc(ave->data.size);
+ 	if (!ave->data_pristine)
+diff --git i/drivers/media/platform/apple/ave/ave-layout.c w/drivers/media/platform/apple/ave/ave-layout.c
+index d0bd73d21..ba1f3e33e 100644
+--- i/drivers/media/platform/apple/ave/ave-layout.c
++++ w/drivers/media/platform/apple/ave/ave-layout.c
+@@ -1,5 +1,7 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ /* Apple AVE command layouts, identified by firmware TEXT CRC. */
++#include <linux/moduleparam.h>
++
+ #include "ave.h"
+ 
+ const struct ave_fw_layout ave_layout_9003_78_0 = {
+@@ -943,6 +945,11 @@ const struct ave_fw_layout ave_layout_6070_11_1 = {
+ 	},
+ };
+ 
++static bool ave_t6050_try_26a428;
++module_param(ave_t6050_try_26a428, bool, 0444);
++MODULE_PARM_DESC(ave_t6050_try_26a428,
++		 "Drive the T6050 macOS 27.3 (26C5035r) firmware with the 27.0 (26A428) command layout (unqualified; testing only)");
++
+ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
+ {
+ 	/*
+@@ -956,5 +963,11 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
+ 	/* The macOS 27.0 build for the M5 Pro and Max. */
+ 	if (crc == AVE_FW_TEXT_CRC_T6050_26A428)
+ 		return &ave_layout_26a428;
++	/*
++	 * The macOS 27.3 build: no qualified layout yet. ave_t6050_try_26a428
++	 * lets it speak 26A428's, to qualify that by hand.
++	 */
++	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035 && ave_t6050_try_26a428)
++		return &ave_layout_26a428;
+ 	return NULL;
+ }
+diff --git i/drivers/media/platform/apple/ave/ave.h w/drivers/media/platform/apple/ave/ave.h
+index e2313b00a..bfc662044 100644
+--- i/drivers/media/platform/apple/ave/ave.h
++++ w/drivers/media/platform/apple/ave/ave.h
+@@ -168,6 +168,8 @@ enum ave_opcode {
+ /* The M4 Pro (T6040) build of the same 25G83 firmware. */
+ #define AVE_FW_TEXT_CRC_T6040_25G83 0x68d5f9f6
+ #define AVE_FW_TEXT_CRC_T6050_26A428 0x87279429
++/* macOS 27.3 beta 1 (26C5035r) / T6050: TEXT 0x158000, DATA 0x134000. */
++#define AVE_FW_TEXT_CRC_T6050_26C5035 0xc25b4ddb
+ 
+ struct ave_ctx;
+ 
+@@ -182,10 +184,24 @@ struct ave_coproc_regs {
+ 	u32 keep_mappings;
+ };
+ 
++/* One preloaded firmware build of a variant: its segment sizes and TEXT CRC. */
++struct ave_fw_build {
++	const char *name;
++	u32 text_size;
++	u32 data_size;
++	u32 text_crc;
++};
++
+ struct ave_variant {
+ 	const struct ave_coproc_regs *regs;
+ 	u32 fw_text_size;
+ 	u32 fw_data_size;
++	/*
++	 * When set, the builds this variant admits; they replace fw_text_size,
++	 * fw_data_size and text_crc, and the segment sizes select the build.
++	 */
++	const struct ave_fw_build *builds;
++	unsigned int build_count;
+ 	u32 boot_device_id;
+ 	u32 device_type;
+ 	u32 lfs_ref_scale;

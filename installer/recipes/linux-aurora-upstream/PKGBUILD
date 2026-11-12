@@ -9,9 +9,10 @@
 
 _auroraver=7.3.0
 _aurorarel=17.up273
-pkgrel=2
+pkgrel=3
 
-# aurora-silicon/linux integration/aurora at f1b79c4beaef, plus upstream-27.3.patch.
+# aurora-silicon/linux integration/aurora at f1b79c4beaef, plus upstream-27.3.patch and
+# t6050-ane-ave-27.3.patch (patches/upstream-27.3/0004: ANE and AVE on the 27.3 firmware).
 _commit=f1b79c4beaef1a4a48738f1c820b0bbc16e84bb3
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
@@ -35,7 +36,7 @@ makedepends=(
 options=('!strip')
 source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github.com/aurora-silicon/linux/archive/${_commit}.tar.gz"
         rust-toolchain.toml bindgen-kernel.py config upstream-27.3.patch j714s-required.config
-        speakersafetyd-hold.conf)
+        speakersafetyd-hold.conf t6050-ane-ave-27.3.patch)
 sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
             '76fad3693b582b8bda47b29cc91c7086e974f408191436d25f2fce1184984c99'
@@ -44,7 +45,8 @@ sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'fb9a4d96baf0eb0610b5d60208a0ed1f77d50db81ad94ef3baffcae49e9218d0'
             '55d1ab8e03b8236193f662a5ab02f620e195d0cf74c78df9cf75c7b959e85213'
             'c812ed7ea8a9c482de07526896c249fa16c833e0f5679aeaff9e40133292c44f'
-            'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7')
+            'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7'
+            'f0dd6e5f98d1643cecd18ab17a41d4f49159c5621efba24093552b6f8f1a4b31')
 
 # Kbuild takes ARCH literally and knows arm64, not aarch64.
 export ARCH=arm64
