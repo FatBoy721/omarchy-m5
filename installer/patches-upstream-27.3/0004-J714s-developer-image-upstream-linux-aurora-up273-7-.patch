@@ -1,0 +1,231 @@
+From 55535e37275ae9275ce7adfd8d5022ca91d7aa75 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 12:47:22 -0500
+Subject: [PATCH 4/4] J714s developer image (upstream): linux-aurora up273-7,
+ Aura up273-3, Touch ID userspace read-only
+
+linux-aurora 7.3.0.aurora17.up273-7 (aurora-silicon/linux integration/aurora 8679514f plus
+betizzel/omarchy-m5 patches/upstream-27.3/0001, 0004, 0005; HEVC on the 27.3 AVE by default) and
+m1n1-aurora 1.6.1.aurora24.up273-3 (Aura main d35655304e, with the MTE tag storage #184, plus
+0002/0003/0006/0007; 0007 lets the auto-PM storage domain gate itself during the GP PCIe
+bring-up), recipes at betizzel/omarchy-m5 222a689. The J714s kernel pins follow the new release
+7.3.0-17.up273-7-ARCH.
+
+Two support packages from betizzel/omarchy-m5 installer/recipes (2183b9a):
+- aurora-sep 1.17.g8679514f4dff-1 (any): aurora-silicon/linux tools/aurora-sep at 8679514f,
+  read-only by default (apple_sep xart_writes=0 provision_keybag=0, no unit enabled).
+- libfprint-aurora 1.94.100-1 (aarch64): libfprint 1.94.100 with aurora-sep-userspace
+  2ea454e0's aurora driver (sep-bio interface 5).
+Both go in the developer profile's support_packages (18 roles), so every image installs them and
+the image pin keeps them. finish-inputs accepts an `any` archive (candidate_set still holds
+runtime and boot packages to aarch64).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../candidate-package-manifest.json           | 48 ++++++++++++++-----
+ .../tools/finish-inputs.py                    |  4 +-
+ .../candidate-trust/policy.json               |  2 +-
+ image-builder/builder/stage1_qualification.py |  4 +-
+ image-builder/test/test_candidate_set.py      | 10 ++--
+ .../test/test_stage1_qualification.py         |  4 +-
+ 6 files changed, 49 insertions(+), 23 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index 69eea53..7ecf0d7 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-b21167ac9c8d",
++  "set": "j714s-dev-runtime-69f623ab6e61",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -51,6 +51,18 @@
+       },
+       "size_bytes": 382511
+     },
++    {
++      "name": "aurora-sep",
++      "version": "1.17.g8679514f4dff-1",
++      "arch": "any",
++      "filename": "aurora-sep-1.17.g8679514f4dff-1-any.pkg.tar.zst",
++      "sha256": "9ac095ea61b4ae6da35acac6f94f6ded3d72734c0a268340180d7b0b997236aa",
++      "source": {
++        "repository": "betizzel/omarchy-m5",
++        "commit": "2183b9ab58a8c40e8c4f2bbc4504a4138e94992a"
++      },
++      "size_bytes": 80147
++    },
+     {
+       "name": "hyprland-m5",
+       "version": "0.57.2-2",
+@@ -63,6 +75,18 @@
+       },
+       "size_bytes": 53014468
+     },
++    {
++      "name": "libfprint-aurora",
++      "version": "1.94.100-1",
++      "arch": "aarch64",
++      "filename": "libfprint-aurora-1.94.100-1-aarch64.pkg.tar.zst",
++      "sha256": "46ff5c86de78fd4e380aac28308540dae189f44c08df25c5862439cc63a00ead",
++      "source": {
++        "repository": "betizzel/omarchy-m5",
++        "commit": "2183b9ab58a8c40e8c4f2bbc4504a4138e94992a"
++      },
++      "size_bytes": 526970
++    },
+     {
+       "name": "limine-mkinitcpio-hook",
+       "version": "1.40.0-3",
+@@ -78,27 +102,27 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora17.up273-6",
++      "version": "7.3.0.aurora17.up273-7",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora17.up273-6-aarch64.pkg.tar.zst",
+-      "sha256": "ada3758b66c8a2bf57dcf940a99f6887ba0d3fcc56e76c26c065f8279763c150",
++      "filename": "linux-aurora-7.3.0.aurora17.up273-7-aarch64.pkg.tar.zst",
++      "sha256": "b421c86bcbeb88a63b7f9d175cb53ec41913b61d8afc7eecf62b2e2e5e3fa5e8",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "708810ea72fbfeacb56a3ef7aeb0fecf7f1f4323"
++        "commit": "222a68992d1dbea936d2e9462b40deed688a4547"
+       },
+-      "size_bytes": 44113078
++      "size_bytes": 44113037
+     },
+     {
+       "name": "m1n1-aurora",
+-      "version": "1.6.1.aurora24.up273-2",
++      "version": "1.6.1.aurora24.up273-3",
+       "arch": "aarch64",
+-      "filename": "m1n1-aurora-1.6.1.aurora24.up273-2-aarch64.pkg.tar.zst",
+-      "sha256": "89f60f75a27436615121380cafab752d429c5a8a49c8547c2d3a779f1656775e",
++      "filename": "m1n1-aurora-1.6.1.aurora24.up273-3-aarch64.pkg.tar.zst",
++      "sha256": "f5d8b15c199dac759e4a187ce9ec84593f7c149ff6e3daa73e3e482ff2bb316d",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "a502b34626062c00e23f3c80dc7925ed07ae5689"
++        "commit": "222a68992d1dbea936d2e9462b40deed688a4547"
+       },
+-      "size_bytes": 1699378
++      "size_bytes": 1770692
+     },
+     {
+       "name": "mesa-aurora",
+@@ -216,5 +240,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "b21167ac9c8de2ecd58bf7a867a2d060118c2a85d84d68c441a6ae9490a7adcf"
++  "set_sha256": "69f623ab6e6194fb97d64e00a7565708da026187094131548ff317546660c2e9"
+ }
+diff --git a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+index 054ccf0..4b6fe8b 100644
+--- a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
++++ b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+@@ -73,7 +73,7 @@ def verify_source_records(candidate, package_dir: Path, manifest: dict,
+         if archive.is_symlink() or not archive.is_file():
+             raise ValueError(f'package archive is not a regular file: {filename}')
+         fields = candidate.pkginfo(archive)
+-        if fields.get('pkgname') != [row['name']] or fields.get('pkgver') != [row['version']] or fields.get('arch') != ['aarch64']:
++        if fields.get('pkgname') != [row['name']] or fields.get('pkgver') != [row['version']] or fields.get('arch') != [row['arch']] or row['arch'] not in ('aarch64', 'any'):
+             raise ValueError(f'package metadata mismatch: {filename}')
+         if archive.stat().st_size != row['size_bytes'] or sha256(archive) != row['sha256']:
+             raise ValueError(f'package size or SHA-256 mismatch: {filename}')
+@@ -157,7 +157,7 @@ def main() -> int:
+                 raise ValueError(f'{name} archive must be a regular file')
+             if candidate.member(path, candidate.REVISION_FILES[name]).decode().strip() != runtime_source['commit']:
+                 raise ValueError(f'{name} does not record the pinned runtime source')
+-        # One package per role the developer profile names (16 since hyprland-m5)
++        # One package per role the developer profile names (18 since aurora-sep and libfprint-aurora)
+         roles = len(policy['runtime_packages'] + policy['boot_packages'] + policy['support_packages'])
+         if len(records) != roles or len({row['name'] for row in records}) != roles:
+             raise ValueError(f'candidate set must contain the checked-in {roles}-package manifest')
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+index f430312..201590f 100644
+--- a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
++++ b/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+@@ -86,7 +86,7 @@
+     "omarchy-aurora-firmware",
+     "mesa-aurora",
+     "vulkan-aurora",
+-    "aurora-bless", "hyprland-m5"],
++    "aurora-bless", "hyprland-m5", "aurora-sep", "libfprint-aurora"],
+   "device_trees": [
+     "t6000-j314s",
+     "t6000-j316s",
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index d48bf83..c82ad62 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -18,8 +18,8 @@ from image_profile import select as select_image_profile
+ COMMON_STAGE1 = "esp/aurora/stage1.bin"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+-J714S_KERNEL_VERSION = "7.3.0.aurora17.up273-6"
+-J714S_KERNEL_RELEASE = "7.3.0-17.up273-6-ARCH"
++J714S_KERNEL_VERSION = "7.3.0.aurora17.up273-7"
++J714S_KERNEL_RELEASE = "7.3.0-17.up273-7-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
+ # What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
+ # with on bare metal, besides the budgets: PMGR domains read-only except the ones its
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index a167c64..923f9a6 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -102,7 +102,7 @@ class CandidateSetTest(unittest.TestCase):
+         summary = self.verify()
+         self.assertIn("uboot-aurora", {p["name"] for p in summary["packages"]})
+ 
+-    def test_j714s_developer_profile_accepts_its_exact_16_roles(self):
++    def test_j714s_developer_profile_accepts_its_exact_18_roles(self):
+         from image_profile import select
+ 
+         signer = fixtures.Signer(self.base / "j714s-signer")
+@@ -112,8 +112,8 @@ class CandidateSetTest(unittest.TestCase):
+                        public_key_sha256=c.digest(signer.trust / "public.asc"))
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+-        self.assertEqual(len(names), 16)
+-        release = "7.3.0-17.up273-6-ARCH"
++        self.assertEqual(len(names), 18)
++        release = "7.3.0-17.up273-7-ARCH"
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+         kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
+@@ -126,7 +126,9 @@ class CandidateSetTest(unittest.TestCase):
+                     package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+-                                    versions={"linux-aurora": "7.3.0.aurora17.up273-6", "hyprland-m5": "0.57.2-2"},
++                                    versions={"linux-aurora": "7.3.0.aurora17.up273-7", "hyprland-m5": "0.57.2-2",
++                                              "aurora-sep": "1.17.g8679514f4dff-1", "libfprint-aurora": "1.94.100-1"},
++                                    arches={"aurora-sep": "any"},
+                                     contents=contents, manifest_edit=developer_sources)
+         output = self.base / "j714s-15-role-import"
+         summary = c.snapshot(input_set, output, receipt, fixtures.SOURCE, trust=signer.trust)
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+index d1ff161..d8c4989 100644
+--- a/image-builder/test/test_stage1_qualification.py
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -32,8 +32,8 @@ class Stage1QualificationTest(unittest.TestCase):
+         trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
+         policy = json.loads((trust / 'policy.json').read_text())
+         self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
+-        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora17.up273-6')
+-        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-17.up273-6-ARCH')
++        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora17.up273-7')
++        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-17.up273-7-ARCH')
+         self.assertEqual(policy['primary_fingerprint'], '0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1')
+         self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
+         self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
+-- 
+2.56.0
+
