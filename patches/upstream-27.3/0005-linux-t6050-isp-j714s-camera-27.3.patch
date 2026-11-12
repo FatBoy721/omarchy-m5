@@ -1,4 +1,4 @@
-From 78a5b5df0918cbf44bca07c2ad2e6d269684b35d Mon Sep 17 00:00:00 2001
+From a31abfc3540d4c07c66bfbb7e95ab60245c99725 Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
 Subject: [PATCH 1/7] media: apple: isp: Tune the J714c IMX958 with setfile
@@ -94,7 +94,7 @@ index 3551018baf17..79a4445d1c4f 100644
 2.56.0
 
 
-From 0472f9b90b342f1a7d7b6841c94f874a9abc4b57 Mon Sep 17 00:00:00 2001
+From 181cbb0cfbf31ed577467a757948194b116a4b7c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:11:59 +0100
 Subject: [PATCH 2/7] media: apple: isp: Compute the T6050 setfile's noise
@@ -278,7 +278,7 @@ index 79a4445d1c4f..6b7e6b5f9a70 100644
 2.56.0
 
 
-From 358a2f8de6cbf4fb9cb45d8e94960793fd121249 Mon Sep 17 00:00:00 2001
+From ba3e63635db2de81ee6676246f729c3f0898d143 Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:13:01 +0100
 Subject: [PATCH 3/7] media: apple: isp: Set the J714c lens shading target and
@@ -422,7 +422,7 @@ index 6b7e6b5f9a70..c13914ef62e9 100644
 2.56.0
 
 
-From f39ef1f53760fb4567026a6d9435ecf0284054c1 Mon Sep 17 00:00:00 2001
+From 279ff88f9aa72832097d5866aee8971c6633b3d0 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 04:15:12 -0500
 Subject: [PATCH 4/7] arm64: dts: apple: t6050-j714s: Stream the camera as the
@@ -493,7 +493,7 @@ index f5bea61b2efb..1a6feb4c86ca 100644
 2.56.0
 
 
-From c655fc1c104aacda356a95e0f4950349ee14b961 Mon Sep 17 00:00:00 2001
+From 0d638addd00c7796f45af6d597fc683dfa5e3d7f Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:35 +0100
 Subject: [PATCH 5/7] media: apple: isp: Drive the J714c camera light from the
@@ -723,7 +723,7 @@ index 09b691228650..3c39a1d5fc9d 100644
 2.56.0
 
 
-From ac7f556a0f8257157c4eb98ba4887c919b1aabef Mon Sep 17 00:00:00 2001
+From 825f47fb74f89c1c1841b31d73adeb578cb14b6e Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
 Subject: [PATCH 6/7] media: apple: isp: Turn the J714c camera light off after
@@ -834,7 +834,7 @@ index 3c39a1d5fc9d..a35961de0f15 100644
 2.56.0
 
 
-From 0bb95a7360812f403da9a65d396fbbc971917fa7 Mon Sep 17 00:00:00 2001
+From 3814ccaeffe0579af6a556a7e2e27f90f6a16804 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 05:03:13 -0500
 Subject: [PATCH 7/7] arm64: dts: apple: t6050-j714s: Describe the camera light
