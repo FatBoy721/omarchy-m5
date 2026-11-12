@@ -12,13 +12,14 @@ under `/usr` instead.
 
 | Patch | Applies to | What |
 | --- | --- | --- |
-| `0001-linux-integration-aurora-pr1173-rolo-27.3-dcp.patch` | aurora-silicon/linux `integration/aurora` at 8679514f4dff (image -6; 2b4523cb6592 for -5, unchanged bytes) | Four commits. #1173 (GPU 27.2/27.3 InitData layouts and firmware identity; Rolando Trevino), resolved against upstream's `Graph` refactor: each build gets its own `Graph` (`M5_GRAPH_26B123`, `M5_GRAPH_26C5035`), `hw_offset()` and the board graph are kept, and the J813 keeps its board graph. Then three of rolotrealanis98's commits from his `j716s-next` (bf857188d0): 450cfbf77385 (the firmware 27 adaptive sync parameter's name), e25c83799018 (no panel brightness after a DCP crash) and 26b9f266cb2d (the full 27.3 IOMFB method table and the 27.3 swap record on top of upstream's merged #1174, whose own 20-entry table refuses a 27.3 DCP; the refusal check stays and passes). His J716s-only DT, config and audio commits are left out. His table and swap conversion are identical to the first #1174 (290b7de9f129 + 0cdf8957541b) that images -1 to -4 carried; the difference is that the EDR words are not sent on a 27.3 swap. One conflict with #1674 in `dcp_swap_submit()`: a swap is EDR-prepared only if it shows a surface and is not 27.3. Images -2 to -4 used the first #1174 on f1b79c4beaef and f8581cbaa87f. |
+| `0001-linux-integration-aurora-pr1173-rolo-27.3-dcp.patch` | aurora-silicon/linux `integration/aurora` at 3766943238bd (image -7; 8679514f4dff for -6, 2b4523cb6592 for -5, unchanged bytes) | Four commits. #1173 (GPU 27.2/27.3 InitData layouts and firmware identity; Rolando Trevino), resolved against upstream's `Graph` refactor: each build gets its own `Graph` (`M5_GRAPH_26B123`, `M5_GRAPH_26C5035`), `hw_offset()` and the board graph are kept, and the J813 keeps its board graph. Then three of rolotrealanis98's commits from his `j716s-next` (bf857188d0): 450cfbf77385 (the firmware 27 adaptive sync parameter's name), e25c83799018 (no panel brightness after a DCP crash) and 26b9f266cb2d (the full 27.3 IOMFB method table and the 27.3 swap record on top of upstream's merged #1174, whose own 20-entry table refuses a 27.3 DCP; the refusal check stays and passes). His J716s-only DT, config and audio commits are left out. His table and swap conversion are identical to the first #1174 (290b7de9f129 + 0cdf8957541b) that images -1 to -4 carried; the difference is that the EDR words are not sent on a 27.3 swap. One conflict with #1674 in `dcp_swap_submit()`: a swap is EDR-prepared only if it shows a surface and is not 27.3. Images -2 to -4 used the first #1174 on f1b79c4beaef and f8581cbaa87f. |
 | `0002-aura-t6050-27.3-gpu-dcp-handoff.patch` | aurora-silicon Aura main d35655304e (image -6: after 1.0.0b12, with #184 MTE tag storage and #196); images -1 to -5 used 1.0.0b11 (main dbf088e151; #173 M5 Pro boot path, #180 DART; first written on 1669cad0) | Aura knows 27.2 and 27.3 beta 1; its T6050 GPU handoff admits the 27.0, 27.2 and 27.3 beta 1 GPU builds (digests and boot-filled ranges from #1173); its T6050 DCP handoff accepts 27.3 beta 1, takes the DCP image the ADT names and publishes `apple,firmware-compat <27 3 0>` (what #1174 keys its 27.3 table by). Only the firmware gate, image check and compat key are changed; our m1n1's notch rows and display-default handling (m1n1-installer 0006/0007) are not ported, so the full 3024x1964 panel is unverified. |
 | `0003-aura-notch-default-and-m5-max-27.3-gpu.patch` | after 0002 | The notch rows by default on M5 (T6050/T6051): without a config line Aura keeps iBoot's full framebuffer and sets `/chosen/asahi,show-notch = "1"`; `chosen.asahi,show-notch=0` opts out. And joshuaswarren's M5 Max 27.3 GPU digest (aurora-silicon/aura #172, the upstream equivalent for the Max of 0002's G17S entries) as one more entry in 0002's build table, so there is a single digest check. |
 | `0004-linux-t6050-ane-ave-27.3-firmware.patch` | after 0001 | The T6050 Neural Engine and video encoder on the macOS 27.3 firmware, beside 27.0. Each driver gets a table of admitted builds, and the segment layout the loader hands off selects the build. ANE (`ane_fw_platform`): 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA 0x100000c0000; 27.3 TEXT 0xec000 and DATA 0x280000 at 0x100000ec000, each with its own TEXT sha256 pin (27.3: `11557586...66dc6066`). AVE (`ave_t6050`): 27.0 TEXT 0x154000 with CRC 87279429; 27.3 (26C5035r) TEXT 0x158000 with CRC c25b4ddb; DATA is 0x134000 in both. The 27.3 encoder has no qualified command layout, so it probes without one and encoding is refused. `apple-ave.ave_t6050_try_26a428=1` drives it with the 27.0 layout for testing by hand. The H17 ANE backend also sizes its IPC from the firmware's boot request instead of a fixed 64 KiB/0xc441: 27.3 asks for 0x10441 bytes, as the H16 backend already handles. `ane_t6021.boot_stages=N` (default 5) holds the bind's bring-up after N stages, so the rest can be stepped from `firmware_stage`. The recipe ships it as `t6050-ane-ave-27.3.patch` (pkgrel 3). Since image -5, the 27.3 build takes 26A428's command layout by default: H.264 encodes (two boots, below). HEVC on 27.3 stayed refused unless `apple-ave.ave_t6050_27_3_hevc=1`. `ave_t6050_try_26a428` is gone. Since image -6, HEVC on 27.3 is on by default too (a second boot encoded cleanly); `apple_ave.ave_t6050_27_3_hevc=0` refuses it. |
 | `0005-linux-t6050-isp-j714s-camera-27.3.patch` | after 0004 | The front camera's image quality on T6050, from edimoldovan's J714c camera (omacom/linux-aurora #422), on top of aurora-silicon's own T6050 ISP driver (#1252/#1253, Erik Bourget) and J714s camera DT (#1306), which `integration/aurora` already has. Three of Eduard Moldovan's driver commits, unchanged apart from the hardware table: IMX958 setfile `isp_2226_02XX.dat` instead of 2224_01 (38993598aa9a), the noise-reduction radial gains computed from the setfile's lens-shading table (162531436bd8), and the lens-shading target 84% plus the face-detection scene metering (cb9cbb2b470f). His camera light (5a3e9d8a5f0b, 04606609e94c): the driver drives the light pin to its on level before every stream, refuses to stream unless it reads back, and feeds the eic ISP watchdog only while the light is on. On the J714s the pin is in the eic's own GPIO block (`cil` at 0x2dc000234, config 0x474002, active high). And his J714c presets on the J714s: 1920x1080 and 2560x1440 in firmware configuration 6, 1280x720 in configuration 7, centre crops (from e8233e1bbe91/8916070002f4). |
 | `0006-aura-t6050-isp-27.3-j714s-camera.patch` | Aura, after 0002 + 0003 | The camera hand-off on 27.3. Aura's T6050 camera hand-off (`dt_set_t6050_isp`) admitted only macOS 27.0. Jens Axboe's board table from aura #188 (9ece8137fa, K116s on 27.2, ported by Thomas Glanzmann), plus a J714s row for 27.3 beta 1: its ADT isp0 keeps sensor type 0x74 and the same two segments (TEXT 0xc1c000 at phys 0x100010cc000, DATA 0x13d0000 at 0x100026a4000). A board may have one row per firmware. |
 | `0007-aura-t6050-pcie-storage-auto-pm.patch` | Aura, after 0006 | Aura's T6050 GP PCIe bring-up compares the storage registers before and after each stage and stops on a change. The storage-side domain APCIE_SYS_ST0 runs under auto power management and gates itself while storage is idle (`0x1f0003ff -> 0x1000030f`: PS_AUTO and the actual state go 0xf -> 0, target and auto-enable unchanged). After stage F that stop left port 0, the N1 Wi-Fi, down; after the shared stages A or S it refuses the whole hand-off (`kboot: refusing T6050 handoff`, "No valid payload found"), which looks like an early hang until the watchdog. 0007 lets a domain with AUTO_ENABLE set before and after move PS_AUTO; target, auto-enable and the ANS/NVMe checks still stop it. See the image -6 section. |
+| `0008-linux-drm-apple-fw27-panel-vrr.patch` | after 0001, 0004, 0005 | rolotrealanis98's j716s-next 8ab10100a4 "drm/apple: Offer VRR on the firmware 27 panel and apply VRR_ENABLED" (Rolando Trevino; his rebase onto integration/aurora 34a447be), unchanged. The firmware 27 ProMotion panel reports its adaptive-sync range fields as zero, so the parser now reads them as 24-120 Hz, the connector says `vrr_capable`, and a plain page flip that changes `VRR_ENABLED` selects the current mode again with adaptive sync at 24 Hz (`minRR = 0x180000`) or off; a swap that does not complete within a second turns it off for good. Opt-in: `appledrm.fw27_panel_vrr=1`. His J716s DT, config and audio commits are left out. Image -7. |
 
 Kernel: `0001` is on `integration/aurora` f8581cbaa87f since image -4 (f1b79c4beaef before), cross-built on ush, which the image's kernel recipe (`installer/recipes/linux-aurora-upstream`) builds. The f8581cba tree is `~/m5-build/up273-4/src` on ush, branch `up-274` (0001, 0004 and 0005 as three commits). The f1b79c4b branch was `build/linux-up` `up-273c` (merges 0929f4f5c93b, 8a0eb8647062, fix e0516e36058b). Aura branch: `~/m5/work/up/aura-isp` `up-273-image-main-isp` (0002 + 0003 + 0006 + 0007 on main d35655304e, image -6; the uncommitted test watchdog and payload retry in its working tree are for RAM tests only). `up-273-image-b11-isp` was images -3 to -5 (on main dbf088e1). Packaged by `installer/recipes/m1n1-aurora-upstream`.
 
@@ -318,3 +319,82 @@ The image ships `aurora-sep` (aurora-silicon/linux `tools/aurora-sep` at 8679514
 - The catcher is back to plain `~/m5/tools/catch-loop.sh loader-daily-dcp-bm.bin`, and the Mac is on its daily kernel.
 - For the libfprint-aurora build, `libgusb`, `glib2-devel`, `gobject-introspection`, `gtk-doc` and `umockdev` were installed on p5. The package builds are in `/home/tripleu/m5-work` (`up6/`, `aura-up/`, `linux-aurora-up/`).
 - Not booted as packaged: the linux-aurora and m1n1-aurora packages themselves (their sources were). The read-only branch of aurora-sep's loader has not run on a Mac.
+
+## Re-pin to integration/aurora 3766943238bd and panel VRR (image -7, 2026-11-12)
+
+Image: [`j714s-developer-image-upstream-2026.11.12-7`](https://github.com/betizzel/omarchy-m5/releases/tag/j714s-developer-image-upstream-2026.11.12-7) (prerelease). Built by CI run [43303056006](https://github.com/betizzel/omarchy-m5/actions/runs/43303056006) from inputs [`installer-build-inputs-j714s-947e002931eb`](https://github.com/betizzel/omarchy-m5/releases/tag/installer-build-inputs-j714s-947e002931eb), set `j714s-dev-runtime-f42a2e2eb85c`. Update check run [43306248588](https://github.com/betizzel/omarchy-m5/actions/runs/43306248588): pacman exited 0, and linux-aurora up273-8 and m1n1-aurora up273-3 were kept over the channel's versions.
+
+What upstream merged after 8679514f:
+- DjDeveloperr's SPMI generation 4 fault queue (#1713). On the J714s, both SPMI controllers drain 8 queued faults at probe (`apple-spmi ...: fault 0x6a100f00 (1 so far)`); nothing after.
+- MTE: no asynchronous tag checking without FEAT_MTE_ASYNC (#1695).
+- ATC: say which condition stops the host for a sleep (#1701).
+- T8140 fixes (#1700, #1715).
+
+No other T6050 or J714s work was merged into `integration/aurora` or Aura main (still d35655304e) since -6. Still open upstream, so not in -7: #1601 (T6050 GPU mailboxes by polling), #1618 (Clock PM masked on adopted T6050 endpoints), #1699 (T6050 USB DARTs across sleep).
+- **0001, 0004** apply unchanged. **0005**: its two J714s DT hunks moved by 8 lines; only those two hunk headers changed.
+- **0008 (new):** rolotrealanis98's panel VRR, see the table.
+- `patch -Np1` of 0001, 0004, 0005 and 0008 on the 3766943238bd tarball gives exactly the tree built on ush (`~/m5-build/up273-8/src`, branch `up-278`). Config unchanged. The J714s dtb differs from up273-7's because of upstream DT changes.
+- **Aura:** unchanged from -6 (m1n1-aurora 1.6.1.aurora24.up273-3).
+
+### The -6 packages, booted as packaged
+
+-6's packages had never been booted themselves, so these boots used the packages from the -6 inputs bundle (`installer-build-inputs-j714s-218219a5e83d`, package hashes as in its manifest):
+- **Kernel.** linux-aurora 7.3.0.aurora17.up273-7. Its `vmlinuz` is a raw Image (sha256 `cbeef90d...`). It went onto p4 `m5local/up273b` gzip'd as `Image.gz` (decompressed bytes identical), with the package's `dtbs/t6050-j714s.dtb` (byte-identical to the ush build's). The package's module tree went to p5, and the ush-built tree with the same release name was moved aside. `/proc/version` shows the package's build stamp: clang 23.1.4, `Thu, 12 Nov 2026 18:43:09 +0000`.
+- **Aura.** The stage 2 an installed image runs is the first part of `m1n1/boot.bin`, which `update-m1n1` writes as `cat m1n1.bin dtbs; gzip u-boot`. So m1n1-aurora's `/usr/lib/asahi-boot/m1n1.bin` (the `ESP_STAGE2=1` build, 3997696 bytes, sha256 `2de10833...`) is that Aura, separable byte for byte. The RAM loader was this file plus the usual config tail (`boot=` p4 `m5local/up273b`, the bootargs, `chosen.asahi,show-notch=1`) in place of the dtbs and U-Boot. `aura-raw.bin` is the stage 1 flavour and was not used.
+
+| Boot | Aura | Kernel | Result |
+| --- | --- | --- | --- |
+| 1 | -6 test loader (0007, test watchdog) | packaged up273-7 | full pass |
+| 2, 3 | **packaged m1n1.bin** (`asahi,m1n1-stage2-version` 1.0.0b12-gd3565530-dirty) | packaged up273-7 | full pass |
+
+- "Full pass" means: GPU 26C5035r; eDP-1 3024x1964 at 120 Hz under Hyprland; Wi-Fi; `/dev/accel/accel0`; AVE H.264 and HEVC, 30 frames each, decoding cleanly; camera `/dev/video0`, 10 distinct frames at 1080p; MTE on 15 CPUs; no SError, Oops or WARNING.
+- On boot 3, the packaged Aura's 0007 path fired: `storage after F: allowed`, then `port 0 up`.
+- Image -7's own `m1n1/boot.bin` (CI run 43303056006) starts with exactly this `m1n1.bin`: its first 3997696 bytes match it byte for byte.
+- **The packaged-Aura boots had no watchdog.** Packaged Aura calls `wdt_disable()` at its start, which drops the 170 s the proxy arms. Its own boot watchdog only arms on `wdt-version` 2, and T6050 is 3. So only two such boots were run; the stability runs below use the test loader.
+
+### Panel VRR (0008) on the J714s eDP
+
+Booted with `appledrm.fw27_panel_vrr=1` in the loader's bootargs:
+- **The panel offers VRR.** The eDP connector's `vrr_capable` is 1, Hyprland shows `vrrCapable: yes`, and the mode set logs `vrr:1`. Without the parameter, `vrr_capable` is 0 and nothing changes.
+- **Hyprland enables it.** `hyprctl eval 'hl.config({ misc = { vrr = 1 } })'` gives `vrr: true` and `VRR_ENABLED 1: selecting "3024x1964" ... again`. The firmware logs `IOMFBParameter_adaptive_sync Req minRR = 0x180000` (24 Hz). `vrr = 0` sends `minRR = 0x0`. The mode stays 3024x1964@120 throughout.
+- **Measurement:** the DCP's `iomfb_swap_complete` tracepoint over 5 s, with mpv paced at 48 fps full screen.
+  - With VRR on, swaps come 20.8 ms apart (227-236 of 239), so the panel follows the content.
+  - At a fixed 120 Hz, swaps alternate between 240 Hz subframe multiples (12.5/16.7/25/29.1 ms), as seen the first time VRR was turned off.
+  - 120 fps content with VRR on: 599 swaps in 5 s, all 8.3-8.4 ms.
+- **Toggling is not deterministic.** There were 26 settled samples, 8 s after each toggle, across the 7 boots with the parameter. Every toggle logged its `VRR_ENABLED` mode set and `minRR`.
+  - VRR on (16 samples): 12 kept steady 20.8 ms pacing; 4 were partly or mostly at the fixed rate.
+  - VRR off (10 samples): only 1 showed the fixed-rate pattern; the other 9 kept the 20.8 ms pacing (one partly).
+  - So turning VRR off does not reliably bring the J714s panel back to a fixed 120 Hz, and turning it on usually, not always, takes effect within 8 s. rolotrealanis98 reports clean off/on on his J716s.
+- **Stable:** in 7 boots with the parameter on (a 2-minute 48 fps run on the first, 48 fps with off/on toggles on each), there was no `adaptive swap timed out`, no retraining, no swap watchdog and no error. Hyprland stayed at 120.00 Hz.
+- **Image -7 ships it opt-in**, as written: add `appledrm.fw27_panel_vrr=1` to the kernel command line, then turn on Hyprland's `misc.vrr`.
+
+### RAM tests of `7.3.0-17.up273-8-ARCH`
+
+Booted through the -6 loader template (Aura main + 0002/0003/0006/0007, test watchdog; `loader-up273-8-bm.bin`, and `loader-up273-8-vrr-bm.bin` with the VRR parameter), every boot from the dev Mac's daily kernel:
+
+| Item | Result |
+| --- | --- |
+| Boots | 8 of 8 up in 84-91 s: one without the VRR parameter, then seven with it (one VRR session, six stability boots in a row) |
+| GPU | `GPU firmware build: 26C5035r for T6050 G17S` |
+| Internal display | `eDP-1` 3024x1964 at 120.00 Hz, Hyprland |
+| Wi-Fi | associated on all 8 (on 2, Aura's 0007 path `storage after F: allowed`) |
+| ANE | `/dev/accel/accel0` |
+| AVE | H.264 and HEVC, 30 frames each, decode clean on all 8 |
+| Camera | `/dev/video0`, 10 distinct NV12 frames at 1920x1080 on all 8 |
+| MTE | 15 CPUs |
+| Errors | no SError, Oops, WARNING or call trace |
+
+Then the **up273-8 package itself** (linux-aurora 7.3.0.aurora17.up273-8, the one in image -7; `/proc/version` clang 23.1.4, `20:23:47 +0000`), with its Image (gzip'd), dtb and module tree, through `loader-up273-8-vrr-bm.bin`. It gave the same full pass, and VRR 48 fps swaps at 20.8 ms.
+
+### Dev Mac state
+
+- p4 `m5local/up273b` holds the packaged up273-8 Image.gz and dtb, with the same test initrd. The ush build's files are in `/root/up273b-ush-up273-8`, and its modules in `/root/modules-up273-8-ush`.
+- Backups on p5:
+  - `/root/up273b-backup-up273-7`: the ush up273-7 Image.gz, dtb and initrd.
+  - `/root/up273b-pkg-up273-7`: the packaged up273-7 Image.gz.
+- Modules on p5:
+  - `7.3.0-17.up273-8-ARCH`: the packaged tree.
+  - `7.3.0-17.up273-7-ARCH`, now the packaged tree; the ush-built one is in `/root/modules-up273-7-ush`.
+- Logs: `/var/lib/m5test/up273-8/<tag>` (pass lists, dmesg, VRR timings) and `/var/lib/m5test/aura-log`.
+- The Mac was left on the packaged up273-8 (a test boot); the catcher is back on `catch-loop.sh loader-daily-dcp-bm.bin` for the next reboot.
+- Test loaders in `~/m5/tools`: `loader-up273-7pkgk-bm.bin`, `loader-up273-7pkgaura-bm.bin`, `loader-up273-8-bm.bin`, `loader-up273-8-vrr-bm.bin`.
