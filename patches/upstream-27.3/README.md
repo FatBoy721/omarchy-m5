@@ -12,10 +12,10 @@ under `/usr` instead.
 
 | Patch | Applies to | What |
 | --- | --- | --- |
-| `0001-linux-integration-aurora-pr1173-pr1174-merged.patch` | aurora-silicon/linux `integration/aurora` at f8581cbaa87f (image -4; f1b79c4beaef for images -2 and -3; first written on 990e00b72b56) | #1174 as first published (290b7de9f129 + 0cdf8957541b: the full 27.3 method table and swap layout; Jeff Queisser, Rolando Trevino). The updated #1174 (61a1fd086170 + bf43e8cefdf3) has a deliberately partial 27.3 table (the 20 traced methods) and refuses to start a 27.3 DCP ("no ID known for 21 methods"), so it is not used until its table is complete and #1173 (GPU 27.2/27.3 InitData layouts and firmware identity; Rolando Trevino) merged. #1173 conflicted with upstream's `Graph` refactor: each build gets its own `Graph` (`M5_GRAPH_26B123`, `M5_GRAPH_26C5035`, chosen by the firmware's identified layouts), `hw_offset()` and the board graph are kept, and the J813 (common26) keeps its board graph. Compiles with rustc 1.98.0 on ush. |
+| `0001-linux-integration-aurora-pr1173-rolo-27.3-dcp.patch` | aurora-silicon/linux `integration/aurora` at 2b4523cb6592 (image -5) | Four commits. #1173 (GPU 27.2/27.3 InitData layouts and firmware identity; Rolando Trevino), resolved against upstream's `Graph` refactor: each build gets its own `Graph` (`M5_GRAPH_26B123`, `M5_GRAPH_26C5035`), `hw_offset()` and the board graph are kept, and the J813 keeps its board graph. Then three of rolotrealanis98's commits from his `j716s-next` (bf857188d0): 450cfbf77385 (the firmware 27 adaptive sync parameter's name), e25c83799018 (no panel brightness after a DCP crash) and 26b9f266cb2d (the full 27.3 IOMFB method table and the 27.3 swap record on top of upstream's merged #1174, whose own 20-entry table refuses a 27.3 DCP; the refusal check stays and passes). His J716s-only DT, config and audio commits are left out. His table and swap conversion are identical to the first #1174 (290b7de9f129 + 0cdf8957541b) that images -1 to -4 carried; the difference is that the EDR words are not sent on a 27.3 swap. One conflict with #1674 in `dcp_swap_submit()`: a swap is EDR-prepared only if it shows a surface and is not 27.3. Images -2 to -4 used the first #1174 on f1b79c4beaef and f8581cbaa87f. |
 | `0002-aura-t6050-27.3-gpu-dcp-handoff.patch` | aurora-silicon Aura 1.0.0b11 (main dbf088e151; #173 M5 Pro boot path, #180 DART; first written on 1669cad0) | Aura knows 27.2 and 27.3 beta 1; its T6050 GPU handoff admits the 27.0, 27.2 and 27.3 beta 1 GPU builds (digests and boot-filled ranges from #1173); its T6050 DCP handoff accepts 27.3 beta 1, takes the DCP image the ADT names and publishes `apple,firmware-compat <27 3 0>` (what #1174 keys its 27.3 table by). Only the firmware gate, image check and compat key are changed; our m1n1's notch rows and display-default handling (m1n1-installer 0006/0007) are not ported, so the full 3024x1964 panel is unverified. |
 | `0003-aura-notch-default-and-m5-max-27.3-gpu.patch` | after 0002 | The notch rows by default on M5 (T6050/T6051): without a config line Aura keeps iBoot's full framebuffer and sets `/chosen/asahi,show-notch = "1"`; `chosen.asahi,show-notch=0` opts out. And joshuaswarren's M5 Max 27.3 GPU digest (aurora-silicon/aura #172, the upstream equivalent for the Max of 0002's G17S entries) as one more entry in 0002's build table, so there is a single digest check. |
-| `0004-linux-t6050-ane-ave-27.3-firmware.patch` | after 0001 | The T6050 Neural Engine and video encoder on the macOS 27.3 firmware, beside 27.0. Each driver gets a table of admitted builds, and the segment layout the loader hands off selects the build. ANE (`ane_fw_platform`): 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA 0x100000c0000; 27.3 TEXT 0xec000 and DATA 0x280000 at 0x100000ec000, each with its own TEXT sha256 pin (27.3: `11557586...66dc6066`). AVE (`ave_t6050`): 27.0 TEXT 0x154000 with CRC 87279429; 27.3 (26C5035r) TEXT 0x158000 with CRC c25b4ddb; DATA is 0x134000 in both. The 27.3 encoder has no qualified command layout, so it probes without one and encoding is refused. `apple-ave.ave_t6050_try_26a428=1` drives it with the 27.0 layout for testing by hand. The H17 ANE backend also sizes its IPC from the firmware's boot request instead of a fixed 64 KiB/0xc441: 27.3 asks for 0x10441 bytes, as the H16 backend already handles. `ane_t6021.boot_stages=N` (default 5) holds the bind's bring-up after N stages, so the rest can be stepped from `firmware_stage`. The recipe ships it as `t6050-ane-ave-27.3.patch` (pkgrel 3). |
+| `0004-linux-t6050-ane-ave-27.3-firmware.patch` | after 0001 | The T6050 Neural Engine and video encoder on the macOS 27.3 firmware, beside 27.0. Each driver gets a table of admitted builds, and the segment layout the loader hands off selects the build. ANE (`ane_fw_platform`): 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA 0x100000c0000; 27.3 TEXT 0xec000 and DATA 0x280000 at 0x100000ec000, each with its own TEXT sha256 pin (27.3: `11557586...66dc6066`). AVE (`ave_t6050`): 27.0 TEXT 0x154000 with CRC 87279429; 27.3 (26C5035r) TEXT 0x158000 with CRC c25b4ddb; DATA is 0x134000 in both. The 27.3 encoder has no qualified command layout, so it probes without one and encoding is refused. `apple-ave.ave_t6050_try_26a428=1` drives it with the 27.0 layout for testing by hand. The H17 ANE backend also sizes its IPC from the firmware's boot request instead of a fixed 64 KiB/0xc441: 27.3 asks for 0x10441 bytes, as the H16 backend already handles. `ane_t6021.boot_stages=N` (default 5) holds the bind's bring-up after N stages, so the rest can be stepped from `firmware_stage`. The recipe ships it as `t6050-ane-ave-27.3.patch` (pkgrel 3). Since image -5, the 27.3 build takes 26A428's command layout by default: H.264 encodes (two boots, below). HEVC on 27.3 stays refused unless `apple-ave.ave_t6050_27_3_hevc=1`. `ave_t6050_try_26a428` is gone. |
 | `0005-linux-t6050-isp-j714s-camera-27.3.patch` | after 0004 | The front camera's image quality on T6050, from edimoldovan's J714c camera (omacom/linux-aurora #422), on top of aurora-silicon's own T6050 ISP driver (#1252/#1253, Erik Bourget) and J714s camera DT (#1306), which `integration/aurora` already has. Three of Eduard Moldovan's driver commits, unchanged apart from the hardware table: IMX958 setfile `isp_2226_02XX.dat` instead of 2224_01 (38993598aa9a), the noise-reduction radial gains computed from the setfile's lens-shading table (162531436bd8), and the lens-shading target 84% plus the face-detection scene metering (cb9cbb2b470f). His camera light (5a3e9d8a5f0b, 04606609e94c): the driver drives the light pin to its on level before every stream, refuses to stream unless it reads back, and feeds the eic ISP watchdog only while the light is on. On the J714s the pin is in the eic's own GPIO block (`cil` at 0x2dc000234, config 0x474002, active high). And his J714c presets on the J714s: 1920x1080 and 2560x1440 in firmware configuration 6, 1280x720 in configuration 7, centre crops (from e8233e1bbe91/8916070002f4). |
 | `0006-aura-t6050-isp-27.3-j714s-camera.patch` | Aura, after 0002 + 0003 | The camera hand-off on 27.3. Aura's T6050 camera hand-off (`dt_set_t6050_isp`) admitted only macOS 27.0. Jens Axboe's board table from aura #188 (9ece8137fa, K116s on 27.2, ported by Thomas Glanzmann), plus a J714s row for 27.3 beta 1: its ADT isp0 keeps sensor type 0x74 and the same two segments (TEXT 0xc1c000 at phys 0x100010cc000, DATA 0x13d0000 at 0x100026a4000). A board may have one row per firmware. |
 
@@ -141,3 +141,78 @@ Not tested on 27.3: external displays (VRR, the HDR hints and formats), EDR with
 - So the 27.3 firmware (26C5035, TEXT CRC c25b4ddb) speaks 26A428's H.264 command layout. The proposal is to admit it by default (for H.264) in the next 0004, after a second encode on another boot. Image -4 keeps the default probe-only, which is what was RAM-tested.
 
 Dev Mac state: p4 `m5local/up273b` now holds up273-5 (Image.gz, dtb; the initrd is unchanged and carries no modules). up273cam-2's files are in `/root/up273b-backup-up273cam-2` on p5. Modules for `7.3.0-17.up273-5-ARCH` are in p5's `/usr/lib/modules`, and the test logs and the 30-frame stream are in `/var/lib/m5test`.
+
+## Re-pin to integration/aurora 2b4523cb (image -5, 2026-11-12)
+
+What upstream merged for the M5 after f8581cba:
+- the T6050 CPU PMU (#1628)
+- AVE HEVC on the 26A428 layout (#1638)
+- the MTE guard: keep MTE off without reserved tag storage (#1639)
+- T6050 JPEG encode, with the J714s engines enabled (#1675)
+- brcmf WoWLAN for macOS-style sleep (#1679)
+- DP audio across system sleep (#1681)
+- the J714s MagSafe 3 PD controller (#1686)
+- firmware 27 panel presents with no surface (#1674)
+- the remaining DART power domains (#1676)
+- rolotrealanis98's #1174, the partial-27.3 version (61a1fd086170 + bf43e8cefdf3)
+
+**Correction:** the J714s Secure Enclave (#1325, 18d276c76c61, merged 2026-11-09) was already in f8581cba, so images -4 and before had it. The SEP node ships `disabled` on purpose: `apple_sep` enables it and its DART with a device-tree changeset when the module loads, and it has no module alias. On -4 nobody loaded it.
+
+- **0001:** see the table. The earlier variant of this re-pin (fdde6bb) reverted upstream's #1174 merge and re-applied the first #1174. Following the coordinator, it was replaced by rolotrealanis98's commits on the merged #1174. Only DCP modules differ between the two builds; both were RAM-tested.
+- **0004:** the AVE default change above. 0004 and 0005 apply unchanged on top.
+- `patch -Np1` of 0001, 0004 and 0005 on the 2b4523cb tarball gives exactly the tree that was built (ush, `~/m5-build/up273-5/src`, branch `up-275r`).
+- **Config:** unchanged; `olddefconfig` gives the same `.config` as up273-5.
+- **Device tree** (J714s, against up273-5): the PMU, the MagSafe PD controller (`usb-pd@8`, `apple,no-liquid-detection`), both JPEG engines and their DARTs enabled, plus DART power domains.
+- **Aura** stays 1.0.0b11 + 0002/0003/0006. Main since b12 has one T6050-relevant change, #184: reserve the MTE tag store (2 GiB at the top of RAM on a 64 GiB J714s), or boot with `arm64.nomte`. Kernel #1639 covers the b11 case: on these boots `/proc/cpuinfo` shows no `mte`. #184 is for -6.
+
+### RAM tests of `7.3.0-17.up273-6-ARCH` (2026-11-12)
+
+Booted through `loader-up273b-isp-bm.bin` (Aura b11 + 0002/0003/0006, test watchdog), from p4 `m5local/up273b`, with modules on p5.
+
+| Item | Result |
+| --- | --- |
+| Kernel | `uname -r` 7.3.0-17.up273-6-ARCH (both builds) |
+| GPU | `GPU firmware: 27.3 (26C5035r), G17S` |
+| Internal display | DCP `eDP-1` 3024x1964 at 120.00 Hz (`hyprctl monitors`), with both the first #1174 and rolotrealanis98's commits |
+| Hyprland | running |
+| Wi-Fi | associated on the good boots |
+| ANE | `READY; IPC 0x10441 bytes requested`, `up at boot`, `/dev/accel/accel0` |
+| AVE | `firmware build 26C5035 ...`, now a full encoder (`/dev/video2`; the JPEG engines take video0/1) |
+| Camera | `/dev/video3`, 10 NV12 frames at 1920x1080, all different, luma 16 → 108 (first build) and 18 → 138 (second) |
+| PMU (#1628) | `hw perfevents: enabled with apple_t6050_pmu PMU driver, 10 counters` |
+| JPEG (#1675) | `apple-jpeg ... JPEG encoder, HWREV 0x110010`, two engines |
+| MTE (#1639) | no `mte` in `/proc/cpuinfo` (Aura b11 reserves no tag store) |
+| Errors | no SError, Oops, WARNING or call trace |
+
+**AVE, second H.264 encode (first boot of the first build, no module parameter):**
+- `v4l2-ctl`, Main with 3 B-frames, 30 fps, NV12 1920x1080 `testsrc2`: 30 frames, 528 KB, ffprobe reads 30 Main frames; ffmpeg decodes them cleanly; luma PSNR 40.8-44.5 dB.
+- 300 frames (looped input): 5.0 MB, all 300 decode.
+- GStreamer `v4l2h264enc`: Baseline, 60 frames, all decode.
+- No DART fault or timeout.
+- This repeats -4's result (`7.3.0-17.up273-5`) on another boot and kernel, so 0004 now admits 27.3 for H.264 by default. On the rolotrealanis98 build, Main (30 frames) and GStreamer Baseline (60 frames) encoded and decoded cleanly again.
+
+**AVE HEVC on 27.3 (rolotrealanis98 build):**
+- Without the parameter, HEVC session setup gets -95, as intended.
+- `apple_ave` reloaded with `ave_t6050_27_3_hevc=1` before any session. HEVC, 3 B-frames, 30 fps, NV12 1920x1080: 30 frames, 543 KB, ffprobe reads 30 Main frames, ffmpeg decodes them cleanly, luma PSNR 42.8-46.3 dB.
+- So #1638's 26A428 slice-header path works on the 27.3 firmware. It stays off by default in -5 (one sample).
+- `apple_ave` cannot be reloaded once its firmware has started (`firmware data is not in its boot state`), so the parameter has to be set before the first session.
+
+**Secure Enclave and Touch ID on 27.3** (first build; `modprobe apple_sep xart_writes=0 provision_keybag=0`, read-only):
+- Aura b11 already publishes what the SEP needs on 27.3: `memory-region` (`sepfw`), `local-policy-manifest` and `iboot-manifest` on `sep@502600000`.
+- The driver picks `SEP platform profile: T6050/J714s` (warm attach). It resolves the xART `.gl` extent (170 slots, 11 live records, writes disabled) and reports `ready in 1433 ms: 12 endpoints (cntl sbio scrd sse hdcp xars sks xarm hibe pnon skdl stac), key store open`. It registers the hwrng and the `trusted` key type, and creates `/dev/sep-bio` and `/dev/sep-key`.
+- upstream's `tools/aurora-sep/aurora-sep status`: 14 pass. keybag `unknown`, matching `blocked` (xART writes off).
+- The fingerprint sensor binds when `/dev/sep-bio` is opened (upstream's `sensor-present`): `apple-mesa spi0.0: sep sensor: bound, 8000000 Hz, mode 2`, `sbio: communication initialization accepted`. Activation then stops at `Touch ID: no persisted identity keybag exists`.
+- Enrol/verify was not tried. It needs the identity keybag, which `provision_keybag=1` creates by writing the xART store macOS shares, and a finger on the sensor. Upstream's userspace for it (`tools/aurora-sep`: `aurora-sep`, `aurora-touchid-setup`, the fprintd config, the Arch `aurora-sep` package) exists, but the image doesn't ship it.
+- The host-state file the driver created (`/var/lib/aurora-sep-host-state.bin`) was moved to `/var/lib/m5test`.
+
+**Boots and the open risks:**
+- Six test boots of up273-6. The 2b4523cb base adds a new risk: hangs early.
+- Clean: three boots (from up273-5 twice, from up273-6 itself once), each up in about 1.5 minutes.
+- No Wi-Fi: one boot (rebooted from up273-6 after the SEP test). PCIe port 0 was not adopted, and the deadman reset it after 300 s. This is the known port 0 risk.
+- **Early hang:** two boots, both rebooted from the dev Mac's daily kernel (`7.3.0-j714s-sleep`). No journal; the loader's 170 s watchdog reset the Mac. up273-5 rebooted from the same daily state came up normally, and so did up273-6 from up273-5 right after. So the hang follows the kernel that ran before, not the boot count. Not understood. An installed image's own reboots look like the clean case (one self-reboot tested). A cold boot from macOS or power-on has not been tried. An installed image has no watchdog, so such a hang would need a power cycle.
+
+Dev Mac state:
+- p4 `m5local/up273b` holds up273-6 (Image.gz and dtb; the same Image.gz for both builds).
+- up273-5's files are in `/root/up273b-backup-up273-5` on p5.
+- Modules for `7.3.0-17.up273-6-ARCH` (the rolotrealanis98 build) are in p5's `/usr/lib/modules`.
+- Logs, the streams, the SEP status and `aurora-sep`/`sensor-present` are in `/var/lib/m5test`.
