@@ -13,6 +13,7 @@ boots on 2026-11-12). A domain with AUTO_ENABLE set before and after may now als
 auto-enable and every other bit still stop the bring-up, as do the ANS and NVMe checks after it.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Signed-off-by: TripleU <182648541+TripleU613@users.noreply.github.com>
 ---
  src/pcie_t6050.c | 12 ++++++++++--
  1 file changed, 10 insertions(+), 2 deletions(-)
