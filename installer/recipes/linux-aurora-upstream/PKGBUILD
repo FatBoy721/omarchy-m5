@@ -9,16 +9,16 @@
 
 _auroraver=7.3.0
 _aurorarel=17.up273
-pkgrel=8
+pkgrel=9
 
-# aurora-silicon/linux integration/aurora at 3766943238bd, plus upstream-27.3.patch (#1173, GPU
+# aurora-silicon/linux integration/aurora at e661192638a3, plus upstream-27.3.patch (#1173, GPU
 # 27.2/27.3; rolotrealanis98's full 27.3 IOMFB table and swap record on the merged #1174),
 # t6050-ane-ave-27.3.patch (patches/upstream-27.3/0004: ANE and AVE on the 27.3 firmware) and
 # t6050-isp-j714s-camera-27.3.patch (patches/upstream-27.3/0005: the front camera's IMX958
 # setfile 2226_02, image tuning, camera light and J714s presets; edimoldovan's J714c camera) and
 # drm-apple-fw27-panel-vrr.patch (patches/upstream-27.3/0008: rolotrealanis98's j716s-next
 # 8ab10100a4, VRR on the firmware 27 panel, opt-in with appledrm.fw27_panel_vrr=1).
-_commit=3766943238bdbddf68b59f5d38c5eb11bbe33650
+_commit=e661192638a3d5b5870b7e7e3a70b5bf221cca56
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -45,7 +45,7 @@ source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github
         drm-apple-fw27-panel-vrr.patch)
 sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
-            'bdea36c0f1f2c2701d80ce7a980427b3aecfd22da102d639514c04f2f61781c0'
+            '932269229fcbe2135680d123f86dbff21018c5918d58bc968bc6714f101528ed'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '32507b46e6d2bd6bc3c9bd933cb0236e3c1887a977ea8aff3ab46d9ece5f4eae'
