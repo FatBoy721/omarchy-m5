@@ -1,4 +1,4 @@
-From 3b2a70cac483e21a6f6d6052a279bef4630ae8c5 Mon Sep 17 00:00:00 2001
+From c8edcebd781557d3882e3b2894b267c0ffcd3ec0 Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:47:46 +0100
 Subject: [PATCH 2/3] Extract the IMX958 setfiles for the M5 Max J714c camera
