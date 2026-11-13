@@ -1,0 +1,72 @@
+name: J714s Recovery app (for the image inputs)
+
+# Builds the native Recovery app from omacom c07e54c + installer/patches and the
+# given extra patch sets, the way omacom's recovery-app.yml does, and keeps it as
+# artifact native-recovery-input (native-recovery.tar + source.txt). The image's
+# inputs bundle (finish-inputs.py) pins this artifact's sha256, the app inventory's
+# sha256, and the source commit/tree recorded here.
+on:
+  workflow_dispatch:
+    inputs:
+      patch-set:
+        description: Extra installer patch sets, in order
+        type: string
+        default: upstream-27.3 j714s
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      PATCH_SET: ${{ inputs.patch-set }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          path: omarchy-m5
+      - name: Rebuild the patched installer tree
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/omacom/omarchy-mac-installer installer
+          cd installer
+          git checkout --quiet -b j714s c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9
+          git -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
+            am --quiet --committer-date-is-author-date ../omarchy-m5/installer/patches/*.patch
+          for set in $PATCH_SET; do
+            [[ $set =~ ^[a-z0-9][a-z0-9.-]*$ ]]
+            git -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
+              am --quiet --committer-date-is-author-date ../omarchy-m5/installer/patches-$set/*.patch
+            [[ $(git rev-parse 'HEAD^{tree}') == "$(tr -d '[:space:]' < ../omarchy-m5/installer/patches-$set/TREE)" ]]
+          done
+          git log --oneline -3
+      - name: Build and record the Recovery app
+        working-directory: installer
+        run: |
+          set -euo pipefail
+          out=$RUNNER_TEMP/native-recovery
+          mkdir -p "$out"
+          bash Recovery/build-recovery.sh "$out/template"
+          source Packaging/identity.conf
+          digest=$(shasum -a 256 "$out/template/omarchy-recovery-app.json" | cut -d' ' -f1)
+          {
+            echo "source_commit=$(git rev-parse HEAD)"
+            echo "recovery_tree=$(git rev-parse HEAD:Recovery)"
+            echo "recovery_app_manifest_sha256=$digest"
+            sw_vers
+            xcodebuild -version
+            xcrun swift --version
+          } > "$out/source.txt"
+          COPYFILE_DISABLE=1 tar -cf "$out/native-recovery.tar" -C "$out/template" "$INSTALLER_RECOVERY_APP_NAME.app" omarchy-recovery-app.json
+          cat "$out/source.txt" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-recovery-input
+          path: |
+            ${{ runner.temp }}/native-recovery/native-recovery.tar
+            ${{ runner.temp }}/native-recovery/source.txt
+          if-no-files-found: error
+          retention-days: 90
