@@ -1,7 +1,7 @@
 From 5c381e510dc848a7af684024978d02ce541fd6fd Mon Sep 17 00:00:00 2001
 From: TripleU <usher@gentechsolution.com>
 Date: Thu, 12 Nov 2026 00:15:31 -0500
-Subject: [PATCH 1/5] J714s developer image (upstream, experimental):
+Subject: [PATCH 1/6] J714s developer image (upstream, experimental):
  aurora-silicon kernel and Aura
 
 linux-aurora 7.3.0.aurora17.up273-6 (aurora-silicon/linux integration/aurora 2b4523cb

@@ -1,7 +1,7 @@
 From 2f02e217021bab1ccb2f3a3ac4cade2e6a1e095b Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 15:42:20 -0500
-Subject: [PATCH 5/5] J714s developer image (upstream): linux-aurora up273-8
+Subject: [PATCH 5/6] J714s developer image (upstream): linux-aurora up273-8
  (integration/aurora 3766943238bd, panel VRR opt-in)
 
 linux-aurora 7.3.0.aurora17.up273-8 (aurora-silicon/linux integration/aurora 3766943238bd plus

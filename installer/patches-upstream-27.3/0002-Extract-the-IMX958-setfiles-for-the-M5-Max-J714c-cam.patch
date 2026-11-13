@@ -1,7 +1,7 @@
 From 42ab1eb753c3bf31243991202e9a674bd461d0ea Mon Sep 17 00:00:00 2001
 From: ed <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:47:46 +0100
-Subject: [PATCH 2/5] Extract the IMX958 setfiles for the M5 Max J714c camera
+Subject: [PATCH 2/6] Extract the IMX958 setfiles for the M5 Max J714c camera
 
 The J714c front camera is an IMX958 (sensor 0x958). The apple_isp driver
 loads apple/isp_2226_02XX.dat for its build rev 2 module, and
