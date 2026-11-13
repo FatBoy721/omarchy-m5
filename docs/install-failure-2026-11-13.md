@@ -365,3 +365,12 @@ Read-only, from macOS over ssh:
 So the 4-second progress bar and power-off is iBoot trying to boot a stub with no paired OS and no custom kernel, not a fault in our Mach-O object, `--compress` or Aura. The owner's recovery choice ("the permissive option") was not our Finish-setup flow, or was applied elsewhere; it did not reach this stub (still Full).
 
 **Fix:** redo step 5 in the new stub's own recovery and complete Omarchy's "Finish setup" (it runs `bputil -nc` + `kmutil configure-boot`). The ranked causes above remain the plan B if a real enrolment then fails.
+
+## Update 2026-11-13 12:50: enrolled correctly the second time; the loop is the NVMe hand-off (aura #213)
+
+- The second 1TR "Finish setup" ran (`installer.log`: `bputil -nc`, `kmutil configure-boot … --compress`, kcrz 153141248, completed; policy Permissive, CTRR off, coih present). Stage 1's embedded config is right (ESP PARTUUID 7196bcf0-…, `m1n1/boot-ctxr.bin`, window 0).
+- Symptom then: Omarchy logo (iBoot runs our Aura Stage 1, so `--compress` is fine), power-off, loop.
+- **Cause (very likely):** release 1's Aura is main `2232ae7a`. It has `adf55805` ("power a post-M4 ANS off after use") but not `aaec599f` / aura #213 ("start a post-M4 ANS an earlier stage powered off before any payload"). Stage 1 reads Stage 2 from NVMe and powers ANS off; Stage 2 hands its embedded U-Boot a powered-off ANS; U-Boot can only adopt a running one (`Failed to probe 'nvme@…': err=-19`) and resets.
+- **Fix without 1TR:** Stage 2 is an unsigned ESP file. `m1n1/boot-ctxr.bin` on the new ESP was replaced with release 2's Aura Stage 2 (main `22b71758`, has #213) + the original DTB/U-Boot payload tail (sha256 `c4211d92…`); original kept as `boot-ctxr.bin.orig`.
+- **Result:** booted once into the new stub (one-time `bless --nextonly`) at 12:48; it did not fall back to the default (old) stub or macOS for 8+ minutes, where every earlier attempt looped within seconds. On-screen confirmation by the owner is pending.
+- Release 2 already pins Aura `22b71758`, so it carries the fix. An installed release 1 must get m1n1-aurora v272-2 before any package update rewrites `boot-ctxr.bin`.

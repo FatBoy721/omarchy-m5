@@ -66,6 +66,10 @@ git -C /tmp/t rev-parse 'HEAD^{tree}' > installer/patches-j714s-r2/TREE
    `patches-j714s-r2`.
 3. `installer-app.yml` defaults to release 1's engine (`b25a51d6df57`); pass the 0010 engine.
 
+**Recovery app CI for release 2 (done 2026-11-13):** `installer-recovery.yml` run 43477703681 on `1afdb5f` with `upstream-27.3 j714s j714s-r2` succeeded; artifact `native-recovery-input` id 14062718355, sha256 `15143a71974e7cfd4c3927c0b0a52c4b458ad9bc512405843f8ed12a4b3ca797`. Step 2 above (provenance block) still to do.
+
+**Correction:** the release-1 boot loop after a correct enrolment was the Stage 2 → U-Boot NVMe hand-off (aura #213), see `docs/install-failure-2026-11-13.md`. Release 2's Aura `22b71758` has the fix.
+
 ## After the first 27.2 boot
 
 Collect what `README.md` "What the first 27.2 boot must collect" lists, then:
