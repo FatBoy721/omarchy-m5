@@ -129,7 +129,9 @@ jobs:
 
       - name: Portable installer checks (test/all)
         working-directory: installer
-        run: ./test/all
+        # A clean environment: omacom's mirror-script test reads the runner's GitHub variables
+        # (test_mirror_release_artifact fails under Actions, passes elsewhere).
+        run: env -i PATH="$PATH" HOME="$HOME" LANG=C.UTF-8 ./test/all
 
       - name: Fetch the engine and check it against the tree's lock
         working-directory: installer
