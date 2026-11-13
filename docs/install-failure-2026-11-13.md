@@ -133,8 +133,11 @@ Compared byte for byte with the padded object above:
   `smp_init` and `pmgr_init`.
   - A fault there resets through `wdt_reboot()`: the Mac restarts by itself.
   - It hangs only if the ADT pointer isn't set yet.
-- A fault in Aura's first instructions, before its vectors are installed, is caught by iBoot's
-  vectors and recorded as an **iBoot panic** after `fuos`. Report 15 calls this H3.
+  - That a `wdt_reboot()` reset really restarts a T6050 is **[derived]**: its ADT has
+    `wdt-version` 3, and packaged Aura does not arm its own watchdog there.
+- A fault in Aura's first instructions, before its vectors are installed, may be caught by iBoot's
+  vectors and recorded as an **iBoot panic** after `fuos`. This is report 15's hypothesis H3, not
+  a verified fact.
   - So an iBoot panic record does not by itself clear Aura. The breadcrumbs and the panic site
     narrow it down.
 
@@ -142,14 +145,17 @@ Compared byte for byte with the padded object above:
 
 At step 2 no boot object was enrolled, so Mach-O, `--compress`, the entry point and Aura cannot
 explain it. Two cases:
-- If the app restarted the Mac instead of shutting it down, cycling is the usual result of
-  booting an unfinished asahi-style stub (blessed default, `.IAPhysicalMedia`, no kernel). Expect
-  it.
+- Cycling is the documented result of booting the unfinished stub normally **[verified]**. The
+  shipped engine's `main.py:791-793` says: "If you end up in a bootloop or get a message telling
+  you that macOS needs to be reinstalled, that means you didn't follow the steps above properly.
+  Fully shut down your system ...". Expect it whenever the Mac was started normally rather than
+  through hold-power → Options.
 - **Ask the owner whether step 2 looked like step 4** (progress bar, then off after a few
   seconds). If it did, the stub's normal-boot path (its Preboot firmware set, personalised for
   27.2 under a 27.3 beta 1 system) fails whatever object it boots. In that case ranks 3 and 4
   below move to the top.
-  - The 1TR boot that worked uses the stub's Recovery-volume set, not its Preboot set, so it
+  - The 1TR boot that worked probably uses the stub's Recovery-volume set, not its Preboot set.
+    This is **[derived]** from the Asahi boot-flow docs and not checked on this Mac. If so, it
     doesn't rule this out.
 
 ## Ranked causes
@@ -157,7 +163,7 @@ explain it. Two cases:
 | # | Cause | For | Against | Confidence |
 | --- | --- | --- | --- | --- |
 | 1 | **27.2 iBoot fails on the `--compress`ed 146 MiB fuos on this J714s**: a decompressed-size or placement limit in the 26B123 J714s iBoot, so iBoot panics after the load | The only J714s Mach-O boot was uncompressed. The progress bar and power-off match iBoot loading, then panicking. Compression is the one enrolment-side change | Compressed padded objects boot on J616s and J700 (other chips, 18000.161.x). K116s on 20457.41.3 probably used aurora-installer's `--compress` (not confirmed) | medium-low |
-| 2 | **Aura b12 + our patches faults at or just after entry under the 27.2 hand-off** (first instructions, `gxf_init`/`mcc_init`/`smp_init` with the locked CTXR/RVBAR state) | Aura has never run as Stage 1 on a T6050 from a 26B123 stub. The b9 that booted here is far older. A fault before Aura's vectors exist looks exactly like an iBoot panic | Upstream main runs the same Stage 1 code on T6050 (J775D, K116s). Our patches touch only kboot hand-offs and PCIe, which run after the logo | medium-low |
+| 2 | **Aura b12 + our patches faults at or just after entry under the 27.2 hand-off** (first instructions, `gxf_init`/`mcc_init`/`smp_init` with the locked CTXR/RVBAR state) | Aura has never run as Stage 1 on a T6050 from a 26B123 stub. This build has never run on this Mac in any mode ("builds, not booted"). The b9 that booted here is far older. A fault before Aura's vectors exist may look exactly like an iBoot panic (H3) | Upstream main runs the same Stage 1 code on T6050 (J775D, K116s). Our patches touch only kboot hand-offs and PCIe, which run after the logo | medium-low |
 | 3 | **Stub normal-boot firmware set from the IPSW** (personalised Preboot `boot/<nsih>`): a missing or mismatched piece under the 27.3 beta 1 system firmware | First stub this Mac has run that was assembled from an IPSW rather than cloned. Step 2 may have shown the same symptom | The stub's 27.2 recoveryOS boots. The selection equals asahi's and aurora-installer's. A failure in the firmware set ends earlier in the breadcrumbs (`sepi`, `isys`, `csys`, `trst`), not at `fuos` | low (rises if step 2 looked like step 4) |
 | 4 | **27.3 beta 1 system firmware (LLB) under a 27.2 stub** on T6050, on the normal path | No Mac is known to run this pair. K116s runs a matched pair | The asahi rule allows an older stub, and the 27.2 recoveryOS boots under the same LLB | low |
 | 5 | Entry point, slide, padding, `kcrz` or the 153,141,248 window | - | Byte-identical layout to the trial that booted here; `kcrz` is the value the trial enrolled | ruled out |
@@ -170,14 +176,26 @@ Do everything read-only first. Nothing below changes the Mac.
 
 ### A. In the recovery the Mac is in now (Utilities → Terminal)
 
+The Mac may be in the **system** recovery (PanicMedic or failed-boot fallback), not the stub's
+paired one. Everything in A is read-only, so it works in either.
+
+**Identify the new stub by volume group, never by name.** The image's volume name is "Omarchy",
+and so is the old 27.3 stub's.
+
 ```sh
 # 1. Failed-boot and panic markers iBoot left in NVRAM
 nvram -p | grep -iE 'panicmedic|failboot|boot-volume|boot-note|panic' | sed -E 's/(boot-note|boot-info-payload)\t.*/\1 <omitted>/'
 
-# 2. Containers, volumes and the stub's volume group (VGID)
+# 2. Containers, volume groups, and which group is the NEW (27.2) stub
 diskutil apfs list
-VG=<the new stub's Volume Group UUID from the list above>
-STUB=/Volumes/<the new stub's System volume name>
+diskutil apfs listVolumeGroups
+#    For each candidate group: its Preboot restore bundle names the build. The new stub says 26B123 / 26.2.123.
+#    (mount that container's Preboot first: diskutil mount <PrebootDevice>)
+for g in /Volumes/Preboot*/*/restore; do echo "$g"; grep -A1 -E 'ProductBuildVersion|RestoreLongVersion' "$g"/SystemVersion.plist "$g"/RestoreVersion.plist 2>/dev/null | grep string; done
+VG=<that group's UUID>
+SYSDEV=<that group's System volume device, from listVolumeGroups>
+STUB=$(diskutil info "$SYSDEV" | awk -F': *' '/Mount Point/{print $2}')   # mount it first if empty
+echo "VG=$VG STUB=$STUB"; cat "$STUB/Aurora/Recovery/State/installation.json" | head -5   # must exist only on the new stub
 
 # 3. The stub's boot policy: Paired, security mode, Kernel CTRR, custom kernel hash
 bputil -d -v "$VG"
@@ -234,8 +252,33 @@ then known.
 
 ## Retest plan (1TR, one variable per enrolment, no new build)
 
+**Getting into the right 1TR.** "Finish setup" removed `.IAPhysicalMedia`, so picking the stub in
+the startup picker now boots the failing object, not the stub's recovery. 1TR follows the
+**default** startup disk; a one-time pick does not select the paired recovery (report 18
+correction, report 21). So:
+1. Make the new stub the default. It probably still is, because the app blessed it. Check in
+   recovery with `bless --info --getBoot`. If it isn't, run
+   `bless --mount "$STUB" --setBoot` and give the owner's password.
+2. Shut down, wait 15 s, hold power until "Loading startup options", choose **Options**, and open
+   Terminal.
+3. Resolve `VG` and `STUB` as in section A, then gate on pairing:
+   ```sh
+   bputil -d -v "$VG" | grep -iE 'paired|one true recoveryOS|security mode|kernel ctrr'
+   ```
+   It must say **Paired**. If it doesn't, stop: a kmutil run here would not install (as in the
+   2026-11-04 retracted cycles).
+
 All objects below are Mach-O. Run `bputil -nc -v "$VG"` before each enrolment, as the app does.
-Afterwards, watch the PC (`dmesg -w` on the cable port) and the screen for about 60 s.
+
+**Confirm that each enrolment installed something new**, so a failure can't be another object
+that was never installed:
+```sh
+ls -lT /Volumes/Preboot*/"$VG"/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache.custom.*   # note names, sizes, times
+# ... enrol ...
+ls -lT /Volumes/Preboot*/"$VG"/boot/*/System/Library/Caches/com.apple.kernelcaches/kernelcache.custom.*   # a new file of about 153 MB (uncompressed) must appear
+```
+Then restart into the stub (it is the default), and watch the PC (`dmesg -w`) and the screen for
+about 60 s.
 
 1. **Without `--compress`, same object** (tests cause 1):
    ```sh
@@ -244,6 +287,13 @@ Afterwards, watch the PC (`dmesg -w` on the cable port) and the screen for about
    bputil -nc -v "$VG"
    kmutil configure-boot -c "$S" -v "$STUB"                  # no --compress: about 146 MiB in Preboot
    ```
+   - The Recovery app keeps its operation directory after a successful install **[derived]**: no
+     code path removes it, and `installation.json` names it.
+     - If `stage1` is missing, rebuild the same object on the PC. Fill the shipped
+       `stage1-j714s.bin` with the `espUUID` from `$STUB/Aurora/Recovery/InstallData/install-config.json`
+       and `m1n1/boot-ctxr.bin`, with window 0 (`aura-j714s-stage1 --raw stage1-j714s.bin
+       --esp-partuuid <uuid> OUT`, or its two tools).
+     - Check that the unpadded carry matches the receipt's `stage1SHA256`.
    - If it boots (Aura logo, then U-Boot or Linux), cause 1 is confirmed. The fix is below.
    - If not, go to 2.
 2. **The 2026-11-07 trial object, uncompressed** (`4f318f1b`, in
@@ -255,11 +305,21 @@ Afterwards, watch the PC (`dmesg -w` on the cable port) and the screen for about
      fine, and the fault is in our b12 Stage 1 (cause 2).
    - **It does not enumerate:** the fault is at the 27.2 stub, iBoot or system-firmware level
      (causes 3 and 4). The panic breadcrumbs then decide.
-   - It may then load an old Stage 2 from p4. Watch only for the enumeration.
+   - **What it boots after its window is not known.** No `chainload=` or ESP path could be found
+     in the object, and the partition table has changed since 2026-11-07. Have the PC claim the
+     proxy as soon as it enumerates (`~/m5/tools/m5catch.py`, which holds it in the proxy). If
+     no PC is attached, the owner holds power to switch off once the result is seen.
+   - Afterwards, re-enrol the object from retest 1 or the eventual fix. Don't leave the trial
+     object enrolled.
 3. Only if 2 points at Aura: on the PC, fill the shipped raw Stage 1 for the new ESP's PARTUUID
    (from `installation.json`) with `--window-ms 15000`. Wrap and pad it with the m1n1-aurora
    tools (`aura-j714s-stage1 --window-ms 15000`), enrol it uncompressed, and bisect Aura (b9 →
    b12 → +patches) through its proxy.
+
+A further check needs no enrolment. If the old 27.3 stub still boots its raw m1n1 chain, run
+`docs/move-to-27.2.md` Phase 1 R1 with the shipped `aura-raw.bin`, chainloaded from the
+watchdog loader. It exercises this Aura build's pre-logo init on this Mac for the first time,
+although under 27.3 beta 1 rather than the 27.2 hand-off.
 
 To leave this state at any time: startup options → Macintosh HD, or the old 27.3 "Omarchy" stub
 if it is still present. Both are unchanged.
@@ -282,7 +342,9 @@ if it is still present. Both are unchanged.
 - Not a fix: downgrading the system firmware (the rule is to stay on Apple's latest).
 
 Nothing in `installer/patches-j714s` or the recipes was changed for this note. The retest picks
-between the fixes above.
+between the fixes above. omarchy-j714s 2, if built on the same patch set, repeats this enrolment
+exactly (`--compress`, `window_ms` 0). Don't offer it for installation on a J714s until retest 1
+or 2 has answered.
 
 ## Files
 
