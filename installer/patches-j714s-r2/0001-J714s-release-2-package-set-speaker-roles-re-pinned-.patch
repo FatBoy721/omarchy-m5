@@ -1,0 +1,233 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 12:32:19 -0500
+Subject: [PATCH] J714s release 2 package set: speaker roles, re-pinned kernel
+ and Aura
+
+Two support roles, speakerguardd-v2 1.0.0alpha.1-41.1 (aarch64) and
+aurora-speaker-upgrade 0.1-16 (any), speakerguardd v2 04169c44: the j714s profile
+names 20 roles, as aurora-sep and libfprint-aurora were added, so every image
+installs them and the image pin keeps them.
+
+Re-pinned from betizzel/omarchy-m5 1b9d5ef: linux-aurora 7.3.0.aurora17.v272-2
+(integration/aurora a34d26c2; a13a2559..., 44127181 bytes), m1n1-aurora
+1.6.1.aurora24.v272-2 (Aura 22b71758; ec19c40e..., 2469202 bytes) and
+omarchy-aurora-firmware 20261014.j714s8-1 (e31dcfd1..., 47835 bytes: one protected
+speaker path, the v2 UCM condition, the speaker upgrade enabled at boot with
+upstream's opt-in flag, VRR range on, the first-boot camera setfile). The
+qualification pins follow 7.3.0-17.v272-2-ARCH. Set j714s-dev-runtime-ac7e940e5bf9.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../candidate-package-manifest.json           | 58 +++++++++++++------
+ .../tools/finish-inputs.py                    |  2 +-
+ .../j714s/candidate-trust/policy.json         |  3 +-
+ image-builder/builder/stage1_qualification.py | 13 ++---
+ image-builder/test/test_candidate_set.py      |  9 +--
+ 5 files changed, 55 insertions(+), 30 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index 65c2191..ad45e04 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-60db92441590",
++  "set": "j714s-dev-runtime-ac7e940e5bf9",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -63,6 +63,18 @@
+       },
+       "size_bytes": 72452
+     },
++    {
++      "name": "aurora-speaker-upgrade",
++      "version": "0.1-16",
++      "arch": "any",
++      "filename": "aurora-speaker-upgrade-0.1-16-any.pkg.tar.zst",
++      "sha256": "3bd6790ac86ee3620020ffe9249c60824e01b93e53898dbd87c3cc19fdfb876e",
++      "source": {
++        "repository": "betizzel/omarchy-m5",
++        "commit": "1b9d5ef99defaf0c6de1d187c156fa0c15f0d43a"
++      },
++      "size_bytes": 66126
++    },
+     {
+       "name": "hyprland-m5",
+       "version": "0.57.2-2",
+@@ -102,27 +114,27 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora17.v272-1",
++      "version": "7.3.0.aurora17.v272-2",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora17.v272-1-aarch64.pkg.tar.zst",
+-      "sha256": "7ed9869122af9ac70361a41521833fd495f8a98edbb1ee01a4c513bb03fa19e2",
++      "filename": "linux-aurora-7.3.0.aurora17.v272-2-aarch64.pkg.tar.zst",
++      "sha256": "a13a255980fb6aee481b3dbc6c2f1eecfadd56410ce7a7abe9ae7c362700dfc6",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "0b813e9a1abff58da08f68db471aa50313a0610c"
++        "commit": "1b9d5ef99defaf0c6de1d187c156fa0c15f0d43a"
+       },
+-      "size_bytes": 44157755
++      "size_bytes": 44127181
+     },
+     {
+       "name": "m1n1-aurora",
+-      "version": "1.6.1.aurora24.v272-1",
++      "version": "1.6.1.aurora24.v272-2",
+       "arch": "aarch64",
+-      "filename": "m1n1-aurora-1.6.1.aurora24.v272-1-aarch64.pkg.tar.zst",
+-      "sha256": "1f30e3fffb1b6a36cad8e5b91d4cd8b844a5ded50565c9f82ff2c3a420b094bf",
++      "filename": "m1n1-aurora-1.6.1.aurora24.v272-2-aarch64.pkg.tar.zst",
++      "sha256": "ec19c40e838c1e2c6d8bc170063e2d5d0da83c43fa0f60943e3488b35400d161",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "0b813e9a1abff58da08f68db471aa50313a0610c"
++        "commit": "1b9d5ef99defaf0c6de1d187c156fa0c15f0d43a"
+       },
+-      "size_bytes": 2458500
++      "size_bytes": 2469202
+     },
+     {
+       "name": "mesa-aurora",
+@@ -150,15 +162,15 @@
+     },
+     {
+       "name": "omarchy-aurora-firmware",
+-      "version": "20261014.j714s7-1",
++      "version": "20261014.j714s8-1",
+       "arch": "aarch64",
+-      "filename": "omarchy-aurora-firmware-20261014.j714s7-1-aarch64.pkg.tar.zst",
+-      "sha256": "215617f5a8513f29087f36d395b9fa834f4e647ce8131a9c3cb837ada27525ac",
++      "filename": "omarchy-aurora-firmware-20261014.j714s8-1-aarch64.pkg.tar.zst",
++      "sha256": "e31dcfd14435cb38692ad86a6e920e7f2e170ed28ddef5947db1e1680b9a4ac5",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "3327d427d712b9d1bd8f30603e6b4eb7e0730048"
++        "commit": "1b9d5ef99defaf0c6de1d187c156fa0c15f0d43a"
+       },
+-      "size_bytes": 35483
++      "size_bytes": 47835
+     },
+     {
+       "name": "omarchy-mac",
+@@ -209,6 +221,18 @@
+       },
+       "size_bytes": 230352
+     },
++    {
++      "name": "speakerguardd-v2",
++      "version": "1.0.0alpha.1-41.1",
++      "arch": "aarch64",
++      "filename": "speakerguardd-v2-1.0.0alpha.1-41.1-aarch64.pkg.tar.zst",
++      "sha256": "c918f58ca81ba251c183fbf4ae7d092ad87fbdf85638fb61c1316ebebfd17b0c",
++      "source": {
++        "repository": "betizzel/omarchy-m5",
++        "commit": "1b9d5ef99defaf0c6de1d187c156fa0c15f0d43a"
++      },
++      "size_bytes": 1760691
++    },
+     {
+       "name": "uboot-aurora",
+       "version": "2026.07.aurora6.j714s3-1",
+@@ -240,5 +264,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "60db92441590a9d5974b0da8291845faf5fb5de95f4e1f9a63e13873c4946367"
++  "set_sha256": "ac7e940e5bf9337793a9ce6347c5a1d324d11741d04c9dba3ec6f68b75eca60c"
+ }
+diff --git a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+index deccae0..7ce9701 100644
+--- a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
++++ b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+@@ -157,7 +157,7 @@ def main() -> int:
+                 raise ValueError(f'{name} archive must be a regular file')
+             if candidate.member(path, candidate.REVISION_FILES[name]).decode().strip() != runtime_source['commit']:
+                 raise ValueError(f'{name} does not record the pinned runtime source')
+-        # One package per role the developer profile names (18 since aurora-sep and libfprint-aurora)
++        # One package per role the developer profile names (20 since speakerguardd-v2 and aurora-speaker-upgrade)
+         roles = len(policy['runtime_packages'] + policy['boot_packages'] + policy['support_packages'])
+         if len(records) != roles or len({row['name'] for row in records}) != roles:
+             raise ValueError(f'candidate set must contain the checked-in {roles}-package manifest')
+diff --git a/image-builder/builder/profiles/j714s/candidate-trust/policy.json b/image-builder/builder/profiles/j714s/candidate-trust/policy.json
+index 201590f..7eb85fe 100644
+--- a/image-builder/builder/profiles/j714s/candidate-trust/policy.json
++++ b/image-builder/builder/profiles/j714s/candidate-trust/policy.json
+@@ -86,7 +86,8 @@
+     "omarchy-aurora-firmware",
+     "mesa-aurora",
+     "vulkan-aurora",
+-    "aurora-bless", "hyprland-m5", "aurora-sep", "libfprint-aurora"],
++    "aurora-bless", "hyprland-m5", "aurora-sep", "libfprint-aurora", "speakerguardd-v2",
++    "aurora-speaker-upgrade"],
+   "device_trees": [
+     "t6000-j314s",
+     "t6000-j316s",
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index 37de886..55603b8 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -61,13 +61,12 @@ CTXR_HOOK = "etc/pacman.d/hooks/96-omarchy-j714s-boot-ctxr.hook"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+ # The J714s kernel the image must carry (the budgets below are only seeded for it).
+-# From installer/recipes/linux-aurora-j714s in betizzel/omarchy-m5 before its first
+-# build (_auroraver=7.3.0, _aurorarel=17.v272, pkgrel=1; "v272" sorts above "up273").
+-# When the package lands, recheck both against the built archive's pkgver-pkgrel and
+-# its usr/lib/modules/<release> directory, and update
+-# Integration/M5/J714s-Normal-System/candidate-package-manifest.json to match.
+-J714S_KERNEL_VERSION = "7.3.0.aurora17.v272-1"
+-J714S_KERNEL_RELEASE = "7.3.0-17.v272-1-ARCH"
++# From installer/recipes/linux-aurora-j714s in betizzel/omarchy-m5 (_auroraver=7.3.0,
++# _aurorarel=17.v272; pkgrel 2 is release 2's re-pin on integration/aurora a34d26c2; "v272"
++# sorts above "up273"). Checked against the built archive's pkgver-pkgrel and its
++# usr/lib/modules/<release> directory; candidate-package-manifest.json matches.
++J714S_KERNEL_VERSION = "7.3.0.aurora17.v272-2"
++J714S_KERNEL_RELEASE = "7.3.0-17.v272-2-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
+ # What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
+ # with on bare metal, besides the budgets: PMGR domains read-only except the ones its
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index ad78223..572efb5 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -102,7 +102,7 @@ class CandidateSetTest(unittest.TestCase):
+         summary = self.verify()
+         self.assertIn("uboot-aurora", {p["name"] for p in summary["packages"]})
+ 
+-    def test_j714s_profile_accepts_its_exact_18_roles(self):
++    def test_j714s_profile_accepts_its_exact_20_roles(self):
+         from image_profile import select
+         import stage1_qualification
+ 
+@@ -113,7 +113,7 @@ class CandidateSetTest(unittest.TestCase):
+                        public_key_sha256=c.digest(signer.trust / "public.asc"))
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+-        self.assertEqual(len(names), 18)
++        self.assertEqual(len(names), 20)
+         release = stage1_qualification.J714S_KERNEL_RELEASE
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+@@ -128,8 +128,9 @@ class CandidateSetTest(unittest.TestCase):
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+                                     versions={"linux-aurora": stage1_qualification.J714S_KERNEL_VERSION, "hyprland-m5": "0.57.2-2",
+-                                              "aurora-sep": "1.17.g8679514f4dff-1", "libfprint-aurora": "1.94.100-1"},
+-                                    arches={"aurora-sep": "any"},
++                                              "aurora-sep": "1.17.g8679514f4dff-1", "libfprint-aurora": "1.94.100-1",
++                                              "speakerguardd-v2": "1.0.0alpha.1-41.1", "aurora-speaker-upgrade": "0.1-16"},
++                                    arches={"aurora-sep": "any", "aurora-speaker-upgrade": "any"},
+                                     contents=contents, manifest_edit=developer_sources)
+         output = self.base / "j714s-15-role-import"
+         summary = c.snapshot(input_set, output, receipt, fixtures.SOURCE, trust=signer.trust)
+-- 
+2.56.0
+

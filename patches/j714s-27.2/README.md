@@ -7,29 +7,44 @@ boot object with no `__TEXT_BOOT_EXEC` (`kcbz` 0, so iBoot does not start SPTM),
 `kmutil configure-boot --compress` after `bputil -nc`; Linux runs at EL2 on every CPU inside the
 128 MiB code-execute window, as aurora-silicon targets 27.2 (`docs/move-to-27.2.md`).
 
-Status (2026-11-13): **builds, not booted.** No J714s has run a 27.2 stub yet. The kernel also
-keeps every 27.3 beta 1 row, so it can be RAM-tested on today's 27.3 setup first (Phase 1 R2 of
-`docs/move-to-27.2.md`).
+Status (2026-11-13): release 1 (`omarchy-j714s-1`) was built on the previous pins; its first
+install stopped at the 27.2 stub (a progress bar for about 4 s, then power off; Stage 1 never
+reached the cable), which is being diagnosed separately. Release 2's kernel and Aura are re-pinned
+and cross-built (below); nothing here has booted a 27.2 stub yet. The remaining steps are in
+[`RELEASE-2.md`](RELEASE-2.md). The kernel also keeps every 27.3 beta 1 row, so it can be
+RAM-tested on a 27.3 setup first.
 
 Recipes: [`installer/recipes/linux-aurora-j714s`](../../installer/recipes/linux-aurora-j714s)
 (`linux-j714s-27.2.patch` is `linux/*.patch` concatenated) and
 [`installer/recipes/m1n1-aurora-j714s`](../../installer/recipes/m1n1-aurora-j714s)
 (`aura-j714s-27.2.patch` is `aura/*.patch` concatenated).
 
-## Bases
+## Bases (release 2, re-pinned 2026-11-13)
 
-- **Kernel:** aurora-silicon/linux `integration/aurora` at `572eb88e8642` (2026-11-13). Already
-  merged there and so in the image: DjDeveloperr's display ADMAC and firmware 27 DisplayPort audio
-  (#1748, #1749) and the J714s dcpext0 DP audio node (#1750); the J714s Secure Enclave (#1325);
-  CLPC floors and sampling (#1324, #1555, #1556) and platform profiles (#1655, #1656); the T6050
-  CPU PMU (#1628); JPEG encode (#1675); ProRes (#1586; no T6050 init rows public, so it stays
-  unused); the MagSafe PD controller (#1686); USB4 and external displays (#1515 and follow-ups);
-  the SEP pnon digest and trusted-accessory service (#1720, #1734); joshuaswarren's GPU mailbox
-  polling (#1601); erikwb's #1608/#1609.
-- **Aura:** aurora-silicon/aura `main` at `2232ae7a` (2026-11-13). Includes DjDeveloperr's display
+- **Kernel:** aurora-silicon/linux `integration/aurora` at `a34d26c255c2` (2026-11-13, after #1752).
+  Already merged there and so in the image: DjDeveloperr's display ADMAC and firmware 27 DisplayPort
+  audio (#1748, #1749) and the J714s dcpext0 DP audio node (#1750); the J714s left-front USB-C
+  USB4/Thunderbolt router (#1791) and the J714s camera sizes from sensor config 6 (#1835); the
+  J714s Secure Enclave (#1325) and SEP sse/skdl/hibe (#1763); CLPC floors and sampling (#1324,
+  #1555, #1556) and platform profiles (#1655, #1656); the T6050 CPU PMU (#1628); JPEG encode
+  (#1675); ProRes (#1586; no T6050 init rows public, so it stays unused); the MagSafe PD
+  controller (#1686); USB4 and external displays (#1515 and follow-ups), tiled 5K displays
+  (#1634, joshuaswarren); the SEP pnon digest and trusted-accessory service (#1720, #1734);
+  joshuaswarren's GPU mailbox polling (#1601); erikwb's #1608/#1609 and GPU GEM residency
+  (#1610), GPU stats (#1611) and the compute timeout (#1752); Jens Axboe's T6050 EL2 errata
+  (#1724, was our 0006-0007), the appledrm combo-PHY softdep (#1745, was our 0017) and the
+  27.3 AVE build (#1747, was half of our 0008).
+- **Aura:** aurora-silicon/aura `main` at `22b71758` (2026-11-13). Includes DjDeveloperr's display
   ADMAC tunables for DP audio (#207), sithglan's chainload copy stub (#186), the MTE tag store
-  (#184), the M5 Pro boot path (#173), `firmware: add macOS 27.2` (d05ed948) and the ANE/AVE
-  hand-offs (#169, #171).
+  (#184), the M5 Pro boot path (#173), `firmware: add macOS 27.2` and `27.3 beta` (#216), the
+  ANE/AVE hand-offs (#169, #171), the T6050 storage auto-PM fix (#203, was our 0006), the K116s
+  26B8125 GPU build (#187, was our 0007) and the T6050 camera table (#188, was our 0004), post-M4
+  ANS for the payload (#213) and the K114c camera (#206). The Stage 1 tooling and config layout
+  are unchanged since 2232ae7a: the engine's fill is byte-identical to Aura's
+  `fill_stage1_config.py` on this build, `aura-boot.macho` passes the layout check, and the padded
+  object has kcrz 153141248, as before.
+
+Release 1 was built on linux `572eb88e8642` and Aura `2232ae7a` (git history of this file).
 
 ## Kernel patches (`linux/`, apply in order with `git am` or `patch -Np1`)
 
@@ -38,32 +53,36 @@ Recipes: [`installer/recipes/linux-aurora-j714s`](../../installer/recipes/linux-
 | 0001 | GPU InitData and firmware identity for 27.2 (26B123) and 27.3 (26C5035r), aurora-silicon/linux #1173 (open), resolved against the Graph refactor. The 26B123 fwid digest `2b4613c6...913f0fd9` was re-derived from the IPSW (below) | Rolando Trevino (rolotrealanis98) |
 | 0002-0004 | Firmware 27 adaptive-sync parameter name; no panel brightness after a DCP crash; the full 27.3 IOMFB method table and swap record (only used on a 27.3 stub; 27.2 uses upstream's `dcp_methods_27_2`) | Rolando Trevino |
 | 0005 | The K114/K116 27.2 (26B8125) G17S identity, #1650 (open) | Jens Axboe (via sithglan) |
-| 0006-0007 | T6050 at EL2: vGIC SEIS treated as broken, WFxT treated as absent, #1724 (open). Needed once Linux runs at EL2 under the Mach-O Stage 1 | Jens Axboe (via sithglan) |
-| 0008 | ANE and AVE on 27.3, ported onto the new AVE probe (`fw_data_size_alt`); builds may share sizes, so the AVE TEXT CRC selects the build | this repo (was upstream-27.3/0004) |
-| 0009-0015 | Front camera: IMX958 setfile 2226_02, noise reduction gains, lens shading target and metering, camera light, J714s presets (omacom/linux-aurora #422) | Eduard Moldovan (edimoldovan); J714s DT by this repo |
-| 0016 | VRR on the firmware 27 panel, opt-in `appledrm.fw27_panel_vrr=1` (j716s-next 8ab10100a4) | Rolando Trevino |
-| 0017 | appledrm soft-depends on `atc-t6050-dp`, so dcpext0/2 find their route PHYs | this repo (was upstream-27.3/0009) |
-| 0018 | ANE and AVE on 27.2 (26B123): layouts from the IPSW. ANE: 27.2 layout recognised, refused until its TEXT pin is known, and the refusal prints the digest. AVE: 26B123 admitted, probe only unless `apple_ave.ave_t6050_27_2_layout=1` | this repo |
+| 0006 | ANE on 27.3; AVE builds selected by TEXT CRC on top of #1747 (27.2 and 27.3 share segment sizes) | this repo |
+| 0007-0009 | Front camera: IMX958 setfile 2226_02, noise reduction gains, lens shading target and metering (omacom/linux-aurora #422) | Eduard Moldovan (edimoldovan) |
+| 0010 | 2560x1440 added to #1835's J714s presets (config 6, the centre 1:1) | this repo, from edimoldovan's J714c preset |
+| 0011-0013 | The camera light and its J714s pin (#422; J714s DT by this repo) | Eduard Moldovan; this repo |
+| 0014 | VRR on the firmware 27 panel, `appledrm.fw27_panel_vrr` (j716s-next 8ab10100a4); the image turns it on (omarchy-aurora-firmware `aurora-m5-vrr.conf`) | Rolando Trevino |
+| 0015 | ANE and AVE on 27.2 (26B123): layouts from the IPSW. ANE: 27.2 layout recognised, refused until its TEXT pin is known, and the refusal prints the digest. AVE: 26B123 admitted, probe only unless `apple_ave.ave_t6050_27_2_layout=1` | this repo |
 
-`patch -Np1` of `linux-j714s-27.2.patch` on the `572eb88e` GitHub tarball (sha256
-`260acb56...2b31ec`) gives the tree that was built (ush `~/m5-build/up272-1/src`, branch
-`up-2721`). Config: unchanged from `linux-aurora-upstream` (`olddefconfig` adds nothing);
-`j714s-required.config` now also requires `ARM64_CTXR_EXECMEM`, `APPLE_ADMAC` and
-`SND_SOC_APPLE_T8152_AOP_AUDIO`.
+Camera presets: #1835 (DjDeveloperr, merged) gives seven sizes on config 6 (1920x1080, 640x480,
+1280x720, 1760x1328, 1328x1760, 1552x1552, 1080x1920). Our release-1 presets (edimoldovan's
+J714c ones: 1920x1080 and 2560x1440 on config 6, 1280x720 on config 7) were not a subset of
+them, so #1835's replace them and 0010 adds back the one size it lacks, 2560x1440, in #1835's
+form. On T6050 the driver uses `apple,input-size` only to bound the crop (the P010 matching that
+compares it with the firmware's config is T6040-only), so both forms stream the same crop. All
+eight sizes are untested on the 27.2 ISP firmware.
 
-## Aura patches (`aura/`, `git am` on main 2232ae7a)
+`patch -Np1` of `linux-j714s-27.2.patch` on the `a34d26c2` GitHub tarball (sha256
+`315c7a76...6d627f72`) gives the tree that was built (ush `~/m5-build/up272-2/src`, branch
+`up-2722`). Config: unchanged; #1791 is device tree only. `j714s-required.config` also requires
+`ARM64_CTXR_EXECMEM`, `APPLE_ADMAC` and `SND_SOC_APPLE_T8152_AOP_AUDIO`.
+
+## Aura patches (`aura/`, `git am` on main 22b71758)
 
 | # | What | Whose |
 | --- | --- | --- |
-| 0001 | T6050 GPU hand-off: a build table (27.0, 27.2 26B123, 27.3 beta 1); DCP hand-off on 27.3 beta 1 with compat `<27 3 0>` | this repo, values from #1173 (Rolando Trevino) |
+| 0001 | T6050 GPU: the 27.2 (26B123) and 27.3 beta 1 (26C5035r) G17S rows in #187's build table; DCP hand-off on 27.3 beta 1 (`V27_3B`, #216) with compat `<27 3 0>` | this repo, values from #1173 (Rolando Trevino) |
 | 0002 | Notch rows shown by default on M5 (`chosen.asahi,show-notch=0` opts out) | this repo, after FatBoy721/edimoldovan's m1n1 work |
 | 0003 | The M5 Max 27.3 G17S digest (aura #172) | joshuaswarren |
-| 0004 | The T6050 camera table and the K116s 27.2 row (aura #188, open) | Jens Axboe, ported by Thomas Glanzmann |
-| 0005 | J714s camera on 27.3 beta 1 | this repo |
-| 0006 | T6050 GP PCIe: the auto-PM storage domain may gate itself (lost Wi-Fi, early hangs) | this repo |
-| 0007 | The K116s 27.2 (26B8125) G17S digest (aura #187, open), carried onto 0001's table | Thomas Glanzmann, from Jens Axboe's #1650 |
-| 0008 | **Internal display on 27.2:** admit `V27_2`, publish compat `<27 2 0>` (the kernel's `dcp_methods_27_2` key), pin the 27.2 DCP image `C51FB0C8-C45D-39B0-85BC-520E600FC950` | this repo |
-| 0009 | **J714s camera on 27.2:** sensor 0x74, the IPSW's ISP segments | this repo |
+| 0004 | J714s camera on 27.3 beta 1 (a row in #188's table) | this repo |
+| 0005 | **Internal display on 27.2:** admit `V27_2`, publish compat `<27 2 0>` (the kernel's `dcp_methods_27_2` key), pin the 27.2 DCP image `C51FB0C8-C45D-39B0-85BC-520E600FC950` | this repo |
+| 0006 | **J714s camera on 27.2:** sensor 0x74, the IPSW's ISP segments | this repo |
 
 The recipe also packages the Stage 1 tooling: `aura-j714s-stage1 --esp-partuuid UUID OUT` fills
 the raw Stage 1 in place (Aura's `fill_stage1_config.py`, Stage 2 `m1n1/boot-ctxr.bin` by default)
@@ -93,57 +112,45 @@ goes on.
 1. `/proc/device-tree/chosen/firmware-version` (or Aura's log) = `mBoot-20457.41.3`, and "All
    CPU(s) started at EL2" on 15 CPUs, `/chosen/aurora,ctxr-exec-window` present.
 2. **ANE TEXT pin.** The driver logs `H17 ANE: preloaded TEXT sha256 <64 hex>` and refuses. Put
-   it in `ane_t6050_text_pin_27_2` (0018), rebuild, check `READY` and `/dev/accel/accel0`. Also
+   it in `ane_t6050_text_pin_27_2` (0015), rebuild, check `READY` and `/dev/accel/accel0`. Also
    log the ADT `ane0` segment-ranges from Aura (expect TEXT 0xbc000 at DVA 0x10000000000).
 3. **DCP UUID.** Aura logs `DCP image <uuid>, firmware-compat 27.2.0` when it hands over, or
    `DCP image <uuid> is not C51FB0C8-...` when it refuses (simpledrm). If refused, the logged UUID
-   goes into 0008.
+   goes into Aura 0005.
 4. **GPU:** `GPU firmware build: 26B123 ... G17S`; the ADT `iop-gfx-nub`/`iop-gfx1-nub` `uuid`s
    should be `6299EB93-...` and `28166DD7-...`.
 5. **Camera:** Aura's `isp0` sensor type (0x74) and segment-ranges (TEXT 0xc1c000, DATA
    0x13d0000, remap 0x10000000000 / 0x10000c1c000) and their physical addresses; `/dev/video0`
-   streams. The IMX958 setfile still comes from macOS 27.3's `appleh16camerad`; whether it suits
-   the 27.2 ISP firmware is untested.
+   streams at each of the eight preset sizes. The IMX958 setfile comes from the installed macOS's
+   `appleh16camerad` (`aurora-j714s-camera-setfile.service` reads it at first boot, the camera has
+   it from the next boot); whether a 27.3 setfile suits the 27.2 ISP firmware is untested.
 6. **AVE:** `firmware build 26B123 (TEXT 0x158000 CRC d33ed3b4 ...)`, `probe only`. Then reboot
    with `apple_ave.ave_t6050_27_2_layout=1` and encode H.264 and HEVC (30 frames each, decode,
    PSNR) before making it the default.
 7. **Wi-Fi port 0** (Aura's `storage after ...` lines), trackpad, NVMe, SError/Oops-free journal,
    and a reboot (`macsmc-reboot`; there is no PSCI reset under the window).
 
-## Next re-pin
 
-Merged upstream at 06:12 UTC on 2026-11-13, after both pins (572eb88e is 04:38 UTC, Aura 2232ae7a
-is 02:07 UTC), so this series still carries them and the built packages stay as they are:
-- aurora-silicon/linux #1745 (17903f58cab4) is kernel 0017 (the appledrm softdep): drop it.
-- aurora-silicon/linux #1747 (e3acfff0d34f), the AVE 27.3 table: 0008's AVE half overlaps it.
-  Rebase 0008 and 0018 onto it, keeping 0018's 26B123 row and CRC selection.
-- aurora-silicon/aura #203 (e3c1075f4144) is Aura 0006 (the storage auto-PM fix): drop it.
+## Packages, release 2 (built 2026-11-13 on ush, from 1b9d5ef)
 
-## Packages (built 2026-11-13 on ush; the Mac was unreachable)
-
-The kernel was cross-built on ush (`OMARCHY_CROSS_KERNEL=1`, kernel package only: the headers
-package would carry x86 host tools; build it natively for headers). Aura is bare-metal, so its x86
-build is the same code. The rest were built in an Arch Linux ARM container under qemu-user
-(`ArchLinuxARM-aarch64-latest`, signature checked). Every `check()` passed. Files on ush in
-`~/m5-build/pkg272/out/`. None of these has been installed or booted.
+Kernel cross-built (`OMARCHY_CROSS_KERNEL=1`, kernel package only; `check()` 35 tests OK); Aura
+built on x86 (bare metal, same code; `check()` filled and padded a Stage 1, kcrz 153141248); the
+rest in an Arch Linux ARM container under qemu-user, every `check()` passed (speakerguardd-v2:
+cargo tests and the provision/wiring/verify suites; aurora-speaker-upgrade: 37 tests). No file of
+the three new or changed support packages collides with another package in the set. Files on ush
+in `~/m5-build/pkg272-2/out/`. None has been installed or booted.
 
 | Package | sha256 | Bytes |
 | --- | --- | --- |
-| `linux-aurora-7.3.0.aurora17.v272-1-aarch64.pkg.tar.zst` (`7.3.0-17.v272-1-ARCH`) | `7ed9869122af9ac70361a41521833fd495f8a98edbb1ee01a4c513bb03fa19e2` | 44157755 |
-| `m1n1-aurora-1.6.1.aurora24.v272-1-aarch64.pkg.tar.zst` | `1f30e3fffb1b6a36cad8e5b91d4cd8b844a5ded50565c9f82ff2c3a420b094bf` | 2458500 |
-| `speakerguardd-v2-1.0.0alpha.1-40.1-aarch64.pkg.tar.zst` (ships disabled) | `d8078f1a9bf9cf6370fb521770623940803c42bead95e346a1fb59c024929440` | 1751517 |
-| `aurora-speaker-upgrade-0.1-15-any.pkg.tar.zst` (ships disabled) | `f63d4dcd1b50e51a6c4a373d0ace10b4b909308f23607204f4dc28d538ac4934` | 66114 |
-| `aurora-sep-1.17.g8679514f4dff-1-any.pkg.tar.zst` (read-only: `xart_writes=0 provision_keybag=0`) | `6fa7ec892ea43462a5cbaa4d59bc5db224040c30ca342e0ef0a80d6be17f411c` | 72452 |
-| `libfprint-aurora-1.94.100-1-aarch64.pkg.tar.zst` | `6f4c2ca4c795f66d0b700c935be6c6646d9b974d19e0a1e6b5d1235d710d8172` | 521161 |
+| `linux-aurora-7.3.0.aurora17.v272-2-aarch64.pkg.tar.zst` (`7.3.0-17.v272-2-ARCH`) | `a13a255980fb6aee481b3dbc6c2f1eecfadd56410ce7a7abe9ae7c362700dfc6` | 44127181 |
+| `m1n1-aurora-1.6.1.aurora24.v272-2-aarch64.pkg.tar.zst` | `ec19c40e838c1e2c6d8bc170063e2d5d0da83c43fa0f60943e3488b35400d161` | 2469202 |
+| `omarchy-aurora-firmware-20261014.j714s8-1-aarch64.pkg.tar.zst` | `e31dcfd14435cb38692ad86a6e920e7f2e170ed28ddef5947db1e1680b9a4ac5` | 47835 |
+| `speakerguardd-v2-1.0.0alpha.1-41.1-aarch64.pkg.tar.zst` | `c918f58ca81ba251c183fbf4ae7d092ad87fbdf85638fb61c1316ebebfd17b0c` | 1760691 |
+| `aurora-speaker-upgrade-0.1-16-any.pkg.tar.zst` | `3bd6790ac86ee3620020ffe9249c60824e01b93e53898dbd87c3cc19fdfb876e` | 66126 |
 
-aurora-sep stays at 8679514f: up to 572eb88e only its read-only status tool changed (two new
-diag lines), and the SEP UAPI header is byte-identical (sep-bio 5, sep-key 4). The kernel keeps
-the speakersafetyd hold for the J714s, so the speakers stay silent until speakerguardd v2 is
-switched on with this Mac's tuning.
+Unchanged from release 1: aurora-sep `6fa7ec89…`, libfprint-aurora `6f4c2ca4…`, hyprland-m5,
+mesa/vulkan-aurora, uboot-aurora and the omacom packages. The device trees grow by 7.5 KB
+(5709462 bytes in all, #1791's USB4 router), well under the boot.bin limit that refused 13.6 MB.
 
-
-## Upstream since the pins (2026-11-13)
-
-- Merged: aurora-silicon/linux #1724 (Jens Axboe's T6050 EL2 errata), our 0006–0007; drop them at the next re-pin. Also #1745 and #1747 (our 0017, 0008 part) and aura #203 (our Aura 0006), plus aura #213 (post-M4 ANS started for the payload) and aura #206 (K114c camera).
-- Reference for HDMI: aurora-silicon/linux #1565 (J575c HDMI, 7robertodantas) is the first merged Apple Silicon HDMI path in this tree. The J714s HDMI port (`atc3-dpphy`, `dp2hdmi-gpio0`) still needs a DT port.
-- Also merged after the pins (take at the next re-pin): #1791 J714s left-front USB-C USB4/Thunderbolt router (DjDeveloperr; the right port already had one), #1835 J714s camera sizes from sensor config 6 (DjDeveloperr; compare with our edimoldovan presets 0009–0015), #1763 SEP sse/skdl/hibe, #1610 GPU GEM residency (erikwb), #1634 tiled 5K displays (joshuaswarren), aura #187 (drop our Aura 0007) and aura #188 camera table (drop our Aura 0004). DjDeveloperr's J714s deep-sleep series #1772–#1785 was closed for rework.
+Release 1's packages (linux `7ed98691…`, m1n1 `1f30e3ff…`, built on 572eb88e/2232ae7a) are in
+this file's git history and on ush in `~/m5-build/pkg272/out/`.
