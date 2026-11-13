@@ -133,6 +133,15 @@ Also watched: [satchlj](https://github.com/satchlj), [joske](https://github.com/
 Posting on X but not found on GitHub: StudioXRadio (M4 Air installer), jefehollis (M4 Air GPU fix),
 thellmgenius (M4 Air Thunderbolt monitor). Know their GitHub names? Tell us.
 
+### Sent upstream from this repo
+
+| Change | Where | Status |
+| --- | --- | --- |
+| T6050 PCIe: let the auto-PM storage domain gate itself (boot hang / missing Wi-Fi) | [aurora-silicon/aura#203](https://github.com/aurora-silicon/aura/pull/203) | merged 2026-11-13 |
+| drm/apple: soft-depend on the T6050 combo PHY module (USB-C external displays) | [aurora-silicon/linux#1745](https://github.com/aurora-silicon/linux/pull/1745) | merged 2026-11-13 |
+| AVE: T6050 encoder on the 27.3 firmware | [aurora-silicon/linux#1747](https://github.com/aurora-silicon/linux/pull/1747) | merged 2026-11-13 |
+| ANE: T6050 on the 27.3 firmware | [aurora-silicon/linux#1746](https://github.com/aurora-silicon/linux/pull/1746) | open |
+
 ### Repos we watch
 
 | Repo | What it is |
