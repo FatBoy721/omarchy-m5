@@ -1,0 +1,38 @@
+#!/bin/sh
+# aura-j714s-stage1 --esp-partuuid UUID [--stage2-path PATH] [--window-ms MS] [--unpadded] OUT
+#
+# Builds the J714s macOS 27.2 Stage 1 from this package's raw Aura: fills the Stage 1
+# configuration (Aura's fill_stage1_config.py, in place, never appended) and wraps it as a
+# Mach-O boot object with no __TEXT_BOOT_EXEC (kcbz 0: iBoot does not start SPTM), padded for the
+# 128 MiB code-execute window (macho_boot_object.py --execute-window). Enroll OUT in the stub's
+# 1TR after `bputil -nc` with `kmutil configure-boot -c OUT --compress -v <stub volume>`.
+# A padded Stage 1 loads m1n1/boot-ctxr.bin by default (the ESP Stage 2 for the window).
+# --unpadded makes the rollback object (proxy only, one CPU; loads m1n1/boot.bin by default).
+# Nothing here enrolls anything.
+set -eu
+lib=/usr/lib/m1n1-aurora-j714s
+raw=/usr/share/m1n1-aurora/stage1/m1n1-raw.bin
+uuid= path= window= pad=1
+while [ $# -gt 1 ]; do
+  case $1 in
+    --esp-partuuid) uuid=$2; shift 2 ;;
+    --stage2-path) path=$2; shift 2 ;;
+    --window-ms) window=$2; shift 2 ;;
+    --unpadded) pad=0; shift ;;
+    --raw) raw=$2; shift 2 ;;
+    *) echo "unknown option $1" >&2; exit 2 ;;
+  esac
+done
+[ $# -eq 1 ] && [ -n "$uuid" ] || { sed -n 2,12p "$0" >&2; exit 2; }
+out=$1
+[ -n "$path" ] || { [ $pad = 1 ] && path=m1n1/boot-ctxr.bin || path=m1n1/boot.bin; }
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+python3 -I "$lib/fill_stage1_config.py" --input "$raw" --output "$tmp/filled.bin" \
+  --esp-partuuid "$uuid" --stage2-path "$path" ${window:+--window-ms "$window"}
+if [ $pad = 1 ]; then
+  python3 -I "$lib/macho_boot_object.py" --execute-window "$tmp/filled.bin" "$out"
+else
+  python3 -I "$lib/macho_boot_object.py" "$tmp/filled.bin" "$out"
+fi
+echo "$out: Stage 1 for ESP $uuid, Stage 2 $path$([ $pad = 1 ] && echo ', padded (kmutil --compress)')"

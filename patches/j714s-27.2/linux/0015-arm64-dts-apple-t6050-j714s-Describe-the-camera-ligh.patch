@@ -1,0 +1,51 @@
+From caa8d0c8e75eb225cfa6acf6652751ac0e32ae21 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 05:03:13 -0500
+Subject: [PATCH 15/18] arm64: dts: apple: t6050-j714s: Describe the camera
+ light
+
+edimoldovan's camera light driver (omacom/linux-aurora #422, 5a3e9d8a5f0b
+and 04606609e94c) needs the light's pin: ADT eic cil-gpio-offset 141 in
+the eic's own GPIO block (eic mmio-gpio 0x2dc000000; the AP's gpio0 at
+0x29c000000 faults at that offset), cil-gpio-config 0x474002, active high,
+as on the J714c.
+
+Tested on the J714s (macOS 27.3 beta 1 firmware): the pin reads back at
+its on level before every stream, and 1920x1080 and 2560x1440 stream at
+30 fps.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ arch/arm64/boot/dts/apple/t6050-j714s.dts | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+index c894e54e7a07..daeedd1336e3 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+@@ -619,6 +619,24 @@ fan-F1Ac {
+  * window; 2560x1440 is the centre 1:1.
+  */
+ &isp0 {
++	/*
++	 * The camera light, as on the J714c (#422): ADT eic cil-gpio-offset 141
++	 * in the eic's own GPIO block (eic mmio-gpio 0x2dc000000, not the AP's
++	 * gpio0 at 0x29c000000, whose pin 141 faults), cil-gpio-config 0x474002,
++	 * active high.
++	 * The driver lights it before every stream and feeds the eic ISP
++	 * watchdog only while it is on.
++	 */
++	reg = <0x5 0x80000000 0 0x1604000>,
++	      <0x5 0x82924000 0 0x40>,
++	      <0x5 0x829241d0 0 0x20>,
++	      <0x5 0x82924464 0 0x10>,
++	      <0x5 0xc3b50000 0 0x8000>,
++	      <0x2 0xdc000234 0 0x4>;
++	reg-names = "coproc", "mbox", "gpio", "mbox2", "wdt", "cil";
++	apple,cil-config = <0x474002>;
++	apple,cil-active-high;
++
+ 	/delete-node/ sensor-presets;
+ 
+ 	sensor-presets {

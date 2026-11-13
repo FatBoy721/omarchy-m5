@@ -1,0 +1,38 @@
+From f0a7093209cd8aff8f9f69ff67eee42cae85ec4f Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 23:55:17 -0500
+Subject: [PATCH 7/9] kboot: T6050: also admit the 27.2 (26B8125) G17S firmware
+ of the K116s
+
+aura #187 (Thomas Glanzmann), carried onto the build table of the 27.2/27.3
+GPU hand-off: the K114/K116 27.2 restore image (26B8125) has the 26B123
+boot-filled records and its own fwid digest, af68d034...9f38f6cb, the value
+of Jens Axboe's hw/t6050.rs entry (aurora-silicon/linux #1650).
+
+Not run on a K116s through this table; the J714s loads 26B123.
+
+Co-Authored-By: Thomas Glanzmann <thomas@glanzmann.de>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/kboot_gpu.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
+index 0f9ca662..244f645c 100644
+--- a/src/kboot_gpu.c
++++ b/src/kboot_gpu.c
+@@ -4052,6 +4052,14 @@ static const struct {
+     {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
+      {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41, 0x01, 0x70, 0x2c, 0x9a, 0xc6,
+       0xc4, 0xe9, 0x0f, 0x2e, 0x12, 0x3f, 0x3b, 0x36, 0xfb, 0xe6, 0xff, 0xea, 0x91, 0x3f, 0x0f, 0xd9}},
++    /*
++     * 27.2 (26B8125), the K114/K116 restore image, which iBoot loads on the K116s: 26B123's
++     * records, its own digest. aura #187 (Thomas Glanzmann), from Jens Axboe's hw/t6050.rs entry
++     * (aurora-silicon/linux #1650).
++     */
++    {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
++     {0xaf, 0x68, 0xd0, 0x34, 0xa3, 0xf0, 0x06, 0xb4, 0x3d, 0xab, 0x66, 0x1b, 0x82, 0x5f, 0x12, 0x59,
++      0x8c, 0xb8, 0x6e, 0x4d, 0x2a, 0x0e, 0x38, 0x44, 0xf1, 0x4f, 0xa5, 0x05, 0x9f, 0x38, 0xf6, 0xcb}},
+     /* 27.0 (26A428) */
+     {{0x49720, 0x49e60, 0x9d1d8, 0x9d918},
+      {0x85, 0xd0, 0xfd, 0x82, 0x80, 0xf7, 0x24, 0x65, 0x5c, 0xa9, 0xa9, 0x71, 0x7b, 0xc9, 0x1a, 0x8a,

@@ -1,0 +1,63 @@
+From 7934cb1291fbbcfadca1daa7cfb161a969f7f234 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 03:36:02 -0500
+Subject: [PATCH 5/9] kboot: T6050: hand the J714s camera over on 27.3 beta 1
+
+The J714s's isp0 on the 27.3 beta 1 stub (mBoot-20457.60.65.0.1) keeps
+27.0's sensor type 0x74 and the same two firmware segments: TEXT 0xc1c000
+at phys 0x100010cc000, DATA 0x13d0000 at 0x100026a4000, remapped at
+0x10000000000 and 0x10000c1c000. Add a 27.3 beta 1 row for it to the
+camera table of aura #188.
+
+A board may now have one row per firmware: rows of another firmware are
+skipped instead of refusing the hand-off.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
+---
+ src/kboot.c | 16 +++++++++++-----
+ 1 file changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/src/kboot.c b/src/kboot.c
+index dc9d2bfb..c12b625e 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -9377,8 +9377,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+  * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
+  * snapshot physical addresses. The kernel allocates the small main-memory
+  * tail and owns all power, DART and firmware-start operations. J716c's camera
+- * is sensor type 0x75, J714s's 0x74 (both measured on 27.0), K116s's 0xbc
+- * (27.2); all three have the same two segments.
++ * is sensor type 0x75, J714s's 0x74 (both measured on 27.0; the J714s also on
++ * 27.3 beta 1), K116s's 0xbc (27.2); all three have the same two segments.
+  */
+ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
+                                                                                 const char *name)
+@@ -9399,6 +9399,11 @@ static const struct {
+ } t6050_isp_boards[] = {
+     {"apple,j716c", 0x75, V27_0},
+     {"apple,j714s", 0x74, V27_0},
++    /*
++     * J714s on the 27.3 beta 1 stub (mBoot-20457.60.65.0.1): its ADT isp0 keeps 27.0's sensor
++     * type and the same two segments (TEXT 0xc1c000, DATA 0x13d0000 at remap 0x10000000000).
++     */
++    {"apple,j714s", 0x74, V27_3B1},
+     /*
+      * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
+      * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.
+@@ -9417,11 +9422,12 @@ static int dt_set_t6050_isp(const char **why)
+     u32 want = 0;
+     *why = "board or firmware not in the table";
+     for (unsigned int i = 0; i < ARRAY_SIZE(t6050_isp_boards); i++) {
+-        if (fdt_node_check_compatible(dt, 0, t6050_isp_boards[i].compat))
++        /* A board may have a row per firmware: take the row of the running one. */
++        if (fdt_node_check_compatible(dt, 0, t6050_isp_boards[i].compat) ||
++            os_firmware.version != t6050_isp_boards[i].fw)
+             continue;
+-        if (os_firmware.version != t6050_isp_boards[i].fw)
+-            return -1;
+         want = t6050_isp_boards[i].sensor_type;
++        break;
+     }
+     if (!want)
+         return -1;

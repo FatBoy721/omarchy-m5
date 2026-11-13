@@ -1,0 +1,69 @@
+From 52b64e83f0f37762c8a9f1578c749e0218cf8d6a Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 23:55:40 -0500
+Subject: [PATCH 8/9] kboot: T6050: hand the internal display over on 27.2
+
+The J714s moves its Linux stub to macOS 27.2 (26B123, mBoot-20457.41.3),
+upstream's Mach-O target. The T6050 DCP hand-off admitted 27.0 and 27.3
+beta 1 only, so on 27.2 the panel stayed on simpledrm.
+
+Admit 27.2 and publish apple,firmware-compat <27 2 0> (the firmware's own
+version), which aurora-silicon/linux iomfb_v27.c keys dcp_methods_27_2 by.
+Pin the 27.2 image as 27.0's is pinned: C51FB0C8-C45D-39B0-85BC-520E600FC950,
+read from the IPSW. In the J714s identity's Firmware/dcp/t605xdcp.im4p it is
+the LC_UUID of the Mach-O at 0x1114608, where 27.0's payload has its pinned
+64863924-... at 0x10f8608, and it appears at the same five places in the
+payload. dcpext engines must run the same image, as before.
+
+Not booted: no J714s has run a 27.2 stub. If the 27.2 ADT names another
+image, the hand-off refuses (simpledrm) and logs the UUID it found.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/kboot_display_handoff.c | 24 ++++++++++++++++++------
+ 1 file changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
+index 0b39c12f..a127e177 100644
+--- a/src/kboot_display_handoff.c
++++ b/src/kboot_display_handoff.c
+@@ -3240,8 +3240,16 @@ static bool dcp6_dt_describes(void *dt)
+  * is taken as the ADT names it, and published with apple,firmware-compat <27 3 0>, the key Linux's
+  * firmware-27 DCP driver chooses its 27.3 method table and swap layout by (aurora-silicon/linux
+  * #1174). As TripleU613's m1n1 for the J714s does (betizzel's 27.3 handoff).
++ *
++ * 27.2 (26B123, mBoot-20457.41.3) is pinned to its image too, and published with its own
++ * apple,firmware-compat <27 2 0>, the key Linux's 27.2 method table is chosen by. The UUID is the
++ * IPSW's: in the J714s identity's Firmware/dcp/t605xdcp.im4p, the Mach-O that holds 27.0's pinned
++ * UUID (at 0x10f8608, after the 0x10f8000 fileset) sits at 0x1114608 in 26B123, and its UUID
++ * appears at the same five places in the payload as 27.0's does. A J714s whose 27.2 ADT names
++ * another image keeps simpledrm, and Aura's log says which UUID it named.
+  */
+-#define T6050_DCP_UUID  "64863924-B56B-3E32-87FE-038677F52709"
++#define T6050_DCP_UUID     "64863924-B56B-3E32-87FE-038677F52709"
++#define T6050_DCP_UUID_272 "C51FB0C8-C45D-39B0-85BC-520E600FC950"
+ #define T6050_NDISP     5       /* disp0 reg[0..4] are the dcp's disp-0..disp-4 */
+ #define T6050_BW_BASE   0x20000 /* bandwidth agent 0's scratch in the PMC metadata */
+ #define T6050_BW_STRIDE 0x4000
+@@ -3321,12 +3329,16 @@ static T6050_INIT int t6050_check_adt(void)
+     int disp0 = adt_path_offset(adt, "/arm-io/disp0");
+     const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
+ 
+-    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B1)
+-        bail("OS firmware %s is not 27.0 or 27.3 beta 1\n", os_firmware.string);
++    if (os_firmware.version != V27_0 && os_firmware.version != V27_2 &&
++        os_firmware.version != V27_3B1)
++        bail("OS firmware %s is not 27.0, 27.2 or 27.3 beta 1\n", os_firmware.string);
+     t6050.compat = os_firmware.version == V27_3B1 ? &t6050_compat_27_3 : &os_firmware;
+-    if (!dcp6_is_uuid(uuid, len) || len > sizeof(t6050.uuid) ||
+-        (os_firmware.version == V27_0 && strcmp(uuid, T6050_DCP_UUID)))
+-        bail("DCP image %s is not " T6050_DCP_UUID "\n", dcp6_is_uuid(uuid, len) ? uuid : "(none)");
++    const char *pin = os_firmware.version == V27_0   ? T6050_DCP_UUID
++                      : os_firmware.version == V27_2 ? T6050_DCP_UUID_272
++                                                     : NULL;
++    if (!dcp6_is_uuid(uuid, len) || len > sizeof(t6050.uuid) || (pin && strcmp(uuid, pin)))
++        bail("DCP image %s is not %s\n", dcp6_is_uuid(uuid, len) ? uuid : "(none)",
++             pin ? pin : "a UUID");
+     strcpy(t6050.uuid, uuid);
+     dlog("DCP image %s, firmware-compat %s\n", t6050.uuid, t6050.compat->string);
+     if (dcp6_adt_u32(nub, "running", &val) || val != 1 || disp0 < 0 ||

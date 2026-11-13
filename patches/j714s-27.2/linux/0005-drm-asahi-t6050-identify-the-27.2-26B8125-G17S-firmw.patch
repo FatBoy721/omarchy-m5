@@ -1,0 +1,79 @@
+From 98d8b8bd184b7108c1cddfcda5c0e7f786107efe Mon Sep 17 00:00:00 2001
+From: Jens Axboe <axboe@kernel.dk>
+Date: Wed, 11 Nov 2026 12:00:39 -0700
+Subject: [PATCH 05/18] drm/asahi: t6050: identify the 27.2 (26B8125) G17S
+ firmware of the K114/K116
+
+Applies on top of aurora-silicon/linux PR #1173.
+
+The 16-inch M5 Pro OLED (K116s, Mac17,12) restores from
+UniversalMac_27.2_26B8125_Restore.ipsw, not from the 26B123 image of the
+Mac17,8 that #1173 pins. Its Firmware/agx/armfw_g17x.im4p and
+armfw1_g17x.im4p carry a010 (G17S) images whose LC_UUIDs are the uuid of
+the K116s ADT's iop-gfx-nub and iop-gfx1-nub (8A2891FC-D479-37E8-895D-
+71B4D88ECB51, 58FF964E-F74B-31C2-8179-3837D6ADA9C2), so this is what iBoot
+loads. TEXT 0x50000 + 0x54000, DATA 0x184000, the GKTS/ECAP records and
+the _rtk_tunables/_rtk_patchbay sections at 26B123's offsets, but the
+fwid digest differs:
+
+  26B8125 G17S  af68d034a3f006b43dab661b825f12598cb86e4d2a0e3844f14fa5059f38f6cb
+  26B123  G17S  2b4613c62a8a007f22a94101702c9ac6c4e90f2e123f3b36fbe6ffea913f0fd9
+
+(check_fwid.py's algorithm.) Without this
+entry the driver refuses the K116s firmware before any GPU write.
+
+It names V26B123_M5: the AGX kext of the 26B8125 kernelcache builds root
+version word 0x0c8e_4339_8728_04c0 and its u64[24] allocation size table
+is ABI_ALLOCATION_SIZES_26B123_M5 entry for entry (HW data 0x2850, policy
+0x12728, status config 0x790), and both firmware roles build the same
+version word. The interior
+offsets of the policy and the status config were not compared against
+26B123's and no 27.2 firmware has run this graph on hardware.
+
+Signed-off-by: Jens Axboe <axboe@kernel.dk>
+---
+ drivers/gpu/drm/asahi/hw/t6050.rs | 31 +++++++++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/drivers/gpu/drm/asahi/hw/t6050.rs b/drivers/gpu/drm/asahi/hw/t6050.rs
+index 9e8b1392d94f..6b7ebe1852da 100644
+--- a/drivers/gpu/drm/asahi/hw/t6050.rs
++++ b/drivers/gpu/drm/asahi/hw/t6050.rs
+@@ -76,6 +76,37 @@
+             variant: &crate::g17::fw::variant::V26C5035_M5,
+             config: None,
+         },
++        // The 27.2 build of the Mac17,10 to Mac17,13 restore image (K114, K116), which iBoot
++        // loads on the K116s: the a010 images whose Mach-O UUIDs are the ADT's iop-gfx-nub and
++        // iop-gfx1-nub uuid. Its records and sections sit where 26B123's do; its kext builds the
++        // 26B123 version word and allocation sizes.
++        crate::g17::fw::variant::Build {
++            os_version: [27, 2, 0],
++            name: "27.2 (26B8125), G17S",
++            images: &[crate::fwid::FirmwareBuild {
++                name: "26B8125 for T6050 G17S, primary then secondary",
++                text_size: 0xa4000,
++                data_size: 0x184000,
++                entropy: &[[0x49ea4, 0x49f87], [0x9d92c, 0x9da0f]],
++                boot_filled: &[
++                    (0x224, 4),
++                    (0x23c, 8),
++                    (0x49764, 0x740),
++                    (0x49ea4, 0x231),
++                    (0x50224, 4),
++                    (0x5023c, 8),
++                    (0x9d1ec, 0x740),
++                    (0x9d92c, 0x231),
++                ],
++                text_sha256: [
++                    0xaf, 0x68, 0xd0, 0x34, 0xa3, 0xf0, 0x06, 0xb4, 0x3d, 0xab, 0x66, 0x1b, 0x82,
++                    0x5f, 0x12, 0x59, 0x8c, 0xb8, 0x6e, 0x4d, 0x2a, 0x0e, 0x38, 0x44, 0xf1, 0x4f,
++                    0xa5, 0x05, 0x9f, 0x38, 0xf6, 0xcb,
++                ],
++            }],
++            variant: &crate::g17::fw::variant::V26B123_M5,
++            config: None,
++        },
+         crate::g17::fw::variant::Build {
+             os_version: [27, 2, 0],
+             name: "27.2 (26B123), G17S",

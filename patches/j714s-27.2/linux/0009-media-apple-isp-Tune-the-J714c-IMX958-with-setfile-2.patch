@@ -1,0 +1,92 @@
+From 1e72d79d0abd12668ccd97196d06131b31870882 Mon Sep 17 00:00:00 2001
+From: Eduard Moldovan <edimoldovan@gmail.com>
+Date: Sun, 8 Nov 2026 12:56:36 +0100
+Subject: [PATCH 09/18] media: apple: isp: Tune the J714c IMX958 with setfile
+ 2226_02
+
+macOS's appleh16camerad carries three setfiles naming sensor 0x958:
+2224_01, 2226_01 and 2226_02. The J714c module reports build revision 2,
+and with 2226_02 its noise is far lower and its colour neutral, where
+2224_01 leaves heavy grain and a green cast. Add 2226_02 and select it
+for T6050; T8142 and T6040 keep 2224_01.
+
+Signed-off-by: Eduard Moldovan <edimoldovan@gmail.com>
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+(cherry picked from commit 38993598aa9aff325515eddc0de76ae895977802)
+---
+ drivers/media/platform/apple/isp/isp-cam.c | 11 ++++++++---
+ drivers/media/platform/apple/isp/isp-drv.c |  2 ++
+ drivers/media/platform/apple/isp/isp-drv.h |  4 ++++
+ 3 files changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/platform/apple/isp/isp-cam.c b/drivers/media/platform/apple/isp/isp-cam.c
+index e3c39232e727..f388c9aef3e7 100644
+--- a/drivers/media/platform/apple/isp/isp-cam.c
++++ b/drivers/media/platform/apple/isp/isp-cam.c
+@@ -87,6 +87,8 @@ static const struct isp_setfile isp_setfiles[] = {
+ 	[ISP_IMX913_7523_01] = {0x913, 0x75230107, "apple/isp_7523_01XX.dat", 0x247f8},
+ 	[ISP_IMX958_2224_01] = {0x958, 0x22240106, "apple/isp_2224_01XX.dat", 0x6ff4, 0,
+ 				ISP_TEMPORAL_FILTER_BAND0},
++	[ISP_IMX958_2226_02] = {0x958, 0x22260201, "apple/isp_2226_02XX.dat", 0x6ff4, 0,
++				ISP_TEMPORAL_FILTER_BAND0},
+ 	[ISP_VD56G0_6221_01] = {0xd56, 0x62210102, "apple/isp_6221_01XX.dat", 0x1b80},
+ 	[ISP_VD56G0_6222_01] = {0xd56, 0x62220102, "apple/isp_6222_01XX.dat", 0x1b80},
+ };
+@@ -176,8 +178,11 @@ static int isp_ch_get_sensor_id(struct apple_isp *isp, u32 ch)
+ 		id = ISP_IMX913_7523_01;
+ 		break;
+ 	case 0x958:
+-		/* Section 0x50f of 2224 names sensor 0x958; 2924's names 0x614. */
+-		id = ISP_IMX958_2224_01;
++		/*
++		 * Section 0x50f of 2224 and 2226 names sensor 0x958; 2924's
++		 * names 0x614.
++		 */
++		id = isp->hw->imx958_2226 ? ISP_IMX958_2226_02 : ISP_IMX958_2224_01;
+ 		break;
+ 	case 0xd56:
+ 		id = ISP_VD56G0_6221_01;
+@@ -485,7 +490,7 @@ static int isp_ch_cache_sensor_info(struct apple_isp *isp, u32 ch)
+ 	if (err ||
+ 	    (fmt->id != ISP_IMX248_1820_01 && fmt->id != ISP_IMX558_1921_01 &&
+ 	     fmt->id != ISP_IMX558_1925_03 && fmt->id != ISP_IMX364_8720_01 &&
+-	     fmt->id != ISP_IMX958_2224_01)) {
++	     fmt->id != ISP_IMX958_2224_01 && fmt->id != ISP_IMX958_2226_02)) {
+ 		dev_err(isp->dev,
+ 			"ch %d: unsupported sensor. Please file a bug report with hardware info & dmesg trace.\n",
+ 			ch);
+diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
+index 703dcea3ef90..21e13968c862 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.c
++++ b/drivers/media/platform/apple/isp/isp-drv.c
+@@ -1412,6 +1412,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+ 	.fw_restore = true,
+ 	.deferred_start = true,
+ 	.setfile_stride_fixup = true,
++	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
++	.imx958_2226 = true,
+ };
+ 
+ static const struct of_device_id apple_isp_of_match[] = {
+diff --git a/drivers/media/platform/apple/isp/isp-drv.h b/drivers/media/platform/apple/isp/isp-drv.h
+index 3551018baf17..79a4445d1c4f 100644
+--- a/drivers/media/platform/apple/isp/isp-drv.h
++++ b/drivers/media/platform/apple/isp/isp-drv.h
+@@ -277,6 +277,9 @@ struct apple_isp_hw {
+ 	 * reopen the camera, does not wait for another firmware start.
+ 	 */
+ 	unsigned int fw_idle_ms;
++
++	/* The IMX958 module takes setfile 2226_02, not 2224_01 */
++	bool imx958_2226;
+ };
+ 
+ enum isp_sensor_id {
+@@ -328,6 +331,7 @@ enum isp_sensor_id {
+ 	ISP_IMX853_7622_01,
+ 	ISP_IMX913_7523_01,
+ 	ISP_IMX958_2224_01,
++	ISP_IMX958_2226_02,
+ 	ISP_VD56G0_6221_01,
+ 	ISP_VD56G0_6222_01,
+ };

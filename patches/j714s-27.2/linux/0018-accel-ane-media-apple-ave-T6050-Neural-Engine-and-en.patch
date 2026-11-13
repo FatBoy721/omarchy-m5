@@ -1,0 +1,174 @@
+From 60f21ee0782da0fdaa559a94f5ccf3ea85e81e8d Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 23:54:15 -0500
+Subject: [PATCH 18/18] accel/ane, media: apple: ave: T6050 Neural Engine and
+ encoder on macOS 27.2
+
+The J714s 27.2 stub (UniversalMac_27.2_26B123, J714s identity) preloads
+these firmware images; their segments, read from the IPSW:
+
+  ANE  Firmware/ane/h17_ane0_fw_hyperion_j71y.im4p
+       TEXT 0xbc000, DATA 0x2b0000 (27.0: 0xc0000/0x2ac000; 27.3:
+       0xec000/0x280000; all end at 0x36c000)
+  AVE  Firmware/ave/AppleAVE2FW_H17D.im4p
+       TEXT 0x158000 CRC32 d33ed3b4, DATA 0x134000 (27.2.1 26B131 has the
+       same bytes)
+
+ANE: add the 27.2 layout. The TEXT pin cannot come from the IPSW: the 27.0
+image hashes to d4a64be9... while the TEXT iBoot preloads hashes to the pinned
+93ae3a37.... Until a 27.2 boot reports it, the 27.2 pin is all zeroes, so the
+layout is recognised and refused before power-up, and the refusal prints the
+preloaded TEXT sha256 to pin.
+
+AVE: add 26B123 to the admitted builds and known CRCs. It has the 27.3
+segment sizes, so the CRC selects between them. Its command layout is not
+qualified: probe only, unless apple_ave.ave_t6050_27_2_layout=1 drives it with
+the 26A428 layout, which 27.0 and 27.3 both speak.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/accel/ane/ane_fw_platform.c           | 19 +++++++++++++++++++
+ drivers/accel/ane/ane_fw_platform.h           |  3 ++-
+ drivers/media/platform/apple/ave/ave-drv.c    |  6 ++++++
+ drivers/media/platform/apple/ave/ave-fw.c     |  5 +++--
+ drivers/media/platform/apple/ave/ave-layout.c | 12 ++++++++++++
+ drivers/media/platform/apple/ave/ave.h        |  6 ++++++
+ 6 files changed, 48 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/accel/ane/ane_fw_platform.c b/drivers/accel/ane/ane_fw_platform.c
+index c17656c17e47..7320942f260a 100644
+--- a/drivers/accel/ane/ane_fw_platform.c
++++ b/drivers/accel/ane/ane_fw_platform.c
+@@ -57,6 +57,15 @@ static const u8 ane_t6050_text_pin_27_3[] = {
+ 	0xc7, 0x19, 0x10, 0xac, 0x66, 0xdc, 0x60, 0x66,
+ };
+ 
++/*
++ * The macOS 27.2 build (26B123). Its TEXT digest as iBoot preloads it is not
++ * known yet: the IPSW image is not what the loader hands off (27.0's file
++ * hashes to d4a64be9..., its preloaded TEXT to 93ae3a37...). All zeroes match
++ * no TEXT, so the 27.2 layout is recognised but refused, and the refusal
++ * prints the preloaded TEXT sha256 to pin here from the first 27.2 boot.
++ */
++static const u8 ane_t6050_text_pin_27_2[32];
++
+ /*
+  * T6050 builds, by their ADT ane0 segment-ranges. 27.3 moved 0x2c000 bytes
+  * from DATA into TEXT; the firmware span (heap tail, pool, IPC) is unchanged.
+@@ -68,6 +77,16 @@ static const struct ane_fw_preload_build ane_t6050_builds[] = {
+ 		.size = { 0xc0000, 0x2ac000 },
+ 		.text_pin = ane_t6050_text_pin_27_0,
+ 	},
++	{
++		/*
++		 * The J714s 27.2 IPSW image (Firmware/ane/h17_ane0_fw_hyperion_j71y,
++		 * 26B123): TEXT 0xbc000, DATA 0x2b0000, the same 0x36c000 span.
++		 */
++		.name = "27.2",
++		.dva = { 0x10000000000, 0x100000bc000 },
++		.size = { 0xbc000, 0x2b0000 },
++		.text_pin = ane_t6050_text_pin_27_2,
++	},
+ 	{
+ 		.name = "27.3",
+ 		.dva = { 0x10000000000, 0x100000ec000 },
+diff --git a/drivers/accel/ane/ane_fw_platform.h b/drivers/accel/ane/ane_fw_platform.h
+index a2b11206ee52..68d4cd02baad 100644
+--- a/drivers/accel/ane/ane_fw_platform.h
++++ b/drivers/accel/ane/ane_fw_platform.h
+@@ -28,7 +28,8 @@ enum ane_fw_irq_role {
+  * One firmware build the loader may preload: the device addresses and sizes
+  * of its TEXT and DATA segments and the digest of its TEXT. Apple moves the
+  * TEXT/DATA split between macOS releases (T6050: 27.0 TEXT 0xc0000 and DATA
+- * 0x2ac000, 27.3 TEXT 0xec000 and DATA 0x280000, both ending at 0x36c000),
++ * 0x2ac000, 27.2 TEXT 0xbc000 and DATA 0x2b0000, 27.3 TEXT 0xec000 and DATA
++ * 0x280000, all ending at 0x36c000),
+  * so the handed-off layout selects the build and the build its TEXT pin.
+  */
+ struct ane_fw_preload_build {
+diff --git a/drivers/media/platform/apple/ave/ave-drv.c b/drivers/media/platform/apple/ave/ave-drv.c
+index 16ae0ace321f..939486044582 100644
+--- a/drivers/media/platform/apple/ave/ave-drv.c
++++ b/drivers/media/platform/apple/ave/ave-drv.c
+@@ -137,6 +137,12 @@ static const struct ave_fw_build ave_t6050_builds[] = {
+ 	 * takes 26A428's command layout (ave_layout_for_crc()).
+ 	 */
+ 	{ "26C5035", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26C5035 },
++	/*
++	 * macOS 27.2 (26B123): 27.3's segment sizes (the IPSW's AppleAVE2FW_H17D), its own TEXT
++	 * CRC. Its command layout is not qualified: probe only unless
++	 * apple_ave.ave_t6050_27_2_layout=1 (ave_layout_for_crc()).
++	 */
++	{ "26B123", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26B123 },
+ };
+ 
+ static const struct ave_variant ave_t6050 = {
+diff --git a/drivers/media/platform/apple/ave/ave-fw.c b/drivers/media/platform/apple/ave/ave-fw.c
+index 2b74519cc05a..20cef7bb7de7 100644
+--- a/drivers/media/platform/apple/ave/ave-fw.c
++++ b/drivers/media/platform/apple/ave/ave-fw.c
+@@ -42,6 +42,7 @@ static const u32 ave_known_text_crc[] = {
+ 	AVE_FW_TEXT_CRC_T6041_25G83, /* AppleAVE2FW 9003.78.0 / M4 Max */
+ 	AVE_FW_TEXT_CRC_T6050_26A428, /* AppleAVE2FW, macOS 27.0 26A428 / T6050 */
+ 	AVE_FW_TEXT_CRC_T6050_26C5035, /* AppleAVE2FW, macOS 27.3 26C5035r / T6050 */
++	AVE_FW_TEXT_CRC_T6050_26B123, /* AppleAVE2FW, macOS 27.2 26B123 / T6050 */
+ 	0x460c7a7c, /* AppleAVE2FW 6070.11.1 / T6000 */
+ 	0x25bfd039, /* AppleAVE2FW 6070.11.1 / T8112 */
+ };
+@@ -222,8 +223,8 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
+  */
+ /*
+  * The variant's build with these segment sizes and, unless @crc is 0, this
+- * TEXT CRC; or NULL. Builds can share sizes, so only the CRC tells them
+- * apart.
++ * TEXT CRC; or NULL. Builds can share sizes (T6050 27.2 and 27.3), so only
++ * the CRC tells them apart.
+  */
+ static const struct ave_fw_build *ave_fw_find_build(const struct ave_variant *v,
+ 						    size_t text, size_t data, u32 crc)
+diff --git a/drivers/media/platform/apple/ave/ave-layout.c b/drivers/media/platform/apple/ave/ave-layout.c
+index dc887d27b4cc..b0a593ca2258 100644
+--- a/drivers/media/platform/apple/ave/ave-layout.c
++++ b/drivers/media/platform/apple/ave/ave-layout.c
+@@ -954,6 +954,11 @@ module_param(ave_t6050_27_3_hevc, bool, 0444);
+ MODULE_PARM_DESC(ave_t6050_27_3_hevc,
+ 		 "HEVC on the T6050 macOS 27.3 (26C5035r) firmware (default on; 0 refuses it)");
+ 
++static bool ave_t6050_27_2_layout;
++module_param(ave_t6050_27_2_layout, bool, 0444);
++MODULE_PARM_DESC(ave_t6050_27_2_layout,
++		 "Drive the T6050 macOS 27.2 (26B123) firmware with 26A428's command layout (default off: probe only)");
++
+ /*
+  * HEVC on the macOS 27.3 build encoded cleanly on two J714s boots (Main with
+  * B-frames); ave_t6050_27_3_hevc=0 refuses it again.
+@@ -984,5 +989,12 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
+ 	 */
+ 	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
+ 		return &ave_layout_26a428;
++	/*
++	 * The macOS 27.2 build sits between 27.0 and 27.3, which both speak 26A428's
++	 * layout, but no encode has run on it yet: probe only until
++	 * ave_t6050_27_2_layout=1 is set and an encode passes.
++	 */
++	if (crc == AVE_FW_TEXT_CRC_T6050_26B123 && ave_t6050_27_2_layout)
++		return &ave_layout_26a428;
+ 	return NULL;
+ }
+diff --git a/drivers/media/platform/apple/ave/ave.h b/drivers/media/platform/apple/ave/ave.h
+index cb4bbe7673c3..db9e9f766525 100644
+--- a/drivers/media/platform/apple/ave/ave.h
++++ b/drivers/media/platform/apple/ave/ave.h
+@@ -174,6 +174,12 @@ enum ave_opcode {
+  */
+ #define AVE_FW_TEXT_CRC_T6041_25G83 0x9a080cad
+ #define AVE_FW_TEXT_CRC_T6050_26A428 0x87279429
++/*
++ * macOS 27.2 (26B123) / T6050: TEXT 0x158000, DATA 0x134000. From the IPSW's
++ * Firmware/ave/AppleAVE2FW_H17D.im4p (the J714s identity's AVE); 27.2.1 (26B131)
++ * carries the same bytes.
++ */
++#define AVE_FW_TEXT_CRC_T6050_26B123 0xd33ed3b4
+ /* macOS 27.3 beta 1 (26C5035r) / T6050: TEXT 0x158000, DATA 0x134000. */
+ #define AVE_FW_TEXT_CRC_T6050_26C5035 0xc25b4ddb
+ 

@@ -1,0 +1,47 @@
+From 9526fd1e8e433f41b2cfc6bb9c055910063837f6 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 23:55:40 -0500
+Subject: [PATCH 9/9] kboot: T6050: hand the J714s camera over on 27.2
+
+Add a J714s 27.2 (26B123) row to the T6050 camera table. The J714s identity
+of UniversalMac_27.2_26B123 loads Firmware/isp_bni/adc-nyx-sc7x.im4p (uuid
+889F5ADB-BDE7-3B93-A531-24587C4CF3D5), whose TEXT (0xc1c000) and DATA
+(0x13d0000) match the two segments the hand-off requires, as on 27.0 and
+27.3 beta 1. The sensor type (0x74) and the ADT segment-ranges are checked
+at boot as for every row, so a different ADT refuses the hand-off.
+
+Not booted: no J714s has run a 27.2 stub.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/kboot.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/kboot.c b/src/kboot.c
+index c12b625e..201e0b7a 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -9378,7 +9378,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+  * snapshot physical addresses. The kernel allocates the small main-memory
+  * tail and owns all power, DART and firmware-start operations. J716c's camera
+  * is sensor type 0x75, J714s's 0x74 (both measured on 27.0; the J714s also on
+- * 27.3 beta 1), K116s's 0xbc (27.2); all three have the same two segments.
++ * 27.3 beta 1, and 27.2 from its IPSW), K116s's 0xbc (27.2); all three have the
++ * same two segments.
+  */
+ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
+                                                                                 const char *name)
+@@ -9404,6 +9405,13 @@ static const struct {
+      * type and the same two segments (TEXT 0xc1c000, DATA 0x13d0000 at remap 0x10000000000).
+      */
+     {"apple,j714s", 0x74, V27_3B1},
++    /*
++     * J714s on the 27.2 stub (26B123): the J714s identity's ISP firmware, isp_bni/adc-nyx-sc7x
++     * (uuid 889F5ADB-BDE7-3B93-A531-24587C4CF3D5), has 27.0's TEXT 0xc1c000 and DATA 0x13d0000
++     * (read from the IPSW). The sensor type and the ADT segments are checked at boot as for the
++     * other rows; not booted yet.
++     */
++    {"apple,j714s", 0x74, V27_2},
+     /*
+      * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
+      * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.

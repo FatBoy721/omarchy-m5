@@ -1,0 +1,134 @@
+From e1e804e4a2055f78bb48dd379737e199128088d5 Mon Sep 17 00:00:00 2001
+From: Jens Axboe <axboe@kernel.dk>
+Date: Wed, 11 Nov 2026 13:30:32 -0700
+Subject: [PATCH 4/9] kboot: T6050: hand the K116s camera over on 27.2
+
+The T6050 camera hand-off admits the J716c (sensor type 0x75) and the
+J714s (0x74) on 27.0. Make the board test a table that also admits the
+K116s (Mac17,12, 16-inch M5 Pro): sensor type 0xbc on 27.2 (26B8125),
+whose isp0 has the same two firmware segments. Its firmware is the
+IPSW's isp_bni/adc-nyx-sck11pm (uuid 980F533B-34EA-3FBA-878C-809F6AF57345),
+and the K116 connection table has one FrontRGB IMX958.
+
+Say why a hand-off is refused, and print the connections scheme with the
+platform.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+[thomas: the camera part of Jens's K116s aura-internal patch "kboot: hand
+ the speaker amps' configuration and the T6050 camera to the kernel",
+ ported to main, which already has the amp configuration, exact paths and
+ the ISP memory-region helper.]
+Signed-off-by: Thomas Glanzmann <thomas@glanzmann.de>
+---
+ src/kboot.c | 50 +++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 37 insertions(+), 13 deletions(-)
+
+diff --git a/src/kboot.c b/src/kboot.c
+index c12d0f69..dc9d2bfb 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -9377,7 +9377,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+  * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
+  * snapshot physical addresses. The kernel allocates the small main-memory
+  * tail and owns all power, DART and firmware-start operations. J716c's camera
+- * is sensor type 0x75, J714s's 0x74; both have the same two segments.
++ * is sensor type 0x75, J714s's 0x74 (both measured on 27.0), K116s's 0xbc
++ * (27.2); all three have the same two segments.
+  */
+ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
+                                                                                 const char *name)
+@@ -9391,26 +9392,45 @@ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(
+     return 0;
+ }
+ 
+-static int dt_set_t6050_isp(void)
++static const struct {
++    const char *compat;
++    u32 sensor_type;
++    enum fw_version fw;
++} t6050_isp_boards[] = {
++    {"apple,j716c", 0x75, V27_0},
++    {"apple,j714s", 0x74, V27_0},
++    /*
++     * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
++     * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.
++     */
++    {"apple,k116s", 0xbc, V27_2},
++};
++
++static int dt_set_t6050_isp(const char **why)
+ {
+     /* Exact paths: "/soc/isp@..." must not resolve "soc" to "soc@200000000". */
+     int node = kboot_fdt_path_exact(dt, "isp");
++    *why = NULL;
+     if (node < 0)
+         return 0;
+-    u32 want;
+-    if (!fdt_node_check_compatible(dt, 0, "apple,j716c"))
+-        want = 0x75;
+-    else if (!fdt_node_check_compatible(dt, 0, "apple,j714s"))
+-        want = 0x74;
+-    else
+-        return -1;
+-    if (os_firmware.version != V27_0)
++
++    u32 want = 0;
++    *why = "board or firmware not in the table";
++    for (unsigned int i = 0; i < ARRAY_SIZE(t6050_isp_boards); i++) {
++        if (fdt_node_check_compatible(dt, 0, t6050_isp_boards[i].compat))
++            continue;
++        if (os_firmware.version != t6050_isp_boards[i].fw)
++            return -1;
++        want = t6050_isp_boards[i].sensor_type;
++    }
++    if (!want)
+         return -1;
+ 
+     int chosen = adt_path_offset(adt, "/chosen");
+     int isp = adt_path_offset(adt, "/arm-io/isp0");
+     u64 ram, ram_size;
+     u32 len, platform, scheme = 0;
++    *why = "ADT isp0, sensor type or firmware segments";
+     if (chosen < 0 || isp < 0)
+         return -1;
+     const struct adt_segment_ranges *seg = adt_getprop(adt, isp, "segment-ranges", &len);
+@@ -9423,6 +9443,7 @@ static int dt_set_t6050_isp(void)
+         return -1;
+     ADT_GETPROP(adt, isp, "cam-connections-scheme", &scheme);
+ 
++    *why = "device tree update";
+     uint32_t owner = fdt_get_phandle(dt, node);
+     if (!owner && (fdt_generate_phandle(dt, &owner) || fdt_setprop_u32(dt, node, "phandle", owner)))
+         return -1;
+@@ -9461,25 +9482,28 @@ static int dt_set_t6050_isp(void)
+         if (node < 0 || fdt_setprop_string(dt, node, "status", "okay"))
+             return -1;
+     }
+-    printf("FDT: T6050 ISP: reserved text/data, main memory 32 MiB; platform 0x%x\n", platform);
++    printf("FDT: T6050 ISP: reserved text/data, main memory 32 MiB; platform 0x%x scheme 0x%x\n",
++           platform, scheme);
+     return 0;
+ }
+ 
++/* All or nothing: a refused or half-done hand-off leaves the device tree as it was. */
+ static int dt_t6050_isp_transaction(void)
+ {
+     void *original = dt;
+     size_t capacity = fdt_totalsize(original);
+     void *scratch = malloc(capacity);
++    const char *why;
+     if (!scratch) {
+         printf("FDT: no space for camera handoff; leaving it disabled\n");
+         return 0;
+     }
+     memcpy(scratch, original, capacity);
+     dt = scratch;
+-    if (!dt_set_t6050_isp())
++    if (!dt_set_t6050_isp(&why))
+         memcpy(original, scratch, capacity);
+     else
+-        printf("FDT: rejected T6050 ISP handoff; leaving it disabled\n");
++        printf("FDT: rejected T6050 ISP handoff (%s); leaving it disabled\n", why);
+     dt = original;
+     free(scratch);
+     return 0;

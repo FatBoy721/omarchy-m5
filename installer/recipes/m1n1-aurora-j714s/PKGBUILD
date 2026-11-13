@@ -1,0 +1,104 @@
+# Aura (aurora-silicon/aura) for the J714s (14" MacBook Pro, M5 Pro, T6050) on the macOS 27.2 stub
+# (UniversalMac_27.2_26B123, mBoot-20457.41.3): Stage 2 on the ESP, and the Stage 1 that is
+# enrolled as a padded Mach-O boot object with SPTM off (kcbz 0), so Linux runs at EL2 on every
+# CPU inside the code-execute window.
+#
+# Aura main 2232ae7a (#207 display ADMAC tunables for DP audio, #186 chainload copy stub, #184 MTE
+# tag store, #173 M5 Pro boot path, firmware 27.2) plus aura-j714s-27.2.patch, betizzel/omarchy-m5
+# patches/j714s-27.2/aura:
+#   0001  GPU and internal display hand-off on 27.2/27.3 (GPU build table from #1173)
+#   0002  notch rows shown by default on M5 (chosen.asahi,show-notch=0 opts out)
+#   0003  the M5 Max 27.3 GPU digest (aura #172, joshuaswarren)
+#   0004  the T6050 camera table and K116s 27.2 row (aura #188, Jens Axboe / Thomas Glanzmann)
+#   0005  J714s camera on 27.3 beta 1
+#   0006  T6050 PCIe: the auto-PM storage domain may gate itself (Wi-Fi port 0, early hangs)
+#   0007  the K116s 27.2 (26B8125) G17S build (aura #187, Thomas Glanzmann)
+#   0008  internal display on 27.2: compat <27 2 0>, DCP image pinned to the IPSW's C51FB0C8-...
+#   0009  J714s camera on 27.2 (the IPSW's ISP segments)
+# Packaged as m1n1-aurora so the image builder and update-m1n1 treat it as the image's Stage 2.
+# Ordinary updates refresh the ESP Stage 2, never enroll Stage 1.
+pkgname=m1n1-aurora
+pkgver=1.6.1.aurora24.v272
+pkgrel=1
+pkgdesc='Aura bootloader for the J714s on macOS 27.2 (Stage 2, and the Mach-O Stage 1 to enroll)'
+arch=('aarch64')
+groups=('omarchy-platform-apple-silicon')
+url='https://github.com/aurora-silicon/aura'
+license=('MIT' 'GPL-2.0-only')
+provides=("m1n1=$pkgver" "m1n1-neo=$pkgver" "aura=$pkgver")
+conflicts=('m1n1' 'aura' 'm1n1-neo')
+replaces=('aura' 'm1n1-neo')
+makedepends=('git' 'clang' 'lld' 'llvm' 'rustup' 'make' 'python')
+options=('!strip' '!debug')
+_commit=2232ae7a01514d8cc16064c01e04bf7ee4321ba5
+source=("aura::git+$url.git#commit=$_commit"
+        aura-j714s-27.2.patch aura-j714s-stage1 bootlogo_48.bin bootlogo_128.bin bootlogo_256.bin)
+sha256sums=('SKIP'
+            '412b9503888529ab4c6b3e50fb065cfaf2f50aa548f99de5cae52922b3acbe53'
+            '5804e26c5e13dab34ad21a69e99f495c89126d989844ba0c44ce8b730d622f81'
+            '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
+            'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'
+            '9c659b392aacfa31c62c638003d2257abfdbe17919b5c90cde4c4e62f87addab')
+
+prepare() {
+  [[ $(git -C "$srcdir/aura" rev-parse HEAD) == "$_commit" ]]
+  patch -d "$srcdir/aura" -p1 --fuzz=0 --batch --no-backup-if-mismatch < "$srcdir/aura-j714s-27.2.patch"
+  rustup toolchain install 1.89.0 --profile minimal --target aarch64-unknown-none-softfloat
+  # Omarchy's boot logo, the same artwork m1n1-aurora ships.
+  mkdir -p "$srcdir/logo"
+  for size in 48 128 256; do
+    cp "$srcdir/bootlogo_$size.bin" "$srcdir/logo/omarchy_$size.bin"
+  done
+}
+
+build() {
+  cd "$srcdir/aura"
+  export RUSTUP_TOOLCHAIN=1.89.0
+  local flags=(RELEASE=1 CHAINLOADING=1 USE_CLANG=1 LOGO_DIR="$srcdir/logo" BUILTIN_LOGO=omarchy)
+  make clean
+  make -j"${OMARCHY_BUILD_JOBS:-10}" "${flags[@]}"
+  install -Dm644 build/aura.bin "$srcdir/stage1/aura-raw.bin"
+  install -Dm644 build/aura.macho "$srcdir/stage1/aura.macho"
+  install -Dm644 build/aura-boot.macho "$srcdir/stage1/aura-boot.macho"
+  make clean
+  make -j"${OMARCHY_BUILD_JOBS:-10}" "${flags[@]}" ESP_STAGE2=1
+}
+
+check() {
+  # The Stage 1 tooling: fill a copy for a made-up ESP and pad it, as an installer would.
+  cd "$srcdir"
+  local out="$srcdir/check-stage1.macho"
+  python3 -I aura/tools/fill_stage1_config.py --input stage1/aura-raw.bin --output check-filled.bin \
+    --esp-partuuid 00000000-0000-4000-8000-000000000000 --stage2-path m1n1/boot-ctxr.bin
+  cmp -s stage1/aura-raw.bin check-filled.bin && { echo 'fill changed nothing' >&2; return 1; }
+  [[ $(stat -c %s check-filled.bin) == $(stat -c %s stage1/aura-raw.bin) ]]
+  python3 -I aura/tools/macho_boot_object.py --execute-window check-filled.bin "$out"
+  # MH_MAGIC_64, MH_FILESET, and padded to more than the 128 MiB window
+  [[ $(od -An -tx1 -N4 "$out" | tr -d ' ') == cffaedfe ]]
+  [[ $(od -An -tu4 -j12 -N4 "$out" | tr -d ' ') == 12 ]]
+  (( $(stat -c %s "$out") > 128 * 1024 * 1024 ))
+  ! grep -aq __TEXT_BOOT_EXEC "$out"
+  rm -f "$out" check-filled.bin
+}
+
+package() {
+  # Required on the installed system, not to build the bootloader.
+  depends=('asahi-scripts>=20260127.1' 'uboot-asahi')
+  optdepends=('python: aura-j714s-stage1, to make the Stage 1 boot object')
+  install -Dm644 "$srcdir/aura/build/aura.bin" "$pkgdir/usr/lib/asahi-boot/m1n1.bin"
+  install -d "$pkgdir/usr/lib/m1n1-neo"
+  ln -s ../asahi-boot/m1n1.bin "$pkgdir/usr/lib/m1n1-neo/m1n1.bin"
+  # Stage 1, unfilled. The image builder reads it from m1n1-aurora's path; nothing enrolls it.
+  install -Dm644 "$srcdir/stage1/aura-raw.bin" "$pkgdir/usr/share/m1n1-aurora/stage1/m1n1-raw.bin"
+  install -Dm644 "$srcdir/stage1/aura.macho" "$pkgdir/usr/share/m1n1-aurora/stage1/m1n1.macho"
+  install -Dm644 "$srcdir/stage1/aura-boot.macho" "$pkgdir/usr/share/m1n1-aurora/stage1/m1n1-boot.macho"
+  install -Dm644 "$srcdir/stage1/aura-raw.bin" "$pkgdir/usr/share/aura/stage1/aura-raw.bin"
+  install -Dm644 "$srcdir/stage1/aura.macho" "$pkgdir/usr/share/aura/stage1/aura.macho"
+  install -Dm644 "$srcdir/stage1/aura-boot.macho" "$pkgdir/usr/share/aura/stage1/aura-boot.macho"
+  # Fill and pad the Mach-O Stage 1 (kcbz 0, 128 MiB window) for this Mac's ESP.
+  install -Dm644 -t "$pkgdir/usr/lib/m1n1-aurora-j714s" \
+    "$srcdir/aura/tools/fill_stage1_config.py" "$srcdir/aura/tools/macho_boot_object.py"
+  install -Dm755 "$srcdir/aura-j714s-stage1" "$pkgdir/usr/bin/aura-j714s-stage1"
+  install -Dm644 "$srcdir/aura/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -m644 "$srcdir/aura/3rdparty_licenses/"* "$pkgdir/usr/share/licenses/$pkgname/"
+}

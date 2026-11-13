@@ -1,0 +1,42 @@
+From d2ce34bf0d60e016a0bc16fd8f9bb3815edf4829 Mon Sep 17 00:00:00 2001
+From: TripleU <usher@gentechsolution.com>
+Date: Wed, 11 Nov 2026 18:39:56 -0500
+Subject: [PATCH 2/9] kboot: M5: show the notch rows by default
+
+The full 3024x1964 panel (notch rows included) is what the J714s image wants by
+default, as our m1n1 (m1n1-installer 0006/0007) did. Without a config line
+Aura now keeps iBoot's full framebuffer on T6050/T6051 and sets
+/chosen/asahi,show-notch = "1" for the display driver; chosen.asahi,show-notch=0
+opts out.
+---
+ src/kboot.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/kboot.c b/src/kboot.c
+index 90b67b6b..c12d0f69 100644
+--- a/src/kboot.c
++++ b/src/kboot.c
+@@ -171,7 +171,8 @@ static bool kboot_show_notch(void)
+         if (!strcmp(chosen_params[i][0], "asahi,show-notch"))
+             return chosen_params[i][1] && !strcmp(chosen_params[i][1], "1");
+     }
+-    return false;
++    /* omarchy-m5: on M5 the full panel (notch rows) is the default; chosen.asahi,show-notch=0 opts out */
++    return chip_id == T6050 || chip_id == T6051;
+ }
+ 
+ static int dt_set_rng_seed_sep(int node)
+@@ -1149,6 +1150,13 @@ static int dt_set_chosen(void)
+         printf("FDT: set chosen.%s\n", name);
+     }
+ 
++    /* Tell the display driver the same default kboot_show_notch() chose (dcp.c reads it) */
++    if (kboot_show_notch() && !kboot_chosen_param("asahi,show-notch")) {
++        if (fdt_setprop_string(dt, node, "asahi,show-notch", "1") < 0)
++            bail("FDT: couldn't set chosen.asahi,show-notch property\n");
++        printf("FDT: set chosen.asahi,show-notch (M5 default)\n");
++    }
++
+     if (dt_set_stdout_path(node))
+         return -1;
+ 

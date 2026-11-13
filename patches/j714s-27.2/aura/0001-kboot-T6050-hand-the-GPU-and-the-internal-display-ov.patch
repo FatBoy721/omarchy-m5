@@ -1,0 +1,234 @@
+From aaa0215bb4ed7fbeb6b67f273ba631b818b3188c Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Wed, 11 Nov 2026 17:02:15 -0500
+Subject: [PATCH 1/9] kboot: T6050: hand the GPU and the internal display over
+ on 27.3 beta 1
+
+The J714s needs the macOS 27.3 beta 1 stub (26C5035r, mBoot-20457.60.65.0.1) to boot all of
+its cores, and the T6050 GPU and DCP handoffs only accepted 27.0.
+
+- firmware: know 27.2 (mBoot-20457.41.3) and 27.3 beta 1 (<27 2 98 1>), as betizzel's m1n1
+  for the J714s does.
+- GPU: admit each build Linux's hw/t6050.rs identifies (27.0, 27.2, 27.3 beta 1): per build
+  the 0x740/0x231 boot-filled records and the TEXT digest, from aurora-silicon/linux #1173
+  (Rolando Trevino, rolotrealanis98). 27.0's digest and ranges are unchanged.
+- DCP: accept 27.3 beta 1 beside 27.0, take its DCP image as the ADT names it (27.0 stays
+  pinned), and publish apple,firmware-compat <27 3 0>, the key aurora-silicon/linux #1174
+  chooses its 27.3 method table and swap layout by. dcpext engines must run the internal
+  display's image. The compat idea follows TripleU613's J714s m1n1 (0004; betizzel,
+  FatBoy721); its notch rows and display default (0006/0007) are not ported.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ src/firmware.c              |  3 ++
+ src/firmware.h              |  1 +
+ src/kboot_display_handoff.c | 32 ++++++++++++------
+ src/kboot_gpu.c             | 65 ++++++++++++++++++++++++-------------
+ 4 files changed, 69 insertions(+), 32 deletions(-)
+
+diff --git a/src/firmware.c b/src/firmware.c
+index af8b2cf8..13b3f325 100644
+--- a/src/firmware.c
++++ b/src/firmware.c
+@@ -217,6 +217,9 @@ const struct fw_version_info fw_versions[NUM_FW_VERSIONS] = {
+     [V27_0]      = {V27_0,      "27.0",        {27, 0, 0},     3, "mBoot-20457.1.29"},
+     // macOS 27.2 (26B123), read from a J813 stub booted by it (system and OS iBoot alike).
+     [V27_2]      = {V27_2,      "27.2",        {27, 2, 0},     3, "mBoot-20457.41.3"},
++    // From betizzel's m1n1 (J714s): 27.3 beta 1 (26C5035r) is the first stub that boots all of
++    // the M5 Pro's cores; m1n1 reports a beta as <major>.<minor-1>.98.<n>.
++    [V27_3B1]    = {V27_3B1,    "27.3 beta",   {27, 2, 98, 1}, 4, "mBoot-20457.60.65.0.1"},
+     // clang-format on
+ };
+ 
+diff --git a/src/firmware.h b/src/firmware.h
+index bcab363d..24144bd4 100644
+--- a/src/firmware.h
++++ b/src/firmware.h
+@@ -193,6 +193,7 @@ enum fw_version {
+     V26_7_1,
+     V27_0,
+     V27_2,
++    V27_3B1,
+     NUM_FW_VERSIONS,
+ };
+ 
+diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
+index ad3edb2a..0b39c12f 100644
+--- a/src/kboot_display_handoff.c
++++ b/src/kboot_display_handoff.c
+@@ -3235,7 +3235,11 @@ static bool dcp6_dt_describes(void *dt)
+  * iBoot leaves the DCP running and both of its DARTs locked on four-level roots. The kernel adopts
+  * that session and resolves firmware DVAs through the live tables, so this publishes no
+  * iommu-addresses: only what the ADT says, checked against the device tree and the registers.
+- * The image is pinned because 27.0 and 27.0.1 report the same iBoot version.
++ * The 27.0 image is pinned because 27.0 and 27.0.1 report the same iBoot version. The 27.3 beta 1
++ * stub (26C5035r, the first that boots all of the M5 Pro's cores) is one iBoot version; its image
++ * is taken as the ADT names it, and published with apple,firmware-compat <27 3 0>, the key Linux's
++ * firmware-27 DCP driver chooses its 27.3 method table and swap layout by (aurora-silicon/linux
++ * #1174). As TripleU613's m1n1 for the J714s does (betizzel's 27.3 handoff).
+  */
+ #define T6050_DCP_UUID  "64863924-B56B-3E32-87FE-038677F52709"
+ #define T6050_NDISP     5       /* disp0 reg[0..4] are the dcp's disp-0..disp-4 */
+@@ -3259,8 +3263,12 @@ static struct {
+     u64 coproc, pmc, pmc_size, vram, vram_size;
+     u32 bw_offset, nits, nclk, clk_id[T6050_CLOCKS], clk_hz[T6050_CLOCKS], pmc_ph;
+     const char *gamut;
++    char uuid[40];
++    const struct fw_version_info *compat;
+ } t6050;
+ 
++static const struct fw_version_info t6050_compat_27_3 = {V27_3B1, "27.3", {27, 3, 0}, 3, "compat"};
++
+ /* The dcp's reg entries and the ADT reg each equals (coproc: a prefix of it) */
+ static const struct {
+     char name[10];
+@@ -3313,10 +3321,14 @@ static T6050_INIT int t6050_check_adt(void)
+     int disp0 = adt_path_offset(adt, "/arm-io/disp0");
+     const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
+ 
+-    if (os_firmware.version != V27_0)
+-        bail("OS firmware %s is not 27.0\n", os_firmware.string);
+-    if (!dcp6_is_uuid(uuid, len) || strcmp(uuid, T6050_DCP_UUID))
++    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B1)
++        bail("OS firmware %s is not 27.0 or 27.3 beta 1\n", os_firmware.string);
++    t6050.compat = os_firmware.version == V27_3B1 ? &t6050_compat_27_3 : &os_firmware;
++    if (!dcp6_is_uuid(uuid, len) || len > sizeof(t6050.uuid) ||
++        (os_firmware.version == V27_0 && strcmp(uuid, T6050_DCP_UUID)))
+         bail("DCP image %s is not " T6050_DCP_UUID "\n", dcp6_is_uuid(uuid, len) ? uuid : "(none)");
++    strcpy(t6050.uuid, uuid);
++    dlog("DCP image %s, firmware-compat %s\n", t6050.uuid, t6050.compat->string);
+     if (dcp6_adt_u32(nub, "running", &val) || val != 1 || disp0 < 0 ||
+         adt_getprop(adt, disp0, "external", NULL))
+         bail("the DCP is not running an internal panel\n");
+@@ -3493,8 +3505,8 @@ static T6050_TEXT int t6050_publish(void *dt)
+     if (firmware_set_fdt(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DCP]),
+                          "apple,firmware-version", &os_firmware) ||
+         firmware_set_fdt(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DCP]),
+-                         "apple,firmware-compat", &os_firmware) ||
+-        t6050_setprop(dt, T6050_DCP, "apple,firmware-uuid", T6050_DCP_UUID, sizeof(T6050_DCP_UUID)))
++                         "apple,firmware-compat", t6050.compat) ||
++        t6050_setprop(dt, T6050_DCP, "apple,firmware-uuid", t6050.uuid, strlen(t6050.uuid) + 1))
+         return -1;
+ 
+     /* The bandwidth scratch, in the PMC metadata (disp0 reg[4]), as register window 5 */
+@@ -3574,7 +3586,7 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
+     snprintf(a, sizeof(a), "/arm-io/dcpext%d/iop-dcpext%d-nub", n, n);
+     int nub = adt_path_offset(adt, a);
+     const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
+-    if (!dcp6_is_uuid(uuid, len) || strcmp(uuid, T6050_DCP_UUID) ||
++    if (!dcp6_is_uuid(uuid, len) || strcmp(uuid, t6050.uuid) ||
+         dcp6_adt_u32(nub, "running", &val) || val != 1)
+         bail("dcpext%d: not running the pinned image\n", n);
+     snprintf(a, sizeof(a), "/arm-io/dcpext%d", n);
+@@ -3672,9 +3684,9 @@ static T6050_TEXT int t6050_ext_one(void *dt, int n)
+     if (firmware_set_fdt(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-version",
+                          &os_firmware) ||
+         firmware_set_fdt(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-compat",
+-                         &os_firmware) ||
+-        fdt_setprop(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-uuid", T6050_DCP_UUID,
+-                    sizeof(T6050_DCP_UUID)) ||
++                         t6050.compat) ||
++        fdt_setprop(dt, kboot_fdt_path_exact(dt, path[0]), "apple,firmware-uuid", t6050.uuid,
++                    strlen(t6050.uuid) + 1) ||
+         fdt_setprop(dt, kboot_fdt_path_exact(dt, path[0]), "apple,bw-scratch", v, sizeof(v)))
+         return -1;
+     if (output && fdt_appendprop(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DISP]), "iommus",
+diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
+index f4274aa8..da6fcc00 100644
+--- a/src/kboot_gpu.c
++++ b/src/kboot_gpu.c
+@@ -3994,10 +3994,10 @@ disable:
+ }
+ 
+ /*
+- * T6050 G17S (M5 Pro, J714s) on the 27.0 firmware. iBoot loads both roles' __TEXT back to back,
+- * their __DATA and __DATA_SHARED_RO in one run, and leaves the UAT ranges empty: each role
++ * T6050 G17S (M5 Pro, J714s) on the 27.0, 27.2 and 27.3 beta 1 firmware. iBoot loads both roles'
++ * __TEXT back to back, their __DATA and __DATA_SHARED_RO in one run, and leaves the UAT ranges empty: each role
+  * publishes its kernel root while it boots. Linux's driver takes the four UAT ranges, fw-text and
+- * fw-data as no-map reservations, and admits only the build whose TEXT normalizes to this digest
++ * fw-data as no-map reservations, and admits only the builds whose TEXT normalizes to these digests
+  * (its fwid rule: the boot-filled ranges, the entropy records among them, zeroed; Linux also
+  * checks the records' tags).
+  *
+@@ -4014,8 +4014,6 @@ disable:
+ 
+ static const struct {
+     const char *props[11], *resv[6], *on[7];
+-    u32 fill[8][2];
+-    u8 sha[32];
+ } t6050_gpu = {
+     /* The UAT ranges (base, size), then the bounds of both roles' __DATA and SRO */
+     {"gpu-region-base", "gpu-region-size", "gfx-shared-region-base", "gfx-shared-region-size",
+@@ -4029,18 +4027,31 @@ static const struct {
+      "/soc/power-management@2300e80000/power-controller@100",
+      "/soc/power-management@2300e80000/power-controller@110", "/soc/mailbox@2302600000",
+      "/soc/mailbox@2302e00000", "gpu"},
+-    {{0x224, 4},
+-     {0x23c, 8},
+-     {0x49720, 0x740},
+-     {0x49e60, 0x231},
+-     {0x50224, 4},
+-     {0x5023c, 8},
+-     {0x9d1d8, 0x740},
+-     {0x9d918, 0x231}},
+-    /* 26A428 G17S, both roles: Linux's hw/t6050.rs CONFIG digest */
+-    {0x85, 0xd0, 0xfd, 0x82, 0x80, 0xf7, 0x24, 0x65, 0x5c, 0xa9, 0xa9,
+-     0x71, 0x7b, 0xc9, 0x1a, 0x8a, 0x5e, 0xf6, 0x09, 0x28, 0xd7, 0x72,
+-     0x00, 0xf6, 0xd5, 0x3b, 0xd0, 0x99, 0xb9, 0x47, 0x39, 0xc6},
++};
++
++/*
++ * The builds Linux's hw/t6050.rs CONFIG identifies, newest first. Every build has the same boot-
++ * filled ranges at 0x224 (4), 0x23c (8) and 0x50000 above them; per build: where each role's
++ * 0x740- and 0x231-byte records start (primary, primary, secondary, secondary) and the digest of
++ * the TEXT with all eight zeroed. 27.2 and 27.3 (26B123, 26C5035r) from aurora-silicon/linux
++ * #1173 (Rolando Trevino).
++ */
++static const struct {
++    u32 fill[4];
++    u8 sha[32];
++} t6050_gpu_builds[] = {
++    /* 27.3 beta 1 (26C5035r) */
++    {{0x4976c, 0x49eac, 0x9d1ec, 0x9d92c},
++     {0xb5, 0x53, 0x7c, 0x8f, 0x06, 0xbd, 0x19, 0xeb, 0xf0, 0xef, 0xd0, 0xcb, 0xfb, 0x65, 0x52, 0x33,
++      0x9a, 0x10, 0xd4, 0xaf, 0xc4, 0xed, 0xa9, 0xd2, 0x1c, 0xbe, 0xdc, 0x36, 0x66, 0x76, 0x36, 0x00}},
++    /* 27.2 (26B123) */
++    {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
++     {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41, 0x01, 0x70, 0x2c, 0x9a, 0xc6,
++      0xc4, 0xe9, 0x0f, 0x2e, 0x12, 0x3f, 0x3b, 0x36, 0xfb, 0xe6, 0xff, 0xea, 0x91, 0x3f, 0x0f, 0xd9}},
++    /* 27.0 (26A428) */
++    {{0x49720, 0x49e60, 0x9d1d8, 0x9d918},
++     {0x85, 0xd0, 0xfd, 0x82, 0x80, 0xf7, 0x24, 0x65, 0x5c, 0xa9, 0xa9, 0x71, 0x7b, 0xc9, 0x1a, 0x8a,
++      0x5e, 0xf6, 0x09, 0x28, 0xd7, 0x72, 0x00, 0xf6, 0xd5, 0x3b, 0xd0, 0x99, 0xb9, 0x47, 0x39, 0xc6}},
+ };
+ extern void aura_sha256(const void *data, size_t size, u8 digest[32]);
+ 
+@@ -4074,12 +4085,22 @@ static T6050_GPU_TEXT_FN int t6050_gpu_check(void *dt, u64 r[12])
+     u8 *copy = malloc(T6050_GPU_TEXT), digest[32];
+     if (!copy)
+         return 1;
+-    memcpy(copy, (const void *)seg[0], T6050_GPU_TEXT);
+-    for (int i = 0; i < 8; i++)
+-        memset(copy + t6050_gpu.fill[i][0], 0, t6050_gpu.fill[i][1]);
+-    aura_sha256(copy, T6050_GPU_TEXT, digest);
++    for (size_t b = 0; b < ARRAY_SIZE(t6050_gpu_builds); b++) {
++        memcpy(copy, (const void *)seg[0], T6050_GPU_TEXT);
++        for (int i = 0; i < 2; i++) {
++            memset(copy + 0x50000 * i + 0x224, 0, 4);
++            memset(copy + 0x50000 * i + 0x23c, 0, 8);
++            memset(copy + t6050_gpu_builds[b].fill[2 * i], 0, 0x740);
++            memset(copy + t6050_gpu_builds[b].fill[2 * i + 1], 0, 0x231);
++        }
++        aura_sha256(copy, T6050_GPU_TEXT, digest);
++        if (!memcmp(digest, t6050_gpu_builds[b].sha, sizeof(digest))) {
++            free(copy);
++            return 2;
++        }
++    }
+     free(copy);
+-    return memcmp(digest, t6050_gpu.sha, sizeof(digest)) ? 1 : 2;
++    return 1;
+ }
+ 
+ /* Enables every node of t6050_gpu.on, in order, if they all exist */
