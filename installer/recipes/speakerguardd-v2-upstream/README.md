@@ -1,9 +1,8 @@
 # speakerguardd v2 for the J714s upstream image
 
-**Status (2026-11-12): recipes only. Not built, not installed, speakers not played.**
-The dev Mac was unreachable over ssh for the whole session (it answered ping but
-not port 22, probably while the installed image was being tested). Nothing
-below has run on a J714s yet, so the image does not include these packages.
+**Status (2026-11-12): `aurora-speaker-upgrade` built (scratch, x86 host; it is `any`), `speakerguardd-v2`
+not built (aarch64, waits for the Mac). Nothing installed, no tuning collected, speakers not played.**
+For about 1.5 hours the dev Mac answered ping but kept port 22 closed. The image does not include these packages.
 
 Two recipes, both pinned to aurora-silicon/speakerguardd `v2` at
 [`bd2b2099`](https://github.com/aurora-silicon/speakerguardd/commit/bd2b2099eb7333857ad05adc1c7b8c15b8428f58):
@@ -29,7 +28,7 @@ the `apple,t6050-aop-audio` transport to `wiring.py`. It is in this pin.
 `packaging/pipewire/sgv2-*.conf` has no J714 file, and that is by design.
 
 What the J714s needs from the rest of the stack:
-- **The kernel:** linux-aurora-upstream has the dual interface
+- **The kernel:** linux-aurora-upstream has the dual interface (read in the up273-10 tree; the dev Linux boots up273-8, so check the live card)
   ("Speaker Protection Interface": "Speaker Volume Unlock" or "Speaker
   Protection") and the J714 macaudio entry with `safe_vol = -20` (#1554).
 - **Aura:** it passes each amp's `apple,speaker-config` / `apple,amp-tx-zd-config`
@@ -42,6 +41,19 @@ What the J714s needs from the rest of the stack:
 None of this is specific to 27.3 except the kernel and Aura already in the
 image. The speaker DT and macaudio entry come from upstream #1554, which was
 validated on DjDeveloperr's J714s.
+
+## Will verify pass on this Mac's macOS? (the likely stop)
+
+`speakerguardd-selfcheck verify` (step 2, `voicing-check`) needs a macOS parity attestation
+for this tuning, from `packaging/session/parity.json`. At bd2b2099 that file has blocks for
+25C56, 25G72, 25G83 (26.6.2) and 26A428 (27.0) only. A tuning is checked against its own
+build's block, or against 25G83's when its speaker files for its AID are byte-identical to
+25G83's (`crates/aurora-speaker-tuning/src/reference.rs`). There is no block for 27.2 or for
+the 27.3 beta. So on either, v2 qualifies only if this Mac's AID is in 25G83 (AIDs 2-50) and
+its files equal 25G83's. Otherwise verify refuses and the speakers stay at the floor. That
+refusal is the expected safe outcome, not a bug to work around: `gate.json` and `parity.json`
+must not be edited. `aurora-speaker-upgrade --check` gives the answer without switching
+anything.
 
 ## The speakersafetyd hold stays
 
@@ -81,9 +93,14 @@ and would reopen the unprotected path in the second. On the Mac,
    Read the amps' `apple,speaker-config` in `/proc/device-tree`, and check
    `/chosen/asahi,speaker-id` and `/proc/mtd` (`adt`).
 2. **Build and install** both packages on the Mac in `~/m5-work/sgv2`.
+   p5 also boots the catcher's fallback kernel (`7.3.0-j714s-sleep`), where speakersafetyd
+   legitimately runs. After installing, check that `speakerguardd-gate explain` says
+   legacy there and that its audio is unchanged.
 3. **Dry run:** `aurora-speaker-upgrade --check --json /root/sgv2-check.json`
-   (add `--device /dev/nvme0n1p2` if needed). It collects, compiles and runs
-   the self-check in /run, and stores and switches nothing. If its `apfs_ro`
+   with `--device /dev/nvme0n1p2`. It collects, compiles and runs
+   the self-check in /run, and stores and switches nothing. Pass `--device` explicitly
+   (after the move to 27.2 there may be two macOS builds on disk). Record which System
+   volume and build were read, because provisioning binds the blob to that build. If its `apfs_ro`
    cannot read the volume, mount it read only with
    `/root/build/apfs-fuse/build/apfs-fuse` (volume 0 of p2) and unmount
    afterwards. A refusal by verify or the gate (for example, no parity
