@@ -1,7 +1,7 @@
-From 52b64e83f0f37762c8a9f1578c749e0218cf8d6a Mon Sep 17 00:00:00 2001
+From b914777284b14fad22356763ef9454a28aaa5c18 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 23:55:40 -0500
-Subject: [PATCH 8/9] kboot: T6050: hand the internal display over on 27.2
+Subject: [PATCH 5/6] kboot: T6050: hand the internal display over on 27.2
 
 The J714s moves its Linux stub to macOS 27.2 (26B123, mBoot-20457.41.3),
 upstream's Mach-O target. The T6050 DCP hand-off admitted 27.0 and 27.3
@@ -24,7 +24,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 18 insertions(+), 6 deletions(-)
 
 diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
-index 0b39c12f..a127e177 100644
+index 1ce1df49..4e7cc77b 100644
 --- a/src/kboot_display_handoff.c
 +++ b/src/kboot_display_handoff.c
 @@ -3240,8 +3240,16 @@ static bool dcp6_dt_describes(void *dt)
@@ -49,12 +49,12 @@ index 0b39c12f..a127e177 100644
      int disp0 = adt_path_offset(adt, "/arm-io/disp0");
      const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
  
--    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B1)
+-    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B)
 -        bail("OS firmware %s is not 27.0 or 27.3 beta 1\n", os_firmware.string);
 +    if (os_firmware.version != V27_0 && os_firmware.version != V27_2 &&
-+        os_firmware.version != V27_3B1)
++        os_firmware.version != V27_3B)
 +        bail("OS firmware %s is not 27.0, 27.2 or 27.3 beta 1\n", os_firmware.string);
-     t6050.compat = os_firmware.version == V27_3B1 ? &t6050_compat_27_3 : &os_firmware;
+     t6050.compat = os_firmware.version == V27_3B ? &t6050_compat_27_3 : &os_firmware;
 -    if (!dcp6_is_uuid(uuid, len) || len > sizeof(t6050.uuid) ||
 -        (os_firmware.version == V27_0 && strcmp(uuid, T6050_DCP_UUID)))
 -        bail("DCP image %s is not " T6050_DCP_UUID "\n", dcp6_is_uuid(uuid, len) ? uuid : "(none)");
@@ -67,3 +67,6 @@ index 0b39c12f..a127e177 100644
      strcpy(t6050.uuid, uuid);
      dlog("DCP image %s, firmware-compat %s\n", t6050.uuid, t6050.compat->string);
      if (dcp6_adt_u32(nub, "running", &val) || val != 1 || disp0 < 0 ||
+-- 
+2.56.0
+

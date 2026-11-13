@@ -1,26 +1,25 @@
-From 0c108a4b3260f9f25b9f611ab4750589da7b2d3a Mon Sep 17 00:00:00 2001
+From efa7f2723d0eebeafd313a534102bc637f3119aa Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 23:52:29 -0500
-Subject: [PATCH 08/18] accel/ane, media: apple: ave: T6050 Neural Engine and
- encoder on macOS 27.3
+Subject: [PATCH 06/15] accel/ane, media: apple: ave: T6050 Neural Engine on
+ macOS 27.3; AVE builds by TEXT CRC
 
-The T6050 ANE and AVE drivers admit one preloaded firmware build each, the
-macOS 27.0 one. Give each a table of admitted builds and let the handed-off
-layout (ANE) or the segment sizes and TEXT CRC (AVE) select the build.
+The T6050 ANE driver admits one preloaded firmware build, the macOS 27.0
+one. Give it a table of admitted builds and let the handed-off layout
+select the build. ANE: 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA
+0x100000c0000; 27.3 (26C5035r) TEXT 0xec000 and DATA 0x280000 at
+0x100000ec000, each with its own TEXT sha256 pin. The H17 backend sizes its
+IPC from the firmware boot request (27.3 asks 0x10441 bytes) instead of a
+fixed 0xc441, and ane_t6021.boot_stages=N holds the bind after N bring-up
+stages.
 
-ANE: 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA 0x100000c0000; 27.3 (26C5035r)
-TEXT 0xec000 and DATA 0x280000 at 0x100000ec000, each with its own TEXT sha256
-pin. The H17 backend sizes its IPC from the firmware boot request (27.3 asks
-0x10441 bytes) instead of a fixed 0xc441, and ane_t6021.boot_stages=N holds
-the bind after N bring-up stages.
+AVE: #1747 admits the 27.3 (26C5035r) build by its segment sizes. Builds
+may share sizes (27.2 26B123 has 27.3's), so let the TEXT CRC, with the
+sizes, select the build. apple_ave.ave_t6050_27_3_hevc=0 refuses HEVC on
+the 27.3 build.
 
-AVE: 27.3 (26C5035r) TEXT 0x158000 CRC c25b4ddb, DATA 0x134000, driven with
-26A428 command layout (H.264 and HEVC encoded cleanly on a J714s;
-apple_ave.ave_t6050_27_3_hevc=0 refuses HEVC). Builds may share sizes, so the
-TEXT CRC selects the build.
-
-Ported from betizzel/omarchy-m5 patches/upstream-27.3/0004 onto
-integration/aurora 572eb88e (the AVE probe now has fw_data_size_alt).
+Ported from betizzel/omarchy-m5 patches/upstream-27.3/0004; rebased onto
+integration/aurora a34d26c2 (after #1747).
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
@@ -29,13 +28,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  drivers/accel/ane/ane_fw_platform.c           | 29 ++++++++
  drivers/accel/ane/ane_fw_platform.h           | 63 ++++++++++++++++-
  drivers/accel/ane/ane_fw_platform_test.c      | 35 ++++++++++
- drivers/media/platform/apple/ave/ave-drv.c    | 12 ++++
- drivers/media/platform/apple/ave/ave-fw.c     | 44 ++++++++++--
- drivers/media/platform/apple/ave/ave-layout.c | 23 +++++++
+ drivers/media/platform/apple/ave/ave-fw.c     | 23 ++++---
+ drivers/media/platform/apple/ave/ave-layout.c | 21 +++++-
  drivers/media/platform/apple/ave/ave-layout.h |  1 +
  drivers/media/platform/apple/ave/ave-sess.c   |  2 +
- drivers/media/platform/apple/ave/ave.h        | 17 +++++
- 11 files changed, 273 insertions(+), 25 deletions(-)
+ drivers/media/platform/apple/ave/ave.h        |  6 +-
+ 10 files changed, 221 insertions(+), 31 deletions(-)
 
 diff --git a/drivers/accel/ane/ane_fw_cold.c b/drivers/accel/ane/ane_fw_cold.c
 index 6f447afa769e..bd62013b2ead 100644
@@ -425,102 +423,51 @@ index 7fa82abf63fa..53eb20cb1300 100644
  	{}
  };
  
-diff --git a/drivers/media/platform/apple/ave/ave-drv.c b/drivers/media/platform/apple/ave/ave-drv.c
-index ed803b18c3c4..16ae0ace321f 100644
---- a/drivers/media/platform/apple/ave/ave-drv.c
-+++ b/drivers/media/platform/apple/ave/ave-drv.c
-@@ -129,10 +129,22 @@ static const struct ave_variant ave_t8140 = {
-  * A18 Pro, after clearing the SVE idle word at mailbox +0x118. Its boot configuration names
-  * device 28, and so does its handshake's device type.
-  */
-+static const struct ave_fw_build ave_t6050_builds[] = {
-+	{ "26A428", 0x154000, 0x134000, AVE_FW_TEXT_CRC_T6050_26A428 },
-+	/*
-+	 * macOS 27.3 beta 1: TEXT grew by 0x4000 (ADT ave0 segment-ranges on a J714s with
-+	 * iBoot 20457.60.65), DATA kept its size. The firmware starts as 26A428 does and
-+	 * takes 26A428's command layout (ave_layout_for_crc()).
-+	 */
-+	{ "26C5035", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26C5035 },
-+};
-+
- static const struct ave_variant ave_t6050 = {
- 	.regs = &ave_coproc_v40,
- 	.fw_text_size = 0x154000,
- 	.fw_data_size = 0x134000,
-+	.builds = ave_t6050_builds,
-+	.build_count = ARRAY_SIZE(ave_t6050_builds),
- 	.boot_device_id = 28,
- 	.boot_arg_value = AVE_COPROC_BOOT_ARG_VALUE,
- 	.timebase_multiplier = 1,
 diff --git a/drivers/media/platform/apple/ave/ave-fw.c b/drivers/media/platform/apple/ave/ave-fw.c
-index d635886675e5..2b74519cc05a 100644
+index 0732fff28fc2..9eb4e29bb886 100644
 --- a/drivers/media/platform/apple/ave/ave-fw.c
 +++ b/drivers/media/platform/apple/ave/ave-fw.c
-@@ -41,6 +41,7 @@ static const u32 ave_known_text_crc[] = {
- 	AVE_FW_TEXT_CRC_T6040_25G83, /* AppleAVE2FW 9003.78.0 / T6040 */
- 	AVE_FW_TEXT_CRC_T6041_25G83, /* AppleAVE2FW 9003.78.0 / M4 Max */
- 	AVE_FW_TEXT_CRC_T6050_26A428, /* AppleAVE2FW, macOS 27.0 26A428 / T6050 */
-+	AVE_FW_TEXT_CRC_T6050_26C5035, /* AppleAVE2FW, macOS 27.3 26C5035r / T6050 */
- 	0x460c7a7c, /* AppleAVE2FW 6070.11.1 / T6000 */
- 	0x25bfd039, /* AppleAVE2FW 6070.11.1 / T8112 */
- };
-@@ -219,10 +220,26 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
-  * Find the firmware, check that it is a build we speak to and that DATA is
-  * still as the bootloader left it, and keep a copy of DATA for restarts.
-  */
+@@ -216,12 +216,17 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
+ 	return ret;
+ }
+ 
+-/* The variant's build with these segment sizes, or NULL. */
 +/*
 + * The variant's build with these segment sizes and, unless @crc is 0, this
 + * TEXT CRC; or NULL. Builds can share sizes, so only the CRC tells them
 + * apart.
 + */
-+static const struct ave_fw_build *ave_fw_find_build(const struct ave_variant *v,
+ static const struct ave_fw_build *ave_fw_find_build(const struct ave_variant *v,
+-						    size_t text, size_t data)
 +						    size_t text, size_t data, u32 crc)
-+{
-+	for (unsigned int i = 0; i < v->build_count; i++)
+ {
+ 	for (unsigned int i = 0; i < v->build_count; i++)
+-		if (text == v->builds[i].text_size && data == v->builds[i].data_size)
 +		if (text == v->builds[i].text_size && data == v->builds[i].data_size &&
 +		    (!crc || crc == v->builds[i].text_crc))
-+			return &v->builds[i];
-+	return NULL;
-+}
-+
- int ave_fw_probe(struct ave_dev *ave)
- {
- 	struct device *dev = ave->dev;
--	u32 text_crc, data_crc, want;
-+	const struct ave_fw_build *build = NULL;
-+	u32 text_crc, data_crc, want, want_crc = ave->variant->text_crc;
- 	bool known = !ave->variant->boot_qualified;
- 	int ret;
- 
-@@ -236,12 +253,18 @@ int ave_fw_probe(struct ave_dev *ave)
- 	if (ret)
+ 			return &v->builds[i];
+ 	return NULL;
+ }
+@@ -249,13 +254,10 @@ int ave_fw_probe(struct ave_dev *ave)
  		return dev_err_probe(dev, ret, "bad firmware reservation\n");
  
--	if (ave->text.size != ave->variant->fw_text_size ||
--	    (ave->data.size != ave->variant->fw_data_size &&
--	     (!ave->variant->fw_data_size_alt ||
--	      ave->data.size != ave->variant->fw_data_size_alt)))
-+	if (ave->variant->build_count) {
+ 	if (ave->variant->build_count) {
+-		build = ave_fw_find_build(ave->variant, ave->text.size,
+-					  ave->data.size);
+-		if (!build)
 +		if (!ave_fw_find_build(ave->variant, ave->text.size, ave->data.size, 0))
-+			return dev_err_probe(dev, -EINVAL,
-+					     "unexpected firmware segment sizes (TEXT %#zx DATA %#zx)\n",
-+					     ave->text.size, ave->data.size);
-+	} else if (ave->text.size != ave->variant->fw_text_size ||
-+		   (ave->data.size != ave->variant->fw_data_size &&
-+		    (!ave->variant->fw_data_size_alt ||
-+		     ave->data.size != ave->variant->fw_data_size_alt))) {
- 		return dev_err_probe(dev, -EINVAL,
- 				     "unexpected firmware segment sizes\n");
-+	}
- 	if ((ave->text.phys < ave->data.phys + ave->data.size &&
- 	     ave->data.phys < ave->text.phys + ave->text.size) ||
- 	    (ave->text.iova < ave->data.iova + ave->data.size &&
-@@ -279,13 +302,20 @@ int ave_fw_probe(struct ave_dev *ave)
+ 			return dev_err_probe(dev, -EINVAL,
+ 					     "unexpected firmware segment sizes (TEXT %#zx DATA %#zx)\n",
+ 					     ave->text.size, ave->data.size);
+-		want_crc = build->text_crc;
+ 	} else if (ave->text.size != ave->variant->fw_text_size ||
+ 		   (ave->data.size != ave->variant->fw_data_size &&
+ 		    (!ave->variant->fw_data_size_alt ||
+@@ -300,7 +302,12 @@ int ave_fw_probe(struct ave_dev *ave)
  		return dev_err_probe(dev, ret,
  				     "firmware text link cell is not the DATA address\n");
  	known |= ave_fw_known_crc(text_crc);
--	if (!known ||
--	    (ave->variant->text_crc && text_crc != ave->variant->text_crc))
+-	if (!known || (want_crc && text_crc != want_crc))
 +	if (ave->variant->build_count) {
 +		build = ave_fw_find_build(ave->variant, ave->text.size, ave->data.size, text_crc);
 +		want_crc = build ? build->text_crc : 0;
@@ -530,16 +477,8 @@ index d635886675e5..2b74519cc05a 100644
  		return dev_err_probe(dev, -ENODEV,
  				     "unsupported firmware (text CRC %08x)\n",
  				     text_crc);
- 	ave->text_crc = text_crc;
- 	ave->layout = ave_layout_for_crc(text_crc);
-+	if (build)
-+		dev_info(dev, "firmware build %s (TEXT %#zx CRC %08x, DATA %#zx)\n",
-+			 build->name, ave->text.size, text_crc, ave->data.size);
- 
- 	ave->data_pristine = vmalloc(ave->data.size);
- 	if (!ave->data_pristine)
 diff --git a/drivers/media/platform/apple/ave/ave-layout.c b/drivers/media/platform/apple/ave/ave-layout.c
-index 4547aeda820c..dc887d27b4cc 100644
+index 6bd435102998..dc887d27b4cc 100644
 --- a/drivers/media/platform/apple/ave/ave-layout.c
 +++ b/drivers/media/platform/apple/ave/ave-layout.c
 @@ -1,5 +1,7 @@
@@ -571,19 +510,18 @@ index 4547aeda820c..dc887d27b4cc 100644
  const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
  {
  	/*
-@@ -961,5 +977,12 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
- 	/* The macOS 27.0 build for the M5 Pro and Max. */
+@@ -962,8 +978,9 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
  	if (crc == AVE_FW_TEXT_CRC_T6050_26A428)
  		return &ave_layout_26a428;
-+	/*
+ 	/*
+-	 * The macOS 27.3 beta 1 build speaks the same command layout: H.264
+-	 * and HEVC encode with it on a J714s.
 +	 * The macOS 27.3 build speaks 26A428's command layout: H.264 (Main with
 +	 * B-frames, Baseline) encodes on a J714s on two boots, and HEVC too, unless
 +	 * ave_t6050_27_3_hevc=0 (ave_layout_hevc_refused()).
-+	 */
-+	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
-+		return &ave_layout_26a428;
- 	return NULL;
- }
+ 	 */
+ 	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
+ 		return &ave_layout_26a428;
 diff --git a/drivers/media/platform/apple/ave/ave-layout.h b/drivers/media/platform/apple/ave/ave-layout.h
 index 6731d634da8b..bba3aadba8d8 100644
 --- a/drivers/media/platform/apple/ave/ave-layout.h
@@ -609,43 +547,22 @@ index 2bdec4b0f2f6..32c6da268b13 100644
  }
  
 diff --git a/drivers/media/platform/apple/ave/ave.h b/drivers/media/platform/apple/ave/ave.h
-index 25693eb4512f..cb4bbe7673c3 100644
+index 0454611f1a42..cb4bbe7673c3 100644
 --- a/drivers/media/platform/apple/ave/ave.h
 +++ b/drivers/media/platform/apple/ave/ave.h
-@@ -174,6 +174,8 @@ enum ave_opcode {
-  */
- #define AVE_FW_TEXT_CRC_T6041_25G83 0x9a080cad
- #define AVE_FW_TEXT_CRC_T6050_26A428 0x87279429
-+/* macOS 27.3 beta 1 (26C5035r) / T6050: TEXT 0x158000, DATA 0x134000. */
-+#define AVE_FW_TEXT_CRC_T6050_26C5035 0xc25b4ddb
- 
- struct ave_ctx;
- 
-@@ -188,12 +190,27 @@ struct ave_coproc_regs {
- 	u32 keep_mappings;
- };
- 
-+/* One preloaded firmware build of a variant: its segment sizes and TEXT CRC. */
-+struct ave_fw_build {
-+	const char *name;
-+	u32 text_size;
-+	u32 data_size;
-+	u32 text_crc;
-+};
-+
- struct ave_variant {
- 	const struct ave_coproc_regs *regs;
- 	u32 fw_text_size;
- 	u32 fw_data_size;
+@@ -205,9 +205,9 @@ struct ave_variant {
  	/* A second DATA size the variant accepts (the M4 Max build), or 0 */
  	u32 fw_data_size_alt;
-+	/*
+ 	/*
+-	 * When set, the builds the variant admits. They replace fw_text_size,
+-	 * fw_data_size and text_crc: the segment sizes select the build, and
+-	 * the build names the TEXT CRC it must have.
 +	 * When set, the builds this variant admits; they replace fw_text_size,
 +	 * fw_data_size and text_crc. Builds may share segment sizes, so the
 +	 * TEXT CRC, with the sizes, selects the build.
-+	 */
-+	const struct ave_fw_build *builds;
-+	unsigned int build_count;
- 	u32 boot_device_id;
- 	u32 device_type;
- 	u32 lfs_ref_scale;
+ 	 */
+ 	const struct ave_fw_build *builds;
+ 	unsigned int build_count;
+-- 
+2.56.0
+

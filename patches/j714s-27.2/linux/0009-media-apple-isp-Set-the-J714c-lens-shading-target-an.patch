@@ -1,7 +1,7 @@
-From 58ee7ebfded6ba719e6e96636e7cbd5a75968d43 Mon Sep 17 00:00:00 2001
+From 6ebb9a70162d17138d35665be18b78db48cbea9c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:13:01 +0100
-Subject: [PATCH 11/18] media: apple: isp: Set the J714c lens shading target
+Subject: [PATCH 09/15] media: apple: isp: Set the J714c lens shading target
  and scene metering
 
 macOS's appleh16camerad sets the IMX958's lens shading ideal percent to
@@ -110,10 +110,10 @@ index ab98f3447d6f..6511b625c58f 100644
  							u32 chan, u32 freq);
  
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index a1bf821770c1..7583878833c1 100644
+index c0e6b3601941..fffb99c7c66f 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
-@@ -1415,6 +1415,9 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+@@ -1425,6 +1425,9 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
  	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
  	.imx958_2226 = true,
  	.setfile_radial_gain = true,
@@ -138,3 +138,6 @@ index 6b7e6b5f9a70..c13914ef62e9 100644
  };
  
  enum isp_sensor_id {
+-- 
+2.56.0
+

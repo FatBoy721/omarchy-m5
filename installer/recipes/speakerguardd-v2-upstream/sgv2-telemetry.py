@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Read-only decoder of speakerguardd v2's engine page (layout 3, bd2b2099).
+"""Read-only decoder of speakerguardd v2's engine page (layout 3, bd2b2099; 04169c44 only appends the sense-bind words after the fields read here).
 Prints the latest telemetry record per channel: coil/magnet temps, powers,
 V/I sense mean squares, gain; plus header health/amps."""
 import struct, sys, math, os

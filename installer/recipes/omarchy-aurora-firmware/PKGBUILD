@@ -1,10 +1,10 @@
 pkgname=omarchy-aurora-firmware
-pkgver=20261014.j714s7
+pkgver=20261014.j714s8
 pkgrel=1
 pkgdesc='Order Apple peripheral admission after device firmware extraction'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
-license=('MIT' 'GPL-2.0-only')
+license=('MIT' 'GPL-2.0-only' 'BSD-3-Clause')
 backup=('etc/mkinitcpio.conf.d/95-aurora-vendor-order.conf' 'etc/sddm.conf.d/60-aurora-m5-display.conf')
 makedepends=('git' 'clang' 'lld' 'llvm')
 url='https://github.com/aurora-silicon/omarchy-mac'
@@ -13,8 +13,8 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         95-aurora-vendor-order.conf aurora-vendor-order-cryptsetup.conf
         20-aurora-vendor-order.conf aurora-regdom-fallback
         aurora-regdom-fallback.service 86-aurora-regdom-fallback.rules
-        # J714 audio: edimoldovan/omarchy-mac-pkgs j714-speaker-route-volume 0a00f7a88711
-        speakersafetyd-j714.conf j714-speakers.json j714-mic.json wireplumber-j714-speakers.conf wireplumber-j714-mic.conf
+        # J714 microphones: edimoldovan/omarchy-mac-pkgs j714-speaker-route-volume 0a00f7a88711
+        j714-mic.json wireplumber-j714-mic.conf
         # N1 6 GHz: edimoldovan/omarchy-mac-pkgs iwd-6ghz-bcm4388-only 702a6ec363
         iwd-n1-main.conf 30-aurora-n1-6ghz.conf
         # RT uclamp: edimoldovan/omarchy-mac-pkgs rt-uclamp 74d8f8bbef
@@ -22,9 +22,13 @@ source=(aurora-firmware-order.conf aurora-peripheral-firmware.sh
         # DCP two-card Hyprland session (rolotrealanis98's J716s daily session)
         aurora-m5-display-env start-hyprland-m5 60-aurora-m5-display.conf
         # J714 UCM: aurora-silicon/alsa-ucm-conf-asahi #10 (edimoldovan, merged, 401a49d4f7ee); busy-card discovery: kazuhidet
-        ucm-macaudio-j714.conf ucm-aop-j714.conf wireplumber-81-aurora-busy-discovery.conf
+        ucm-macaudio-j714.conf ucm-macaudio-hifi-j714.conf ucm-aop-j714.conf wireplumber-81-aurora-busy-discovery.conf
+        # J714s: speakerguardd v2 at boot once it qualifies, the panel's VRR range, the camera's tuning
+        70-aurora-speaker-upgrade-auto.conf aurora-m5-vrr.conf aurora-j714s-camera-setfile aurora-j714s-camera-setfile.service
         # The video decoder's v5-t2 firmware (MIT), built from source; avd-fw 0.1 has up to v5-t1
-        "avd-fw::git+https://github.com/aurora-silicon/avd-fw.git#commit=ea3a65cc9c0c41907e6ad2714b813e4be6858485")
+        "avd-fw::git+https://github.com/aurora-silicon/avd-fw.git#commit=ea3a65cc9c0c41907e6ad2714b813e4be6858485"
+        # liblzfse (BSD-3-Clause), for apfs_ro: macOS keeps many System files LZFSE-compressed; not in Arch Linux ARM
+        "lzfse::git+https://github.com/lzfse/lzfse.git#commit=e634ca58b4821d9f3d560cdc6df5dec02ffc93fd")
 sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'abd1fd7f2c40561311356c5748f964687e45771ad461ef7786fbdbda2aff530d'
             '328c689685f21bb760f3bea7984b42060a04f6a386d4a35b8237de95328ccc31'
@@ -35,10 +39,7 @@ sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'f2bcb10ee622bce438932f7c53443b4f4fb436e6a9b3391bdd285657cd3d5bd5'
             '5aeb12c046553b53e5edd75a7c94a082e8c4edc4ee1226f5163d5ce9774f4d3c'
             '3b994ae27fd1a14ccd569cfc103b205807fe262fe2487446de02d870455e1ec8'
-            'b04fdc5d16a87439c28fc0932762d655dd607324e5b25f2e61a9b00a151e2668'
-            '1ee05ccf8937081661dd8be77cbaf55329677b43ccf064d8494e9c6c2ba33956'
             '2ed01ea6fc1139f5c24bde4385fd5c7ec2f7dcd1fa53d056f5afe40d148d93d8'
-            '39b866d847f9ed569abe36ddf2301d0cee75f27e96c709afc11febb400938c2e'
             'b6a234e472009913a4b44203fb3a1834f3e5904d67ccd949b2f840307279180b'
             '345282cf4827e1324ab454fba40c6693a828899ef1fe3c8a461918f2b785076f'
             'bd8c5c3d03ba3678e08b328fee603cbfd89e76241e029f6e80e90fc1dcff7294'
@@ -46,13 +47,22 @@ sha256sums=('e2d6d6008bfde44ba871da2fcaae22b409d52ea8695fcf672bc3b06d786f823e'
             'e50f077b2735b8b7a28bdd165bbea3e731080c998f52e43ad69442f87adc5c73'
             'a40a72344fd5fad870900a5f92c9793bce4eab5467e206f1d5f6ccf2a2a09b18'
             '1edefd658763c198fa174535b11ae6b7796d5e6c223b18226ce8d25092556ead'
-            '64a7594002f84d15a1fd9a0735ace44df4f9bca341112950850371a6f28213f0'
+            '261c62b4a9e920fb7b7f040e34139bf8de4092fe421d1ec174529c6fdb80c091'
+            'd673d2abd77efecc1ec39dacd0434baf6caea4c01214b8e4b8befc6afc3a6ab6'
             '66c1da54fb834923d3a42c08c04d74758778356417e1edbb191af131a4911483'
             'c9e54f1e1d5938e47ad047599b4306c767c800a92fe52c0b35985f0f4d7647f1'
+            '3d969438b2d7214b5f172d431842026590fd44d081f37a03f9afc43cabdb0092'
+            '340e0ed3b664ae7e5845169826b1f54188a4252bfacfdae55a20c3f45b24134b'
+            '52ed437db809ed363b03da071d959b59c53d30688b64187adf3f66f7c9dcbbd9'
+            '3d91c4be5f110df0b6703effdf82d637a93928b51467c45f775fd9ac68c59492'
+            'SKIP'
             'SKIP')
 build() {
   # AVD_VER/AVD_TIER as the J714s ADT's avd0 reports them (avd-version 5, tier 2)
   make -C avd-fw AVD_VER=5 AVD_TIER=2
+  # The library alone (no lzfse tool): what apfs_ro loads through AURORA_LZFSE_LIB
+  ${CC:-cc} $CFLAGS -fPIC -shared -Wl,-soname,liblzfse.so.1 $LDFLAGS -o liblzfse.so.1 \
+    lzfse/src/lzfse_{decode,decode_base,encode,encode_base,fse}.c lzfse/src/lzvn_{decode_base,encode_base}.c
 }
 
 package() {
@@ -69,15 +79,14 @@ package() {
   install -Dm644 aurora-regdom-fallback.service "$pkgdir/usr/lib/systemd/system/aurora-regdom-fallback.service"
   install -Dm644 86-aurora-regdom-fallback.rules "$pkgdir/usr/lib/udev/rules.d/86-aurora-regdom-fallback.rules"
 
-  # J714 (MacBook Pro 14", M5) audio, edimoldovan's (omarchy-mac-pkgs branch
-  # j714-speaker-route-volume, 0a00f7a88711): speakersafetyd's j714 profile
-  # (GPL-2.0-only, from speakersafetyd's j316.conf and m5pro-linux's J716
-  # thermal model), the speaker graph (asahi-audio's J314 filters in J714
-  # channel order) and the microphone graph, wired up by WirePlumber.
-  install -Dm644 speakersafetyd-j714.conf "$pkgdir/usr/share/speakersafetyd/apple/j714.conf"
-  install -Dm644 j714-speakers.json "$pkgdir/usr/share/omarchy-mac/j714/speakers.json"
+  # J714 (MacBook Pro 14", M5) microphones, edimoldovan's (omarchy-mac-pkgs branch
+  # j714-speaker-route-volume, 0a00f7a88711): the microphone graph, wired up by WirePlumber.
+  # The speakers have one protected path, speakerguardd v2 with this Mac's own tuning
+  # (speakerguardd-v2, aurora-speaker-upgrade). The old kernel's speaker path is gone: its
+  # speakersafetyd profile (j714.conf) and its software-dsp speaker graph on hw:AppleJ714,1
+  # were measured against another device tree. Until v2 qualifies, the kernel holds the
+  # speakers at its floor.
   install -Dm644 j714-mic.json "$pkgdir/usr/share/omarchy-mac/j714/mic.json"
-  install -Dm644 wireplumber-j714-speakers.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/j714-speakers.conf"
   install -Dm644 wireplumber-j714-mic.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/j714-mic.conf"
 
   # 6 GHz Wi-Fi on the N1 (edimoldovan/omarchy-mac-pkgs iwd-6ghz-bcm4388-only
@@ -101,11 +110,35 @@ package() {
 
   # Speakers, headphone jack and microphones in PipeWire. The J714 UCM profiles are edimoldovan's
   # (aurora-silicon/alsa-ucm-conf-asahi #10, merged after alsa-ucm-conf-aurora 10.aurora3 was built;
-  # drop them when that package carries them). The busy-card discovery is kazuhidet's (J713): without
-  # it PipeWire skips the speaker card while speakersafetyd holds its sense PCM.
+  # drop them when that package carries them). The J714 profile takes the laptop HiFi verb from
+  # omarchy-j714/HiFi.conf, upstream's (96b3206) with the speakerguardd v2 condition: no Speaker
+  # device while /run/speakerguardd-graph/speakerguardd-owns-speakers exists, so the raw speaker PCM
+  # is v2's alone. The busy-card discovery is kazuhidet's (J713): without it PipeWire skips the
+  # speaker card while a daemon holds its sense PCM.
   install -Dm644 ucm-macaudio-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/macaudio/MacBook Pro J714.conf"
+  install -Dm644 ucm-macaudio-hifi-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/macaudio/omarchy-j714/HiFi.conf"
   install -Dm644 ucm-aop-j714.conf "$pkgdir/usr/share/alsa/ucm2/conf.d/t8140-aop-audio/MacBook Pro J714 AOP Audio.conf"
   install -Dm644 wireplumber-81-aurora-busy-discovery.conf "$pkgdir/usr/share/wireplumber/wireplumber.conf.d/81-aurora-busy-discovery.conf"
+
+  # The speakers move to speakerguardd v2 on their own: aurora-speaker-upgrade's boot unit, enabled
+  # here with upstream's documented opt-in flag. The gate decides; a refusal keeps the floor.
+  install -Dm644 70-aurora-speaker-upgrade-auto.conf \
+    "$pkgdir/usr/lib/systemd/system/aurora-speaker-upgrade.service.d/70-omarchy-j714s-auto.conf"
+  install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../aurora-speaker-upgrade.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/aurora-speaker-upgrade.service"
+
+  # The firmware 27 panel's VRR range offered to the compositor (kernel patch 0014's opt-in, on).
+  install -Dm644 aurora-m5-vrr.conf "$pkgdir/usr/lib/modprobe.d/aurora-m5-vrr.conf"
+
+  # The front camera's IMX958 tuning, read once from this Mac's macOS System volume (read only).
+  install -Dm755 aurora-j714s-camera-setfile "$pkgdir/usr/lib/omarchy-aurora/aurora-j714s-camera-setfile"
+  install -Dm644 aurora-j714s-camera-setfile.service "$pkgdir/usr/lib/systemd/system/aurora-j714s-camera-setfile.service"
+  ln -s ../aurora-j714s-camera-setfile.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/aurora-j714s-camera-setfile.service"
+
+  install -Dm755 liblzfse.so.1 "$pkgdir/usr/lib/omarchy-aurora/liblzfse.so.1"
+  install -Dm644 lzfse/LICENSE "$pkgdir/usr/share/licenses/$pkgname/lzfse-LICENSE"
 
   # Hardware video decode: the J714s decoder (linux-aurora-n1 0017, DjDeveloperr's #1577) runs
   # avd-fw v5-t2, which the image's avd-fw 0.1 does not ship (it ends at v5-t1).

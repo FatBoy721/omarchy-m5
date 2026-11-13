@@ -1,7 +1,7 @@
-From ac7a2d242d92826388034f8b36ce2c38eee236a1 Mon Sep 17 00:00:00 2001
+From d70557057d89b49caddecda61a8d5f947d1c7c4b Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
-Subject: [PATCH 14/18] media: apple: isp: Turn the J714c camera light off
+Subject: [PATCH 12/15] media: apple: isp: Turn the J714c camera light off
  after a firmware halt
 
 A firmware that dies mid-start can leave the sensor powered, and a
@@ -80,7 +80,7 @@ index b81efea0cb33..8cdcd17e2088 100644
  
  #endif /* __ISP_CAM_H__ */
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index 1c3829d6f2b3..c63a171b469b 100644
+index b9f27e4b5ff8..1e2c6d80f488 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
 @@ -828,6 +828,7 @@ static int apple_isp_probe(struct platform_device *pdev)
@@ -105,3 +105,6 @@ index 3c39a1d5fc9d..a35961de0f15 100644
  	isp->ipc_stale = NULL;
  	isp->fw_idle = false;
  	isp->fw_state = isp->hw->resident_fw && !isp->hw->fw_restart ?
+-- 
+2.56.0
+

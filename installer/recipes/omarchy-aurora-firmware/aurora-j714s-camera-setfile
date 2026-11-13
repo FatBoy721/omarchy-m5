@@ -1,0 +1,101 @@
+#!/usr/bin/python3 -I
+# SPDX-License-Identifier: MIT
+"""Collect the J714s front camera's IMX958 tuning (setfile) from this Mac's macOS.
+
+The apple_isp driver loads apple/isp_2226_02XX.dat (IMX958, build rev 2 module) and
+apple/isp_2224_01XX.dat (the older module). They are Apple's, per macOS build, inside the
+camera daemon /usr/sbin/appleh16camerad, so no image can carry them. The Omarchy installer
+collects them for the MacBook Neo only; on a J714s this unit reads the daemon from a macOS
+System volume on the internal disk, read only (aurora-speaker-upgrade's apfs_ro: the System
+volume is not encrypted, it is never mounted or written), and writes the setfiles to
+/usr/lib/firmware/updates/apple/. The camera uses them from the next boot.
+
+Setfile layout and the 4 KiB scan are the Omarchy installer's (Engine omarchy_isp.py, MIT,
+edimoldovan's IMX958 entries). Nothing from another Mac is ever used; on any failure nothing
+is written and the reason goes to the journal.
+"""
+import json, os, struct, subprocess, sys
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, "/usr/lib/aurora-speaker-upgrade")
+OUT = "/usr/lib/firmware/updates/apple"
+DAEMON = "/usr/sbin/appleh16camerad"
+APFS_GUID = "7c3457ef-0000-11aa-aa11-00306543ecac"
+# magic -> (name, size): omarchy_isp IMX958_2224 and IMX958_2226
+SETFILES = {0x22240106: ("2224_01XX", 0x6FF4), 0x22260201: ("2226_02XX", 0x6FF4)}
+ALIGNMENT = 0x1000
+
+
+def valid(h):
+    return (h[2] == h[3] == h[6] == 0 and h[4] != 0 and h[4] & 0xFF000000 == h[4] and h[5] != 0
+            and h[5] & 0xFFFF0000 == h[5] and h[7] == 0x03C00000)
+
+
+def extract(data):
+    found = {}
+    for offset in range(0, len(data) - 31, ALIGNMENT):
+        h = struct.unpack_from(">8I", data, offset)
+        if h[0] not in SETFILES or not valid(h):
+            continue
+        name, size = SETFILES[h[0]]
+        size = (size + 63) & ~63
+        if offset + size > len(data):
+            raise ValueError(f"truncated setfile {name} at {offset:#x}")
+        blob = bytes(data[offset:offset + size])
+        if found.get(name, blob) != blob:
+            raise ValueError(f"conflicting copies of {name}")
+        found[name] = blob
+    return found
+
+
+def apfs_partitions():
+    p = subprocess.run(["lsblk", "-J", "-p", "-o", "PATH,PARTTYPE"], capture_output=True, text=True)
+    out = []
+
+    def walk(devs):
+        for d in devs:
+            if (d.get("parttype") or "").lower() == APFS_GUID:
+                out.append(d["path"])
+            walk(d.get("children") or [])
+    if p.returncode == 0:
+        walk(json.loads(p.stdout).get("blockdevices", []))
+    return out
+
+
+def main():
+    try:
+        from aurora_speaker_upgrade import apfs_ro
+    except ImportError:
+        print("aurora-speaker-upgrade's apfs_ro is not installed", file=sys.stderr)
+        return 1
+    reasons = []
+    for dev in apfs_partitions():
+        try:
+            vols = [v for v in apfs_ro.Container(dev).volumes()
+                    if v.role == apfs_ro.ROLE_SYSTEM and not v.encrypted]
+        except (OSError, apfs_ro.ApfsError) as e:
+            reasons.append(f"{dev}: {e}")
+            continue
+        for v in vols:
+            try:
+                files = extract(v.read_file(v.resolve(DAEMON)[0]))
+            except (OSError, apfs_ro.ApfsError, ValueError, KeyError) as e:
+                reasons.append(f"{dev} {v.name}: {e}")
+                continue
+            if "2226_02XX" not in files:
+                reasons.append(f"{dev} {v.name}: no IMX958 2226_02 setfile in {DAEMON}")
+                continue
+            os.makedirs(OUT, mode=0o755, exist_ok=True)
+            for name, blob in sorted(files.items()):
+                path = os.path.join(OUT, f"isp_{name}.dat")
+                with open(path + ".new", "wb") as f:
+                    f.write(blob)
+                os.replace(path + ".new", path)
+                print(f"{path}: {len(blob)} bytes from {dev} ({v.name})")
+            return 0
+    print("no camera setfile collected: " + ("; ".join(reasons) or "no APFS partition"), file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

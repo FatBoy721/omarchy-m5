@@ -1,0 +1,17 @@
+[Unit]
+Description=Collect the J714s camera tuning from this Mac's macOS (read only)
+Documentation=file:///usr/lib/omarchy-aurora/aurora-j714s-camera-setfile
+After=local-fs.target
+ConditionPathExists=!/usr/lib/firmware/updates/apple/isp_2226_02XX.dat
+ConditionPathExists=/usr/lib/aurora-speaker-upgrade/aurora_speaker_upgrade/apfs_ro.py
+
+[Service]
+Type=oneshot
+ExecCondition=/bin/sh -c 'tr "\\000" "\\n" < /proc/device-tree/compatible | grep -qx apple,j714s'
+Environment=AURORA_LZFSE_LIB=/usr/lib/omarchy-aurora/liblzfse.so.1
+ExecStart=/usr/lib/omarchy-aurora/aurora-j714s-camera-setfile
+# 1 = nothing collected (the reason is in the journal); the camera then has no tuning.
+SuccessExitStatus=1
+
+[Install]
+WantedBy=multi-user.target

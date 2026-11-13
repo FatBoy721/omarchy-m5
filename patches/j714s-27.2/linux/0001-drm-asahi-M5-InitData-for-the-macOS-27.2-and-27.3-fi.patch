@@ -1,7 +1,7 @@
-From cf492a4e637c7382444d8884eb33670142b55fc3 Mon Sep 17 00:00:00 2001
+From b7f44ec31425549b47a894f386f14955f68bd917 Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Thu, 12 Nov 2026 10:56:02 -0500
-Subject: [PATCH 01/18] drm/asahi: M5: InitData for the macOS 27.2 and 27.3
+Subject: [PATCH 01/15] drm/asahi: M5: InitData for the macOS 27.2 and 27.3
  firmware (#1173)
 
 aurora-silicon/linux #1173 (Rolando Trevino, rolotrealanis98; head
@@ -1477,7 +1477,7 @@ index 5c3200fefce1..d1e26e0b44e6 100644
              let offset = shared.main_config[index];
              m::encode_main_config_for_profile(profile, role, &addresses, &instance,
 diff --git a/drivers/gpu/drm/asahi/g17/mod.rs b/drivers/gpu/drm/asahi/g17/mod.rs
-index 88610416beab..7f59f0e4d33d 100644
+index e3db5fee6153..1f33f941079a 100644
 --- a/drivers/gpu/drm/asahi/g17/mod.rs
 +++ b/drivers/gpu/drm/asahi/g17/mod.rs
 @@ -1637,6 +1637,16 @@ pub(crate) fn new(
@@ -1497,7 +1497,7 @@ index 88610416beab..7f59f0e4d33d 100644
              let board = cfg.m5.ok_or(EINVAL)?;
              J813_FORMS.store(board.j813_forms(), core::sync::atomic::Ordering::Relaxed);
              // Hold the J813's GFX power domain for the session, as the G15 and G16 paths do
-@@ -2097,7 +2107,7 @@ fn boot_m5(
+@@ -2100,7 +2110,7 @@ fn boot_m5(
              .inspect_err(at("root adoption"))?;
          session
              .init
@@ -1622,3 +1622,6 @@ index 949bd81d00ed..9e8b1392d94f 100644
      // Two clusters of ten cores. The buffers are sized for every core slot of the board, so the
      // board's cluster and slot counts admit the GPU, whichever cores are fused off.
      core_layout: CoreLayout {
+-- 
+2.56.0
+

@@ -1,7 +1,7 @@
-From cf492a4e637c7382444d8884eb33670142b55fc3 Mon Sep 17 00:00:00 2001
+From b7f44ec31425549b47a894f386f14955f68bd917 Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Thu, 12 Nov 2026 10:56:02 -0500
-Subject: [PATCH 01/18] drm/asahi: M5: InitData for the macOS 27.2 and 27.3
+Subject: [PATCH 01/15] drm/asahi: M5: InitData for the macOS 27.2 and 27.3
  firmware (#1173)
 
 aurora-silicon/linux #1173 (Rolando Trevino, rolotrealanis98; head
@@ -1477,7 +1477,7 @@ index 5c3200fefce1..d1e26e0b44e6 100644
              let offset = shared.main_config[index];
              m::encode_main_config_for_profile(profile, role, &addresses, &instance,
 diff --git a/drivers/gpu/drm/asahi/g17/mod.rs b/drivers/gpu/drm/asahi/g17/mod.rs
-index 88610416beab..7f59f0e4d33d 100644
+index e3db5fee6153..1f33f941079a 100644
 --- a/drivers/gpu/drm/asahi/g17/mod.rs
 +++ b/drivers/gpu/drm/asahi/g17/mod.rs
 @@ -1637,6 +1637,16 @@ pub(crate) fn new(
@@ -1497,7 +1497,7 @@ index 88610416beab..7f59f0e4d33d 100644
              let board = cfg.m5.ok_or(EINVAL)?;
              J813_FORMS.store(board.j813_forms(), core::sync::atomic::Ordering::Relaxed);
              // Hold the J813's GFX power domain for the session, as the G15 and G16 paths do
-@@ -2097,7 +2107,7 @@ fn boot_m5(
+@@ -2100,7 +2110,7 @@ fn boot_m5(
              .inspect_err(at("root adoption"))?;
          session
              .init
@@ -1622,10 +1622,13 @@ index 949bd81d00ed..9e8b1392d94f 100644
      // Two clusters of ten cores. The buffers are sized for every core slot of the board, so the
      // board's cluster and slot counts admit the GPU, whichever cores are fused off.
      core_layout: CoreLayout {
-From b43ec1e6d09bc903a86c7e9e9a4dfa047d1c8000 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 7163c457accea60da368cfed44edd92c38673dd8 Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Sat, 7 Nov 2026 15:41:37 -0500
-Subject: [PATCH 02/18] drm/apple: Name the firmware 27 adaptive sync parameter
+Subject: [PATCH 02/15] drm/apple: Name the firmware 27 adaptive sync parameter
 
 The firmware 27 template instance sends adaptive sync as a bare 15,
 where every other instance sends IOMFBPARAM_ADAPTIVE_SYNC (14). The DCP
@@ -1650,7 +1653,7 @@ Signed-off-by: Rolando Trevino <rolotrealanis@gmail.com>
  2 files changed, 9 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/gpu/drm/apple/iomfb.h b/drivers/gpu/drm/apple/iomfb.h
-index 3202cb0ca26b..603cf2f6352a 100644
+index 33d6c489c7b4..29f3e1912d6f 100644
 --- a/drivers/gpu/drm/apple/iomfb.h
 +++ b/drivers/gpu/drm/apple/iomfb.h
 @@ -57,6 +57,13 @@ enum dcpep_type {
@@ -1668,10 +1671,10 @@ index 3202cb0ca26b..603cf2f6352a 100644
  
  #define IOMFB_MESSAGE_TYPE	GENMASK_ULL( 3,  0)
 diff --git a/drivers/gpu/drm/apple/iomfb_template.c b/drivers/gpu/drm/apple/iomfb_template.c
-index bd7927a41269..5cb3c354e40c 100644
+index 42308171be80..5586bbae0f36 100644
 --- a/drivers/gpu/drm/apple/iomfb_template.c
 +++ b/drivers/gpu/drm/apple/iomfb_template.c
-@@ -2444,7 +2444,7 @@ static void dcp_on_set_parameter(struct apple_dcp *dcp, void *out, void *cookie)
+@@ -2443,7 +2443,7 @@ static void dcp_on_set_parameter(struct apple_dcp *dcp, void *out, void *cookie)
  	struct dcp_set_parameter_dcp param = {
  		.param =
  #if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
@@ -1680,7 +1683,7 @@ index bd7927a41269..5cb3c354e40c 100644
  #else
  		IOMFBPARAM_ADAPTIVE_SYNC,
  #endif
-@@ -4012,7 +4012,7 @@ static void dcp_set_adaptive_sync(struct apple_dcp *dcp, u32 min_vrr,
+@@ -4011,7 +4011,7 @@ static void dcp_set_adaptive_sync(struct apple_dcp *dcp, u32 min_vrr,
  	struct dcp_set_parameter_dcp param = {
  		.param =
  #if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
@@ -1689,10 +1692,13 @@ index bd7927a41269..5cb3c354e40c 100644
  #else
  		IOMFBPARAM_ADAPTIVE_SYNC,
  #endif
-From c590c5abb71e97c2a52419974359c69ed8715f7d Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 4d042d88fe6b805d6106707b7dff4d6b65e322ff Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Sat, 7 Nov 2026 18:21:40 -0500
-Subject: [PATCH 03/18] drm/apple: Refuse panel brightness once the display
+Subject: [PATCH 03/15] drm/apple: Refuse panel brightness once the display
  processor crashed
 
 A panel that presents its level in the swap gets a new level only with
@@ -1735,10 +1741,13 @@ index 00f29157241f..46c162f20121 100644
  
  	if (dcp_backlight_active(dcp) || dcp_backlight_desktop(dcp)) {
  		struct dcp_backlight_state *state = &dcp->backlight.state;
-From 8abc67a554aac2f4614b992ed696c6f7cac14937 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 1a0a6bc58569279039d19b60c9bda1d4e463318b Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Thu, 12 Nov 2026 08:13:48 -0500
-Subject: [PATCH 04/18] drm/apple: firmware 27.3: the full IOMFB method table
+Subject: [PATCH 04/15] drm/apple: firmware 27.3: the full IOMFB method table
  and the 27.3 swap record (J716s daily)
 
 Private to the J716s daily: the IDs beyond the 20 traced ones and the 27.3 swap layout were
@@ -1803,7 +1812,7 @@ index bd4e50ad1fe6..325691adfea4 100644
  	if (READ_ONCE(peer->crashed))
  		dcp_peer_swap_error(owner, "peer publication", -EIO);
 diff --git a/drivers/gpu/drm/apple/iomfb_template.c b/drivers/gpu/drm/apple/iomfb_template.c
-index 5cb3c354e40c..4c0fd3726988 100644
+index 5586bbae0f36..462c6ee46825 100644
 --- a/drivers/gpu/drm/apple/iomfb_template.c
 +++ b/drivers/gpu/drm/apple/iomfb_template.c
 @@ -423,6 +423,11 @@ static void dcp_swap_submit(struct apple_dcp *dcp, bool oob,
@@ -2043,10 +2052,13 @@ index 28063a45d6a6..8a5271105ffd 100644
  bool iomfb_v27_callback_size_valid(unsigned int tag, u32 input, u32 output);
  void iomfb_firmware_state_cleanup_v27(void *data);
  int iomfb_modeset_v27(struct apple_dcp *dcp, struct drm_crtc_state *state);
-From 98d8b8bd184b7108c1cddfcda5c0e7f786107efe Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 9201da58be4e7dddd085314552e017621addcfce Mon Sep 17 00:00:00 2001
 From: Jens Axboe <axboe@kernel.dk>
 Date: Wed, 11 Nov 2026 12:00:39 -0700
-Subject: [PATCH 05/18] drm/asahi: t6050: identify the 27.2 (26B8125) G17S
+Subject: [PATCH 05/15] drm/asahi: t6050: identify the 27.2 (26B8125) G17S
  firmware of the K114/K116
 
 Applies on top of aurora-silicon/linux PR #1173.
@@ -2122,120 +2134,31 @@ index 9e8b1392d94f..6b7ebe1852da 100644
          crate::g17::fw::variant::Build {
              os_version: [27, 2, 0],
              name: "27.2 (26B123), G17S",
-From d204ad4d7ab64d882af9edf88f5e2a390abb2da8 Mon Sep 17 00:00:00 2001
-From: Jens Axboe <axboe@kernel.dk>
-Date: Thu, 12 Nov 2026 10:55:19 -0700
-Subject: [PATCH 06/18] arm64: errata: treat the T6050 vGIC SEIS as broken,
- like T6040 and T8140
+-- 
+2.56.0
 
-ICH_VTR_EL2 on the K116s (MacBook Pro 16-inch, M5 Pro, firmware 27.2)
-reads 0x90580007 at EL2: eight list registers and SEIS set, on the boot
-CPU, part 0x064. The other Apple cores with this value are listed in
-apple_broken_seis_cpus so that KVM does not trust the locally generated
-SError the vGIC claims to support; without the entry SMP guests livelock.
-Add the two T6050 core parts.
-
-The register was read through the boot loader's proxy at EL2 before
-Linux ran. The K116s now runs Linux at EL2 on every CPU (padded Stage 1,
-27.2) with this entry, which logs "Known broken GICv3 SEIS
-implementation", and KVM works: qemu -accel kvm -M virt,gic-version=3
--cpu host guests with 1, 2, 6 and 18 vCPUs boot and exit cleanly.
-
-Signed-off-by: Jens Axboe <axboe@kernel.dk>
----
- arch/arm64/kernel/cpu_errata.c | 2 ++
- 1 file changed, 2 insertions(+)
-
-diff --git a/arch/arm64/kernel/cpu_errata.c b/arch/arm64/kernel/cpu_errata.c
-index 9d7e134419fb..fa1a6a83caa9 100644
---- a/arch/arm64/kernel/cpu_errata.c
-+++ b/arch/arm64/kernel/cpu_errata.c
-@@ -318,6 +318,8 @@ static const struct midr_range apple_broken_seis_cpus[] = {
- 	MIDR_ALL_VERSIONS(MIDR_APPLE_TAHITI_P),
- 	MIDR_ALL_VERSIONS(MIDR_APPLE_T8142_E),
- 	MIDR_ALL_VERSIONS(MIDR_APPLE_T8142_P),
-+	MIDR_ALL_VERSIONS(MIDR_APPLE_T6050_064),
-+	MIDR_ALL_VERSIONS(MIDR_APPLE_T6050_065),
- 	{},
- };
- 
-From 63bc1d53e785766d148ad765412580094fc7e133 Mon Sep 17 00:00:00 2001
-From: Jens Axboe <axboe@kernel.dk>
-Date: Thu, 12 Nov 2026 07:04:15 -0700
-Subject: [PATCH 07/18] arm64: cpufeature: treat WFxT as absent on the T6050
- cores too
-
-has_wfxt() hides WFxT on the T8142 and T8152 cores, which clear
-architectural state across WFIT. Add the T6050 (M5 Pro and Max) core
-parts, 0x064 and 0x065.
-
-This is a precaution, not a measured fix: the T6050 was not measured for
-the WFIT state loss. Under the boot loader's EL1 monitor
-ID_AA64ISAR2_EL1.WFxT read 0. The K116s now runs Linux at EL2 on every
-CPU (padded Stage 1, 27.2), where the field reads 2, so ARM64_HAS_WFXT
-would be set without these entries. With them, a sha256 loop under
-schedutil on all 18 cores ran 67k times without a wrong result, and KVM
-guests run. The kernel was not run at EL2 without them. __delay()
-already skips WFIT on these cores by MIDR; the entries keep the
-capability clear for its other users as well.
-
-The HWCAP2_WFXT bit userspace sees comes from the ID register field, not
-from this capability, and is not changed.
-
-Signed-off-by: Jens Axboe <axboe@kernel.dk>
----
- arch/arm64/kernel/cpufeature.c | 9 +++++++++
- 1 file changed, 9 insertions(+)
-
-diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c
-index e56bf965e2eb..e766c1d13748 100644
---- a/arch/arm64/kernel/cpufeature.c
-+++ b/arch/arm64/kernel/cpufeature.c
-@@ -2636,12 +2636,21 @@ test_has_gicv5_legacy(const struct arm64_cpu_capabilities *entry, int scope)
-  * there, as arm64.nowfxt does, so __delay() uses WFE. T8142 (M5) was not
-  * measured; it is included because apple_m5_needs_wait_save() groups its
-  * cores with T8152 for this state loss.
-+ *
-+ * T6050 (M5 Pro and Max, parts 0x064 and 0x065) was not measured for the WFIT
-+ * state loss either. On the K116s, at EL1 under the boot loader's monitor,
-+ * ID_AA64ISAR2_EL1.WFxT reads 0, so the capability is not set there today
-+ * with or without these entries, and __delay() already avoids WFIT on these
-+ * cores by MIDR. The entries are a precaution for a kernel started at EL2,
-+ * where the field may read as implemented.
-  */
- static bool has_wfxt(const struct arm64_cpu_capabilities *entry, int scope)
- {
- 	static const struct midr_range apple_wfxt_loses_state[] = {
- 		MIDR_ALL_VERSIONS(MIDR_CPU_MODEL(ARM_CPU_IMP_APPLE, 0x062)),
- 		MIDR_ALL_VERSIONS(MIDR_CPU_MODEL(ARM_CPU_IMP_APPLE, 0x063)),
-+		MIDR_ALL_VERSIONS(MIDR_CPU_MODEL(ARM_CPU_IMP_APPLE, APPLE_CPU_PART_T6050_064)),
-+		MIDR_ALL_VERSIONS(MIDR_CPU_MODEL(ARM_CPU_IMP_APPLE, APPLE_CPU_PART_T6050_065)),
- 		MIDR_ALL_VERSIONS(MIDR_CPU_MODEL(ARM_CPU_IMP_APPLE, 0x072)),
- 		MIDR_ALL_VERSIONS(MIDR_CPU_MODEL(ARM_CPU_IMP_APPLE, 0x073)),
- 		{}
-From 0c108a4b3260f9f25b9f611ab4750589da7b2d3a Mon Sep 17 00:00:00 2001
+From efa7f2723d0eebeafd313a534102bc637f3119aa Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 23:52:29 -0500
-Subject: [PATCH 08/18] accel/ane, media: apple: ave: T6050 Neural Engine and
- encoder on macOS 27.3
+Subject: [PATCH 06/15] accel/ane, media: apple: ave: T6050 Neural Engine on
+ macOS 27.3; AVE builds by TEXT CRC
 
-The T6050 ANE and AVE drivers admit one preloaded firmware build each, the
-macOS 27.0 one. Give each a table of admitted builds and let the handed-off
-layout (ANE) or the segment sizes and TEXT CRC (AVE) select the build.
+The T6050 ANE driver admits one preloaded firmware build, the macOS 27.0
+one. Give it a table of admitted builds and let the handed-off layout
+select the build. ANE: 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA
+0x100000c0000; 27.3 (26C5035r) TEXT 0xec000 and DATA 0x280000 at
+0x100000ec000, each with its own TEXT sha256 pin. The H17 backend sizes its
+IPC from the firmware boot request (27.3 asks 0x10441 bytes) instead of a
+fixed 0xc441, and ane_t6021.boot_stages=N holds the bind after N bring-up
+stages.
 
-ANE: 27.0 TEXT 0xc0000 and DATA 0x2ac000 at DVA 0x100000c0000; 27.3 (26C5035r)
-TEXT 0xec000 and DATA 0x280000 at 0x100000ec000, each with its own TEXT sha256
-pin. The H17 backend sizes its IPC from the firmware boot request (27.3 asks
-0x10441 bytes) instead of a fixed 0xc441, and ane_t6021.boot_stages=N holds
-the bind after N bring-up stages.
+AVE: #1747 admits the 27.3 (26C5035r) build by its segment sizes. Builds
+may share sizes (27.2 26B123 has 27.3's), so let the TEXT CRC, with the
+sizes, select the build. apple_ave.ave_t6050_27_3_hevc=0 refuses HEVC on
+the 27.3 build.
 
-AVE: 27.3 (26C5035r) TEXT 0x158000 CRC c25b4ddb, DATA 0x134000, driven with
-26A428 command layout (H.264 and HEVC encoded cleanly on a J714s;
-apple_ave.ave_t6050_27_3_hevc=0 refuses HEVC). Builds may share sizes, so the
-TEXT CRC selects the build.
-
-Ported from betizzel/omarchy-m5 patches/upstream-27.3/0004 onto
-integration/aurora 572eb88e (the AVE probe now has fw_data_size_alt).
+Ported from betizzel/omarchy-m5 patches/upstream-27.3/0004; rebased onto
+integration/aurora a34d26c2 (after #1747).
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
@@ -2244,13 +2167,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  drivers/accel/ane/ane_fw_platform.c           | 29 ++++++++
  drivers/accel/ane/ane_fw_platform.h           | 63 ++++++++++++++++-
  drivers/accel/ane/ane_fw_platform_test.c      | 35 ++++++++++
- drivers/media/platform/apple/ave/ave-drv.c    | 12 ++++
- drivers/media/platform/apple/ave/ave-fw.c     | 44 ++++++++++--
- drivers/media/platform/apple/ave/ave-layout.c | 23 +++++++
+ drivers/media/platform/apple/ave/ave-fw.c     | 23 ++++---
+ drivers/media/platform/apple/ave/ave-layout.c | 21 +++++-
  drivers/media/platform/apple/ave/ave-layout.h |  1 +
  drivers/media/platform/apple/ave/ave-sess.c   |  2 +
- drivers/media/platform/apple/ave/ave.h        | 17 +++++
- 11 files changed, 273 insertions(+), 25 deletions(-)
+ drivers/media/platform/apple/ave/ave.h        |  6 +-
+ 10 files changed, 221 insertions(+), 31 deletions(-)
 
 diff --git a/drivers/accel/ane/ane_fw_cold.c b/drivers/accel/ane/ane_fw_cold.c
 index 6f447afa769e..bd62013b2ead 100644
@@ -2640,102 +2562,51 @@ index 7fa82abf63fa..53eb20cb1300 100644
  	{}
  };
  
-diff --git a/drivers/media/platform/apple/ave/ave-drv.c b/drivers/media/platform/apple/ave/ave-drv.c
-index ed803b18c3c4..16ae0ace321f 100644
---- a/drivers/media/platform/apple/ave/ave-drv.c
-+++ b/drivers/media/platform/apple/ave/ave-drv.c
-@@ -129,10 +129,22 @@ static const struct ave_variant ave_t8140 = {
-  * A18 Pro, after clearing the SVE idle word at mailbox +0x118. Its boot configuration names
-  * device 28, and so does its handshake's device type.
-  */
-+static const struct ave_fw_build ave_t6050_builds[] = {
-+	{ "26A428", 0x154000, 0x134000, AVE_FW_TEXT_CRC_T6050_26A428 },
-+	/*
-+	 * macOS 27.3 beta 1: TEXT grew by 0x4000 (ADT ave0 segment-ranges on a J714s with
-+	 * iBoot 20457.60.65), DATA kept its size. The firmware starts as 26A428 does and
-+	 * takes 26A428's command layout (ave_layout_for_crc()).
-+	 */
-+	{ "26C5035", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26C5035 },
-+};
-+
- static const struct ave_variant ave_t6050 = {
- 	.regs = &ave_coproc_v40,
- 	.fw_text_size = 0x154000,
- 	.fw_data_size = 0x134000,
-+	.builds = ave_t6050_builds,
-+	.build_count = ARRAY_SIZE(ave_t6050_builds),
- 	.boot_device_id = 28,
- 	.boot_arg_value = AVE_COPROC_BOOT_ARG_VALUE,
- 	.timebase_multiplier = 1,
 diff --git a/drivers/media/platform/apple/ave/ave-fw.c b/drivers/media/platform/apple/ave/ave-fw.c
-index d635886675e5..2b74519cc05a 100644
+index 0732fff28fc2..9eb4e29bb886 100644
 --- a/drivers/media/platform/apple/ave/ave-fw.c
 +++ b/drivers/media/platform/apple/ave/ave-fw.c
-@@ -41,6 +41,7 @@ static const u32 ave_known_text_crc[] = {
- 	AVE_FW_TEXT_CRC_T6040_25G83, /* AppleAVE2FW 9003.78.0 / T6040 */
- 	AVE_FW_TEXT_CRC_T6041_25G83, /* AppleAVE2FW 9003.78.0 / M4 Max */
- 	AVE_FW_TEXT_CRC_T6050_26A428, /* AppleAVE2FW, macOS 27.0 26A428 / T6050 */
-+	AVE_FW_TEXT_CRC_T6050_26C5035, /* AppleAVE2FW, macOS 27.3 26C5035r / T6050 */
- 	0x460c7a7c, /* AppleAVE2FW 6070.11.1 / T6000 */
- 	0x25bfd039, /* AppleAVE2FW 6070.11.1 / T8112 */
- };
-@@ -219,10 +220,26 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
-  * Find the firmware, check that it is a build we speak to and that DATA is
-  * still as the bootloader left it, and keep a copy of DATA for restarts.
-  */
+@@ -216,12 +216,17 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
+ 	return ret;
+ }
+ 
+-/* The variant's build with these segment sizes, or NULL. */
 +/*
 + * The variant's build with these segment sizes and, unless @crc is 0, this
 + * TEXT CRC; or NULL. Builds can share sizes, so only the CRC tells them
 + * apart.
 + */
-+static const struct ave_fw_build *ave_fw_find_build(const struct ave_variant *v,
+ static const struct ave_fw_build *ave_fw_find_build(const struct ave_variant *v,
+-						    size_t text, size_t data)
 +						    size_t text, size_t data, u32 crc)
-+{
-+	for (unsigned int i = 0; i < v->build_count; i++)
+ {
+ 	for (unsigned int i = 0; i < v->build_count; i++)
+-		if (text == v->builds[i].text_size && data == v->builds[i].data_size)
 +		if (text == v->builds[i].text_size && data == v->builds[i].data_size &&
 +		    (!crc || crc == v->builds[i].text_crc))
-+			return &v->builds[i];
-+	return NULL;
-+}
-+
- int ave_fw_probe(struct ave_dev *ave)
- {
- 	struct device *dev = ave->dev;
--	u32 text_crc, data_crc, want;
-+	const struct ave_fw_build *build = NULL;
-+	u32 text_crc, data_crc, want, want_crc = ave->variant->text_crc;
- 	bool known = !ave->variant->boot_qualified;
- 	int ret;
- 
-@@ -236,12 +253,18 @@ int ave_fw_probe(struct ave_dev *ave)
- 	if (ret)
+ 			return &v->builds[i];
+ 	return NULL;
+ }
+@@ -249,13 +254,10 @@ int ave_fw_probe(struct ave_dev *ave)
  		return dev_err_probe(dev, ret, "bad firmware reservation\n");
  
--	if (ave->text.size != ave->variant->fw_text_size ||
--	    (ave->data.size != ave->variant->fw_data_size &&
--	     (!ave->variant->fw_data_size_alt ||
--	      ave->data.size != ave->variant->fw_data_size_alt)))
-+	if (ave->variant->build_count) {
+ 	if (ave->variant->build_count) {
+-		build = ave_fw_find_build(ave->variant, ave->text.size,
+-					  ave->data.size);
+-		if (!build)
 +		if (!ave_fw_find_build(ave->variant, ave->text.size, ave->data.size, 0))
-+			return dev_err_probe(dev, -EINVAL,
-+					     "unexpected firmware segment sizes (TEXT %#zx DATA %#zx)\n",
-+					     ave->text.size, ave->data.size);
-+	} else if (ave->text.size != ave->variant->fw_text_size ||
-+		   (ave->data.size != ave->variant->fw_data_size &&
-+		    (!ave->variant->fw_data_size_alt ||
-+		     ave->data.size != ave->variant->fw_data_size_alt))) {
- 		return dev_err_probe(dev, -EINVAL,
- 				     "unexpected firmware segment sizes\n");
-+	}
- 	if ((ave->text.phys < ave->data.phys + ave->data.size &&
- 	     ave->data.phys < ave->text.phys + ave->text.size) ||
- 	    (ave->text.iova < ave->data.iova + ave->data.size &&
-@@ -279,13 +302,20 @@ int ave_fw_probe(struct ave_dev *ave)
+ 			return dev_err_probe(dev, -EINVAL,
+ 					     "unexpected firmware segment sizes (TEXT %#zx DATA %#zx)\n",
+ 					     ave->text.size, ave->data.size);
+-		want_crc = build->text_crc;
+ 	} else if (ave->text.size != ave->variant->fw_text_size ||
+ 		   (ave->data.size != ave->variant->fw_data_size &&
+ 		    (!ave->variant->fw_data_size_alt ||
+@@ -300,7 +302,12 @@ int ave_fw_probe(struct ave_dev *ave)
  		return dev_err_probe(dev, ret,
  				     "firmware text link cell is not the DATA address\n");
  	known |= ave_fw_known_crc(text_crc);
--	if (!known ||
--	    (ave->variant->text_crc && text_crc != ave->variant->text_crc))
+-	if (!known || (want_crc && text_crc != want_crc))
 +	if (ave->variant->build_count) {
 +		build = ave_fw_find_build(ave->variant, ave->text.size, ave->data.size, text_crc);
 +		want_crc = build ? build->text_crc : 0;
@@ -2745,16 +2616,8 @@ index d635886675e5..2b74519cc05a 100644
  		return dev_err_probe(dev, -ENODEV,
  				     "unsupported firmware (text CRC %08x)\n",
  				     text_crc);
- 	ave->text_crc = text_crc;
- 	ave->layout = ave_layout_for_crc(text_crc);
-+	if (build)
-+		dev_info(dev, "firmware build %s (TEXT %#zx CRC %08x, DATA %#zx)\n",
-+			 build->name, ave->text.size, text_crc, ave->data.size);
- 
- 	ave->data_pristine = vmalloc(ave->data.size);
- 	if (!ave->data_pristine)
 diff --git a/drivers/media/platform/apple/ave/ave-layout.c b/drivers/media/platform/apple/ave/ave-layout.c
-index 4547aeda820c..dc887d27b4cc 100644
+index 6bd435102998..dc887d27b4cc 100644
 --- a/drivers/media/platform/apple/ave/ave-layout.c
 +++ b/drivers/media/platform/apple/ave/ave-layout.c
 @@ -1,5 +1,7 @@
@@ -2786,19 +2649,18 @@ index 4547aeda820c..dc887d27b4cc 100644
  const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
  {
  	/*
-@@ -961,5 +977,12 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
- 	/* The macOS 27.0 build for the M5 Pro and Max. */
+@@ -962,8 +978,9 @@ const struct ave_fw_layout *ave_layout_for_crc(u32 crc)
  	if (crc == AVE_FW_TEXT_CRC_T6050_26A428)
  		return &ave_layout_26a428;
-+	/*
+ 	/*
+-	 * The macOS 27.3 beta 1 build speaks the same command layout: H.264
+-	 * and HEVC encode with it on a J714s.
 +	 * The macOS 27.3 build speaks 26A428's command layout: H.264 (Main with
 +	 * B-frames, Baseline) encodes on a J714s on two boots, and HEVC too, unless
 +	 * ave_t6050_27_3_hevc=0 (ave_layout_hevc_refused()).
-+	 */
-+	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
-+		return &ave_layout_26a428;
- 	return NULL;
- }
+ 	 */
+ 	if (crc == AVE_FW_TEXT_CRC_T6050_26C5035)
+ 		return &ave_layout_26a428;
 diff --git a/drivers/media/platform/apple/ave/ave-layout.h b/drivers/media/platform/apple/ave/ave-layout.h
 index 6731d634da8b..bba3aadba8d8 100644
 --- a/drivers/media/platform/apple/ave/ave-layout.h
@@ -2824,50 +2686,29 @@ index 2bdec4b0f2f6..32c6da268b13 100644
  }
  
 diff --git a/drivers/media/platform/apple/ave/ave.h b/drivers/media/platform/apple/ave/ave.h
-index 25693eb4512f..cb4bbe7673c3 100644
+index 0454611f1a42..cb4bbe7673c3 100644
 --- a/drivers/media/platform/apple/ave/ave.h
 +++ b/drivers/media/platform/apple/ave/ave.h
-@@ -174,6 +174,8 @@ enum ave_opcode {
-  */
- #define AVE_FW_TEXT_CRC_T6041_25G83 0x9a080cad
- #define AVE_FW_TEXT_CRC_T6050_26A428 0x87279429
-+/* macOS 27.3 beta 1 (26C5035r) / T6050: TEXT 0x158000, DATA 0x134000. */
-+#define AVE_FW_TEXT_CRC_T6050_26C5035 0xc25b4ddb
- 
- struct ave_ctx;
- 
-@@ -188,12 +190,27 @@ struct ave_coproc_regs {
- 	u32 keep_mappings;
- };
- 
-+/* One preloaded firmware build of a variant: its segment sizes and TEXT CRC. */
-+struct ave_fw_build {
-+	const char *name;
-+	u32 text_size;
-+	u32 data_size;
-+	u32 text_crc;
-+};
-+
- struct ave_variant {
- 	const struct ave_coproc_regs *regs;
- 	u32 fw_text_size;
- 	u32 fw_data_size;
+@@ -205,9 +205,9 @@ struct ave_variant {
  	/* A second DATA size the variant accepts (the M4 Max build), or 0 */
  	u32 fw_data_size_alt;
-+	/*
+ 	/*
+-	 * When set, the builds the variant admits. They replace fw_text_size,
+-	 * fw_data_size and text_crc: the segment sizes select the build, and
+-	 * the build names the TEXT CRC it must have.
 +	 * When set, the builds this variant admits; they replace fw_text_size,
 +	 * fw_data_size and text_crc. Builds may share segment sizes, so the
 +	 * TEXT CRC, with the sizes, selects the build.
-+	 */
-+	const struct ave_fw_build *builds;
-+	unsigned int build_count;
- 	u32 boot_device_id;
- 	u32 device_type;
- 	u32 lfs_ref_scale;
-From 1e72d79d0abd12668ccd97196d06131b31870882 Mon Sep 17 00:00:00 2001
+ 	 */
+ 	const struct ave_fw_build *builds;
+ 	unsigned int build_count;
+-- 
+2.56.0
+
+From 576c68baee9deaa19ffd61a172e5ea3c0aef9d4c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
-Subject: [PATCH 09/18] media: apple: isp: Tune the J714c IMX958 with setfile
+Subject: [PATCH 07/15] media: apple: isp: Tune the J714c IMX958 with setfile
  2226_02
 
 macOS's appleh16camerad carries three setfiles naming sensor 0x958:
@@ -2922,10 +2763,10 @@ index e3c39232e727..f388c9aef3e7 100644
  			"ch %d: unsupported sensor. Please file a bug report with hardware info & dmesg trace.\n",
  			ch);
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index 703dcea3ef90..21e13968c862 100644
+index f46adc37bad3..035f6ad49d43 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
-@@ -1412,6 +1412,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+@@ -1422,6 +1422,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
  	.fw_restore = true,
  	.deferred_start = true,
  	.setfile_stride_fixup = true,
@@ -2956,10 +2797,13 @@ index 3551018baf17..79a4445d1c4f 100644
  	ISP_VD56G0_6221_01,
  	ISP_VD56G0_6222_01,
  };
-From 1a80935a9f83e47abf1480f0a67275669c7c2516 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 299c0248a9acf5325bdcd09ba5359c6fdfed4116 Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:11:59 +0100
-Subject: [PATCH 10/18] media: apple: isp: Compute the T6050 setfile's noise
+Subject: [PATCH 08/15] media: apple: isp: Compute the T6050 setfile's noise
  reduction radial gains
 
 The IMX958 setfile 2226_02 carries its noise reduction radial gains
@@ -3112,10 +2956,10 @@ index f388c9aef3e7..fff6dd35cfad 100644
  	err = isp_cmd_ch_set_file_load(isp, ch, isp->data_surf->iova,
  				       setfile->size);
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index 21e13968c862..a1bf821770c1 100644
+index 035f6ad49d43..c0e6b3601941 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
-@@ -1414,6 +1414,7 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+@@ -1424,6 +1424,7 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
  	.setfile_stride_fixup = true,
  	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
  	.imx958_2226 = true,
@@ -3136,10 +2980,13 @@ index 79a4445d1c4f..6b7e6b5f9a70 100644
  };
  
  enum isp_sensor_id {
-From 58ee7ebfded6ba719e6e96636e7cbd5a75968d43 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 6ebb9a70162d17138d35665be18b78db48cbea9c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 14:13:01 +0100
-Subject: [PATCH 11/18] media: apple: isp: Set the J714c lens shading target
+Subject: [PATCH 09/15] media: apple: isp: Set the J714c lens shading target
  and scene metering
 
 macOS's appleh16camerad sets the IMX958's lens shading ideal percent to
@@ -3248,10 +3095,10 @@ index ab98f3447d6f..6511b625c58f 100644
  							u32 chan, u32 freq);
  
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index a1bf821770c1..7583878833c1 100644
+index c0e6b3601941..fffb99c7c66f 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
-@@ -1415,6 +1415,9 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+@@ -1425,6 +1425,9 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
  	/* The J714c's IMX958 (build revision 2) is tuned by 2226_02 */
  	.imx958_2226 = true,
  	.setfile_radial_gain = true,
@@ -3276,77 +3123,64 @@ index 6b7e6b5f9a70..c13914ef62e9 100644
  };
  
  enum isp_sensor_id {
-From 38cc56960f09c2771c75cac0332ff31433ca36a1 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From ca22b22899c1d782b1d53b05a231061e84daad4a Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
-Date: Thu, 12 Nov 2026 04:15:12 -0500
-Subject: [PATCH 12/18] arm64: dts: apple: t6050-j714s: Stream the camera as
- the J714c does
+Date: Fri, 13 Nov 2026 11:16:29 -0500
+Subject: [PATCH 10/15] arm64: dts: apple: t6050-j714s: Also offer 2560x1440
+ from sensor config 6
 
-Take edimoldovan's J714c presets (omacom/linux-aurora #422, e8233e1bbe91
-and 8916070002f4) for the J714s's IMX958: the full sensor cropped to the
-centre, 1920x1080 and 2560x1440 in firmware configuration 6 (two merged
-exposures, as macOS streams), 1280x720 in configuration 7.
+DjDeveloperr's J714s presets (#1835) crop and scale sensor config 6 to
+seven sizes up to 1920x1080. edimoldovan's J714c presets (omacom/linux-aurora
+#422) also stream the centre 2560x1440 of the same 3040x2880 frame 1:1,
+which this J714s streamed at 30 fps on the macOS 27.3 beta 1 ISP firmware.
+Add it as preset7 in #1835's form (config 6, the stacked 3040x5760 input).
 
-Tested on the J714s (macOS 27.3 beta 1 firmware): all three stream NV12
-at 30 fps.
+The earlier J714s presets (1920x1080 and 2560x1440 on config 6, 1280x720 on
+config 7) are replaced by #1835's.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
 ---
- arch/arm64/boot/dts/apple/t6050-j714s.dts | 36 +++++++++++++++++++++++
- 1 file changed, 36 insertions(+)
+ arch/arm64/boot/dts/apple/t6050-j714s.dts | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-index b6c7675864b9..c894e54e7a07 100644
+index f9d5789c9855..4cea8adb301b 100644
 --- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-@@ -610,6 +610,42 @@ fan-F1Ac {
- /* The same T6050 camera as J716c (J714sAP ADT); the loader sets the J714s sensor type. */
- #include "t6050-j716c-isp.dtsi"
- 
-+/*
-+ * The J714s's IMX958 streams as edimoldovan's J714c does (omacom/linux-aurora
-+ * #422): the full sensor cropped to the centre, inside the lens circle.
-+ * 1920x1080 and 2560x1440 use firmware configuration 6, the one macOS streams
-+ * (two exposures, 3040x5760, merged to 3040x2880); 1280x720 uses
-+ * configuration 7 (3040x2880). 1920x1080 and 1280x720 scale a 2400x1350
-+ * window; 2560x1440 is the centre 1:1.
-+ */
-+&isp0 {
-+	/delete-node/ sensor-presets;
-+
-+	sensor-presets {
-+		/* 1920x1080 */
-+		preset0 {
-+			apple,config-index = <6>;
-+			apple,input-size = <3040 2880>;
-+			apple,output-size = <1920 1080>;
-+			apple,crop = <320 765 2400 1350>;
-+		};
-+		/* 1280x720 */
-+		preset1 {
-+			apple,config-index = <7>;
-+			apple,input-size = <3040 2880>;
-+			apple,output-size = <1280 720>;
-+			apple,crop = <320 765 2400 1350>;
-+		};
+@@ -618,6 +618,9 @@ fan-F1Ac {
+  * the first) cropped and scaled by the ISP per size. Each crop is centred on that frame;
+  * the landscape sizes take two-thirds of its width, the portrait sizes the same length of
+  * its height and the square that side.
++ *
++ * 2560x1440 (edimoldovan's J714c preset, omacom/linux-aurora #422) is the centre of the
++ * same frame 1:1, unscaled.
+  */
+ &isp0 {
+ 	/delete-node/ sensor-presets;
+@@ -672,6 +675,13 @@ preset6 {
+ 			apple,output-size = <1080 1920>;
+ 			apple,crop = <950 426 1140 2026>;
+ 		};
 +		/* 2560x1440 */
-+		preset2 {
++		preset7 {
 +			apple,config-index = <6>;
-+			apple,input-size = <3040 2880>;
++			apple,input-size = <3040 5760>;
 +			apple,output-size = <2560 1440>;
 +			apple,crop = <240 720 2560 1440>;
 +		};
-+	};
-+};
-+
- /* The GPU and the internal panel, for the boot loader's handoff */
- #include "t6050-j714s-gpu-panel.dtsi"
+ 	};
+ };
  
-From 19ba47c6b22f42778de211e332b7bc3d181df513 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 42a3efb6edb109eb89c2b96ce1778960bbddc903 Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:35 +0100
-Subject: [PATCH 13/18] media: apple: isp: Drive the J714c camera light from
+Subject: [PATCH 11/15] media: apple: isp: Drive the J714c camera light from
  the driver
 
 On the J714c the camera light belongs to the exclave indicator
@@ -3490,7 +3324,7 @@ index 51c2f2ec6c07..b81efea0cb33 100644
  
  #endif /* __ISP_CAM_H__ */
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index 7583878833c1..1c3829d6f2b3 100644
+index fffb99c7c66f..b9f27e4b5ff8 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
 @@ -811,6 +811,25 @@ static int apple_isp_probe(struct platform_device *pdev)
@@ -3519,7 +3353,7 @@ index 7583878833c1..1c3829d6f2b3 100644
  	isp->irq = platform_get_irq(pdev, 0);
  	if (isp->irq < 0) {
  		err = isp->irq;
-@@ -1418,6 +1437,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+@@ -1428,6 +1447,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
  	/* As macOS's appleh16camerad sets them for the J714c's IMX958 */
  	.lsc_ideal_percent = 84,
  	.ae_fd_scene_metering = true,
@@ -3569,10 +3403,13 @@ index 09b691228650..3c39a1d5fc9d 100644
  	pm_runtime_put_sync(isp->dev);
  	isp->ipc_stale = NULL;
  	isp->fw_idle = false;
-From ac7a2d242d92826388034f8b36ce2c38eee236a1 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From d70557057d89b49caddecda61a8d5f947d1c7c4b Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
-Subject: [PATCH 14/18] media: apple: isp: Turn the J714c camera light off
+Subject: [PATCH 12/15] media: apple: isp: Turn the J714c camera light off
  after a firmware halt
 
 A firmware that dies mid-start can leave the sensor powered, and a
@@ -3651,7 +3488,7 @@ index b81efea0cb33..8cdcd17e2088 100644
  
  #endif /* __ISP_CAM_H__ */
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index 1c3829d6f2b3..c63a171b469b 100644
+index b9f27e4b5ff8..1e2c6d80f488 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
 @@ -828,6 +828,7 @@ static int apple_isp_probe(struct platform_device *pdev)
@@ -3676,10 +3513,13 @@ index 3c39a1d5fc9d..a35961de0f15 100644
  	isp->ipc_stale = NULL;
  	isp->fw_idle = false;
  	isp->fw_state = isp->hw->resident_fw && !isp->hw->fw_restart ?
-From caa8d0c8e75eb225cfa6acf6652751ac0e32ae21 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From a820947dd267eab1070fe6e1de9821053c886340 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 05:03:13 -0500
-Subject: [PATCH 15/18] arm64: dts: apple: t6050-j714s: Describe the camera
+Subject: [PATCH 13/15] arm64: dts: apple: t6050-j714s: Describe the camera
  light
 
 edimoldovan's camera light driver (omacom/linux-aurora #422, 5a3e9d8a5f0b
@@ -3699,11 +3539,11 @@ Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
  1 file changed, 18 insertions(+)
 
 diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-index c894e54e7a07..daeedd1336e3 100644
+index 4cea8adb301b..d0b713627078 100644
 --- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
 +++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
-@@ -619,6 +619,24 @@ fan-F1Ac {
-  * window; 2560x1440 is the centre 1:1.
+@@ -623,6 +623,24 @@ fan-F1Ac {
+  * same frame 1:1, unscaled.
   */
  &isp0 {
 +	/*
@@ -3727,10 +3567,13 @@ index c894e54e7a07..daeedd1336e3 100644
  	/delete-node/ sensor-presets;
  
  	sensor-presets {
-From e63fc2ed06fb94b68285aa7192c053e359478cf7 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 0bb98db8e302cc614539f47798bba265f0f7b8af Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Thu, 12 Nov 2026 12:29:34 -0500
-Subject: [PATCH 16/18] drm/apple: Offer VRR on the firmware 27 panel and apply
+Subject: [PATCH 14/15] drm/apple: Offer VRR on the firmware 27 panel and apply
  VRR_ENABLED (J716s daily)
 
 The T6050 ProMotion panel reports its 120 Hz timing with both
@@ -3801,10 +3644,10 @@ index 649e76820e18..8a24a1e97bb3 100644
   * Does @dcp's firmware speak the 14.7 AFK, DPTX and DPAV endpoint protocol,
   * whichever IOMFB path drives it? DCP_FIRMWARE_V_14_7 is the native DCPLink
 diff --git a/drivers/gpu/drm/apple/dcp.c b/drivers/gpu/drm/apple/dcp.c
-index e819a3565b5f..1894241f222f 100644
+index b65a534ad531..9f4993297748 100644
 --- a/drivers/gpu/drm/apple/dcp.c
 +++ b/drivers/gpu/drm/apple/dcp.c
-@@ -1525,6 +1525,12 @@ VISIBLE_IF_KUNIT void dcp_swap_watchdog(struct work_struct *work)
+@@ -1549,6 +1549,12 @@ VISIBLE_IF_KUNIT void dcp_swap_watchdog(struct work_struct *work)
  		WRITE_ONCE(dcp->vrr_enabled, false);
  		dev_warn(dcp->dev, "adaptive swap timed out, restoring fixed refresh\n");
  	}
@@ -3817,7 +3660,7 @@ index e819a3565b5f..1894241f222f 100644
  	dev_warn(dcp->dev, "swap not completed, retraining the display\n");
  	dcp_mode_invalidate(&dcp->mode_state);
  	dcp_drm_crtc_vblank(dcp->crtc);
-@@ -1535,7 +1541,8 @@ VISIBLE_IF_KUNIT void dcp_swap_watchdog(struct work_struct *work)
+@@ -1559,7 +1565,8 @@ VISIBLE_IF_KUNIT void dcp_swap_watchdog(struct work_struct *work)
  
  void dcp_swap_watchdog_arm(struct apple_dcp *dcp)
  {
@@ -3828,7 +3671,7 @@ index e819a3565b5f..1894241f222f 100644
  			msecs_to_jiffies(DCP_SWAP_WATCHDOG_MS);
  		mod_delayed_work(system_dfl_wq, &dcp->swap_watchdog_wq,
 diff --git a/drivers/gpu/drm/apple/iomfb.c b/drivers/gpu/drm/apple/iomfb.c
-index 4a7ff2127ac0..9b42ed350dc1 100644
+index 174fc83c3add..9f82797f1255 100644
 --- a/drivers/gpu/drm/apple/iomfb.c
 +++ b/drivers/gpu/drm/apple/iomfb.c
 @@ -44,6 +44,23 @@
@@ -3866,10 +3709,10 @@ index 4a7ff2127ac0..9b42ed350dc1 100644
 +	 */
 +	ctx->zero_vrr_range_fallback = dcp->fw_compat == DCP_FIRMWARE_V_26_6_DESKTOP ||
 +		(dcp_fw27_panel(dcp) && READ_ONCE(fw27_panel_vrr));
- 	modes = enumerate_modes(ctx, &nr_modes, dcp->width_mm, dcp->height_mm,
- 				dcp->notch_height,
- 				dcp->fixed_connector_type == DRM_MODE_CONNECTOR_eDP,
-@@ -2470,6 +2492,8 @@ int dcp_get_modes(struct drm_connector *connector)
+ 	if (dcp->fixed_connector_type != DRM_MODE_CONNECTOR_eDP &&
+ 	    smp_load_acquire(&dcp->dptxport[0].tile_hint)) {
+ 		ctx->tiled_width = dcp->dptxport[0].tile_width;
+@@ -2475,6 +2497,8 @@ int dcp_get_modes(struct drm_connector *connector)
  		}
  		vrr_capable |= modes[i].vrr;
  	}
@@ -3878,7 +3721,7 @@ index 4a7ff2127ac0..9b42ed350dc1 100644
  	drm_connector_set_vrr_capable_property(connector, vrr_capable);
  modes_done:
  	mutex_unlock(&dcp->dcpavserv.lock);
-@@ -3668,6 +3692,44 @@ static void iomfb_queue_atomic(struct apple_dcp *dcp, struct drm_crtc *crtc,
+@@ -3673,6 +3697,44 @@ static void iomfb_queue_atomic(struct apple_dcp *dcp, struct drm_crtc *crtc,
  	schedule_work(&dcp->vblank_wq);
  }
  
@@ -3923,7 +3766,7 @@ index 4a7ff2127ac0..9b42ed350dc1 100644
  void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_commit *commit)
  {
  	struct platform_device *pdev = to_apple_crtc(crtc)->dcp;
-@@ -3734,6 +3796,11 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_commit *commit)
+@@ -3739,6 +3801,11 @@ void dcp_flush(struct drm_crtc *crtc, struct drm_atomic_commit *commit)
  			dcp_hdr_metadata_sync(dcp, crtc, commit);
  	}
  
@@ -3936,10 +3779,10 @@ index 4a7ff2127ac0..9b42ed350dc1 100644
  		iomfb_queue_atomic(dcp, crtc, commit);
  		return;
 diff --git a/drivers/gpu/drm/apple/iomfb_template.c b/drivers/gpu/drm/apple/iomfb_template.c
-index 4c0fd3726988..cda77b7726fb 100644
+index 462c6ee46825..21ac0deb9785 100644
 --- a/drivers/gpu/drm/apple/iomfb_template.c
 +++ b/drivers/gpu/drm/apple/iomfb_template.c
-@@ -4045,6 +4045,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
+@@ -4044,6 +4044,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
  	struct dcp_wait_cookie *cookie;
  	struct dcp_color_mode *cmode = NULL;
  	bool paired = false;
@@ -3947,7 +3790,7 @@ index 4c0fd3726988..cda77b7726fb 100644
  	int ret;
  
  	if (!lookup_mode(dcp, &crtc_state->mode, mode)) {
-@@ -4089,6 +4090,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
+@@ -4088,6 +4089,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
  
  	/* Built-in ProMotion panels require timestamps even in fixed-120 mode. */
  	dcp->use_timestamps = mode->needs_timestamps && dcp->main_display;
@@ -3955,7 +3798,7 @@ index 4c0fd3726988..cda77b7726fb 100644
  
  	cookie = kzalloc(sizeof(*cookie), GFP_KERNEL);
  	if (!cookie) {
-@@ -4113,7 +4115,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
+@@ -4112,7 +4114,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
  #if (DCP_FW_H17(DCP_FW_VER) && DCP_FW_VER >= DCP_FW_VERSION(27, 0, 0))
  	if ((ret = dcp_peer_modeset_v27(dcp, mode->timing_mode_id,
  				      mode->color_mode_id,
@@ -3964,7 +3807,7 @@ index 4c0fd3726988..cda77b7726fb 100644
  		cookie->status = ret;
  		paired = true;
  		if (!ret)
-@@ -4129,9 +4131,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
+@@ -4128,9 +4130,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
  	if (mode->vrr &&
  		   dcp->hw.iomfb_method_profile !=
  		   DCP_IOMFB_METHODS_H17P_EXTERNAL)
@@ -3975,7 +3818,7 @@ index 4c0fd3726988..cda77b7726fb 100644
  	else
  		dcp_set_digital_out_mode(dcp, false, &dcp->mode,
  					 complete_set_digital_out_mode, cookie);
-@@ -4185,7 +4185,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
+@@ -4184,7 +4184,7 @@ int DCP_FW_NAME(iomfb_modeset)(struct apple_dcp *dcp,
  				 READ_ONCE(cookie->status));
  	}
  	kref_put(&cookie->refcount, release_wait_cookie);
@@ -3984,50 +3827,13 @@ index 4c0fd3726988..cda77b7726fb 100644
  	/* A firmware 27 pair took them on both engines (dcp_peer_finish_v27()). */
  	if (dcp->hw.iomfb_method_profile == DCP_IOMFB_METHODS_H17P_EXTERNAL ||
  	    (dcp->fw_compat == DCP_FIRMWARE_V_27_0 && !dcp_has_panel(dcp) && !paired))
-From cd7e13215f023cdc1da4e3e29d3703c4e38643cf Mon Sep 17 00:00:00 2001
-From: TripleU <182648541+TripleU613@users.noreply.github.com>
-Date: Thu, 12 Nov 2026 18:30:00 -0500
-Subject: [PATCH 17/18] drm/apple: load the T6050 combo PHYs before appledrm
+-- 
+2.56.0
 
-appledrm already soft-depends on the display crossbar, because a DCP
-probe that defers after the deferred probe timeout gives up its Type-C
-routes for the boot. The routes' PHYs need the same: on T6050 they are
-the combo PHYs of atc-t6050-dp, which appledrm does not otherwise pull
-in.
-
-On a J714s on macOS 27.3 (up273-8), appledrm probed from the root
-filesystem at about 62 s, long after the 10 s timer, and dcpext0 and
-dcpext2, the two engines with Type-C routes, failed with "deferred probe
-timeout, ignoring dependency" and -110. dcpext1 and dcpext3 have no
-routes and came up.
-
-The same softdep as a modprobe.d line on up273-8 made all four
-external DCPs bind and DRM offer DP-1..DP-4.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
----
- drivers/gpu/drm/apple/apple_drv.c | 4 +++-
- 1 file changed, 3 insertions(+), 1 deletion(-)
-
-diff --git a/drivers/gpu/drm/apple/apple_drv.c b/drivers/gpu/drm/apple/apple_drv.c
-index 3e6f12778a57..a08173fdfecd 100644
---- a/drivers/gpu/drm/apple/apple_drv.c
-+++ b/drivers/gpu/drm/apple/apple_drv.c
-@@ -2120,7 +2120,9 @@ MODULE_LICENSE("Dual MIT/GPL");
-  * crossbar. Without this, initramfs generators leave it out, it loads only
-  * from the root filesystem, and a DCP probe that waits past the deferred
-  * probe timeout (an encrypted root's passphrase prompt) gives up its routes.
-+ * The same holds for the PHYs of the routes: on T6050 they are the combo
-+ * PHYs of atc-t6050-dp, which nothing else pulls in before this module.
-  * DCP also asks for the battery temperature once while it starts (see
-  * dcp_pmu_temperature()), so have the SMC battery registered by then.
-  */
--MODULE_SOFTDEP("pre: mux-apple-display-crossbar macsmc-power");
-+MODULE_SOFTDEP("pre: mux-apple-display-crossbar atc-t6050-dp macsmc-power");
-From 60f21ee0782da0fdaa559a94f5ccf3ea85e81e8d Mon Sep 17 00:00:00 2001
+From 1f63895beea5249275f675c3b7d5a79b1e61b6c5 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 23:54:15 -0500
-Subject: [PATCH 18/18] accel/ane, media: apple: ave: T6050 Neural Engine and
+Subject: [PATCH 15/15] accel/ane, media: apple: ave: T6050 Neural Engine and
  encoder on macOS 27.2
 
 The J714s 27.2 stub (UniversalMac_27.2_26B123, J714s identity) preloads
@@ -4113,11 +3919,11 @@ index a2b11206ee52..68d4cd02baad 100644
   */
  struct ane_fw_preload_build {
 diff --git a/drivers/media/platform/apple/ave/ave-drv.c b/drivers/media/platform/apple/ave/ave-drv.c
-index 16ae0ace321f..939486044582 100644
+index 88021a2dadb4..11c56e6f4e3a 100644
 --- a/drivers/media/platform/apple/ave/ave-drv.c
 +++ b/drivers/media/platform/apple/ave/ave-drv.c
-@@ -137,6 +137,12 @@ static const struct ave_fw_build ave_t6050_builds[] = {
- 	 * takes 26A428's command layout (ave_layout_for_crc()).
+@@ -138,6 +138,12 @@ static const struct ave_fw_build ave_t6050_builds[] = {
+ 	 * layout (ave_layout_for_crc()).
  	 */
  	{ "26C5035", 0x158000, 0x134000, AVE_FW_TEXT_CRC_T6050_26C5035 },
 +	/*
@@ -4130,7 +3936,7 @@ index 16ae0ace321f..939486044582 100644
  
  static const struct ave_variant ave_t6050 = {
 diff --git a/drivers/media/platform/apple/ave/ave-fw.c b/drivers/media/platform/apple/ave/ave-fw.c
-index 2b74519cc05a..20cef7bb7de7 100644
+index 9eb4e29bb886..344e729b8c31 100644
 --- a/drivers/media/platform/apple/ave/ave-fw.c
 +++ b/drivers/media/platform/apple/ave/ave-fw.c
 @@ -42,6 +42,7 @@ static const u32 ave_known_text_crc[] = {
@@ -4141,8 +3947,8 @@ index 2b74519cc05a..20cef7bb7de7 100644
  	0x460c7a7c, /* AppleAVE2FW 6070.11.1 / T6000 */
  	0x25bfd039, /* AppleAVE2FW 6070.11.1 / T8112 */
  };
-@@ -222,8 +223,8 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
-  */
+@@ -218,8 +219,8 @@ static int ave_fw_text_id(struct ave_dev *ave, u32 *crc)
+ 
  /*
   * The variant's build with these segment sizes and, unless @crc is 0, this
 - * TEXT CRC; or NULL. Builds can share sizes, so only the CRC tells them
@@ -4198,3 +4004,6 @@ index cb4bbe7673c3..db9e9f766525 100644
  /* macOS 27.3 beta 1 (26C5035r) / T6050: TEXT 0x158000, DATA 0x134000. */
  #define AVE_FW_TEXT_CRC_T6050_26C5035 0xc25b4ddb
  
+-- 
+2.56.0
+

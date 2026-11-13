@@ -1,7 +1,7 @@
-From 1e72d79d0abd12668ccd97196d06131b31870882 Mon Sep 17 00:00:00 2001
+From 576c68baee9deaa19ffd61a172e5ea3c0aef9d4c Mon Sep 17 00:00:00 2001
 From: Eduard Moldovan <edimoldovan@gmail.com>
 Date: Sun, 8 Nov 2026 12:56:36 +0100
-Subject: [PATCH 09/18] media: apple: isp: Tune the J714c IMX958 with setfile
+Subject: [PATCH 07/15] media: apple: isp: Tune the J714c IMX958 with setfile
  2226_02
 
 macOS's appleh16camerad carries three setfiles naming sensor 0x958:
@@ -56,10 +56,10 @@ index e3c39232e727..f388c9aef3e7 100644
  			"ch %d: unsupported sensor. Please file a bug report with hardware info & dmesg trace.\n",
  			ch);
 diff --git a/drivers/media/platform/apple/isp/isp-drv.c b/drivers/media/platform/apple/isp/isp-drv.c
-index 703dcea3ef90..21e13968c862 100644
+index f46adc37bad3..035f6ad49d43 100644
 --- a/drivers/media/platform/apple/isp/isp-drv.c
 +++ b/drivers/media/platform/apple/isp/isp-drv.c
-@@ -1412,6 +1412,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
+@@ -1422,6 +1422,8 @@ static const struct apple_isp_hw apple_isp_hw_t6050 = {
  	.fw_restore = true,
  	.deferred_start = true,
  	.setfile_stride_fixup = true,
@@ -90,3 +90,6 @@ index 3551018baf17..79a4445d1c4f 100644
  	ISP_VD56G0_6221_01,
  	ISP_VD56G0_6222_01,
  };
+-- 
+2.56.0
+

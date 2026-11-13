@@ -3,23 +3,21 @@
 # enrolled as a padded Mach-O boot object with SPTM off (kcbz 0), so Linux runs at EL2 on every
 # CPU inside the code-execute window.
 #
-# Aura main 2232ae7a (#207 display ADMAC tunables for DP audio, #186 chainload copy stub, #184 MTE
-# tag store, #173 M5 Pro boot path, firmware 27.2) plus aura-j714s-27.2.patch, betizzel/omarchy-m5
-# patches/j714s-27.2/aura:
-#   0001  GPU and internal display hand-off on 27.2/27.3 (GPU build table from #1173)
+# Aura main 22b71758 (#207 display ADMAC tunables for DP audio, #186 chainload copy stub, #184 MTE
+# tag store, #173 M5 Pro boot path, firmware 27.2 and 27.3 beta (#216), the T6050 storage auto-PM
+# fix #203, post-M4 ANS for the payload #213, the K116s 26B8125 GPU build #187 and the T6050 camera
+# table #188) plus aura-j714s-27.2.patch, betizzel/omarchy-m5 patches/j714s-27.2/aura:
+#   0001  GPU (26B123, 26C5035r rows in #187's table, from #1173) and display hand-off on 27.3 beta 1
 #   0002  notch rows shown by default on M5 (chosen.asahi,show-notch=0 opts out)
 #   0003  the M5 Max 27.3 GPU digest (aura #172, joshuaswarren)
-#   0004  the T6050 camera table and K116s 27.2 row (aura #188, Jens Axboe / Thomas Glanzmann)
-#   0005  J714s camera on 27.3 beta 1
-#   0006  T6050 PCIe: the auto-PM storage domain may gate itself (Wi-Fi port 0, early hangs)
-#   0007  the K116s 27.2 (26B8125) G17S build (aura #187, Thomas Glanzmann)
-#   0008  internal display on 27.2: compat <27 2 0>, DCP image pinned to the IPSW's C51FB0C8-...
-#   0009  J714s camera on 27.2 (the IPSW's ISP segments)
+#   0004  J714s camera on 27.3 beta 1
+#   0005  internal display on 27.2: compat <27 2 0>, DCP image pinned to the IPSW's C51FB0C8-...
+#   0006  J714s camera on 27.2 (the IPSW's ISP segments)
 # Packaged as m1n1-aurora so the image builder and update-m1n1 treat it as the image's Stage 2.
 # Ordinary updates refresh the ESP Stage 2, never enroll Stage 1.
 pkgname=m1n1-aurora
 pkgver=1.6.1.aurora24.v272
-pkgrel=1
+pkgrel=2
 pkgdesc='Aura bootloader for the J714s on macOS 27.2 (Stage 2, and the Mach-O Stage 1 to enroll)'
 arch=('aarch64')
 groups=('omarchy-platform-apple-silicon')
@@ -30,11 +28,11 @@ conflicts=('m1n1' 'aura' 'm1n1-neo')
 replaces=('aura' 'm1n1-neo')
 makedepends=('git' 'clang' 'lld' 'llvm' 'rustup' 'make' 'python')
 options=('!strip' '!debug')
-_commit=2232ae7a01514d8cc16064c01e04bf7ee4321ba5
+_commit=22b71758dfd048f6a874073db55fbe6bd1d17f44
 source=("aura::git+$url.git#commit=$_commit"
         aura-j714s-27.2.patch aura-j714s-stage1 bootlogo_48.bin bootlogo_128.bin bootlogo_256.bin)
 sha256sums=('SKIP'
-            '412b9503888529ab4c6b3e50fb065cfaf2f50aa548f99de5cae52922b3acbe53'
+            '6d23914eaf60fe4f8ed88a260b1064027843ed17f67a6dd9ec67045812ba76c1'
             '5804e26c5e13dab34ad21a69e99f495c89126d989844ba0c44ce8b730d622f81'
             '6668050653645711ad7523fe2abeb4cbe85a92c875f3eec754b6db23cea2191c'
             'b19cb017645c7a9068ea0be9b6bb394131d7ca11b28093cf6caa1ffca74b0a4e'

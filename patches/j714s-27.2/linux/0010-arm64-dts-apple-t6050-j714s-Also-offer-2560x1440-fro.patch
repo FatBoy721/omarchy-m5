@@ -1,0 +1,51 @@
+From ca22b22899c1d782b1d53b05a231061e84daad4a Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 11:16:29 -0500
+Subject: [PATCH 10/15] arm64: dts: apple: t6050-j714s: Also offer 2560x1440
+ from sensor config 6
+
+DjDeveloperr's J714s presets (#1835) crop and scale sensor config 6 to
+seven sizes up to 1920x1080. edimoldovan's J714c presets (omacom/linux-aurora
+#422) also stream the centre 2560x1440 of the same 3040x2880 frame 1:1,
+which this J714s streamed at 30 fps on the macOS 27.3 beta 1 ISP firmware.
+Add it as preset7 in #1835's form (config 6, the stacked 3040x5760 input).
+
+The earlier J714s presets (1920x1080 and 2560x1440 on config 6, 1280x720 on
+config 7) are replaced by #1835's.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/apple/t6050-j714s.dts | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/apple/t6050-j714s.dts b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+index f9d5789c9855..4cea8adb301b 100644
+--- a/arch/arm64/boot/dts/apple/t6050-j714s.dts
++++ b/arch/arm64/boot/dts/apple/t6050-j714s.dts
+@@ -618,6 +618,9 @@ fan-F1Ac {
+  * the first) cropped and scaled by the ISP per size. Each crop is centred on that frame;
+  * the landscape sizes take two-thirds of its width, the portrait sizes the same length of
+  * its height and the square that side.
++ *
++ * 2560x1440 (edimoldovan's J714c preset, omacom/linux-aurora #422) is the centre of the
++ * same frame 1:1, unscaled.
+  */
+ &isp0 {
+ 	/delete-node/ sensor-presets;
+@@ -672,6 +675,13 @@ preset6 {
+ 			apple,output-size = <1080 1920>;
+ 			apple,crop = <950 426 1140 2026>;
+ 		};
++		/* 2560x1440 */
++		preset7 {
++			apple,config-index = <6>;
++			apple,input-size = <3040 5760>;
++			apple,output-size = <2560 1440>;
++			apple,crop = <240 720 2560 1440>;
++		};
+ 	};
+ };
+ 
+-- 
+2.56.0
+

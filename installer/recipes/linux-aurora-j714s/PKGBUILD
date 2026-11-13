@@ -2,26 +2,28 @@
 # macOS 27.2 stub (UniversalMac_27.2_26B123, mBoot-20457.41.3), booted from a padded Aura Mach-O
 # Stage 1 with SPTM off: Linux at EL2 on every CPU inside the CTXR execute window.
 #
-# The one J714s image line. aurora-silicon/linux integration/aurora at 572eb88e8642 (includes DP
+# The one J714s image line. aurora-silicon/linux integration/aurora at a34d26c255c2 (includes DP
 # audio #1748/#1749/#1750, the J714s Secure Enclave, CLPC, CPU PMU, JPEG, ProRes, MagSafe PD,
-# external displays) plus linux-j714s-27.2.patch, betizzel/omarchy-m5 patches/j714s-27.2/linux:
+# external displays, T6050 EL2 errata #1724, the appledrm combo-PHY softdep #1745, the 27.3 AVE
+# build #1747, the J714s left-front USB4 router #1791 and camera sizes #1835) plus
+# linux-j714s-27.2.patch, betizzel/omarchy-m5 patches/j714s-27.2/linux:
 #   0001     #1173, GPU InitData for 27.2 (26B123) and 27.3 (Rolando Trevino)
 #   0002-04  rolotrealanis98's firmware 27 DCP fixes and the 27.3 IOMFB table (27.3 rollback stub)
 #   0005     #1650, the K114/K116 27.2 (26B8125) G17S identity (Jens Axboe)
-#   0006-07  #1724, T6050 at EL2: vGIC SEIS broken, WFxT treated as absent (Jens Axboe)
-#   0008     ANE and AVE on 27.3 (this repo)
-#   0009-15  the front camera: edimoldovan's IMX958 tuning and camera light (#422), J714s presets
-#   0016     rolotrealanis98's firmware 27 panel VRR (8ab10100a4), opt-in appledrm.fw27_panel_vrr=1
-#   0017     appledrm soft-depends on the T6050 combo PHY (external displays)
-#   0018     ANE and AVE on 27.2: the 27.2 layouts from the IPSW; ANE refuses until its TEXT pin
+#   0006     ANE on 27.3; AVE builds selected by TEXT CRC (this repo)
+#   0007-09  the front camera: edimoldovan's IMX958 tuning (#422)
+#   0010     2560x1440 added to #1835's J714s presets
+#   0011-13  edimoldovan's camera light (#422) and its J714s pin
+#   0014     rolotrealanis98's firmware 27 panel VRR (8ab10100a4), opt-in appledrm.fw27_panel_vrr=1
+#   0015     ANE and AVE on 27.2: the 27.2 layouts from the IPSW; ANE refuses until its TEXT pin
 #            is collected, AVE probe-only unless apple_ave.ave_t6050_27_2_layout=1
 # Same package name as the image's kernel (linux-aurora); the version sorts above up273.
 
 _auroraver=7.3.0
 _aurorarel=17.v272
-pkgrel=1
+pkgrel=2
 
-_commit=572eb88e8642df77b5808da70ae1ed25cd687e95
+_commit=a34d26c255c29bdd5548ace985d0d9c8e083aab1
 
 # Any m1n1 1.6.1 loads these device trees. The Neo's own Stage 2 comes from the
 # image, so the floor stays where M1 and M2 users' m1n1-aurora already meets it.
@@ -47,11 +49,11 @@ source=(validate-config.py configure.sh "linux-${_commit}.tar.gz::https://github
         speakersafetyd-hold.conf)
 sha256sums=('aca7420a18139474da62a81c77fc6e5c3f25001f872b6e11e18605cd892aa4c3'
             'b95c0f0ddf106f3861e0e62a746af6a881fb8e0f356a892961f9e86062877400'
-            '260acb56bec99f6d7a44b9b4a73ed84b7c3310ffb41f5fde72538ef9962b31ec'
+            '315c7a7698f647851df2fb38a4aec1f2be520aa73bd28c2661ddebcb6d627f72'
             'd71a5756f6803008c92fd5b14bb377baa538cd56a5674970bfaea3584a60d291'
             '84a03d5fea19cae243c89f50c1736c639622d25d4d1de8d7d53ebd8f603c0f62'
             '32507b46e6d2bd6bc3c9bd933cb0236e3c1887a977ea8aff3ab46d9ece5f4eae'
-            '325079b975fd236f8b4427c36214718628d47ddbd1462b8544a9ce16dab4426e'
+            'cda8dcb71c125fe875a6ba52d2e6228442cf4b9a78537ebbe8f5d2cf7c9eebc7'
             '1408e3fdeafbd86be3b31e04e8bdd9930a9af2753e8c39a728cda7d1e42ad033'
             'be3e29fc27e3f589c0e90c4722fcc309e54bc211fae9708476a80fc92709bfb7')
 

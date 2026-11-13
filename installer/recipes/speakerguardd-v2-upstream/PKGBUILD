@@ -2,18 +2,18 @@
 # experimental J714s upstream image (linux-aurora-upstream, the dual-interface
 # kernel with DjDeveloperr's J714s speakers, aurora-silicon/linux #1554).
 #
-# aurora-silicon/alarm-aurora packages/speakerguardd-v2 (9420980b8fc0, pkgrel 40)
+# aurora-silicon/alarm-aurora packages/speakerguardd-v2 (282881f37c86, pkgrel 41, pin 04169c44)
 # unchanged except:
-#   - the pin moves from 26b88eac (#159) to the v2 head bd2b2099 (adds #168:
-#     the supervisor enables and verifies V/I sense before a grant, the session
-#     selects the Secondary speaker route; and #170, #172);
 #   - depends: see the comment in package_speakerguardd-v2().
+# The pin 04169c44 is the v2 head of 2026-11-13: #168 (V/I sense enabled and verified before a
+# grant, the Secondary speaker route), #169/#175 (LSID sense binding) and #173 (parity.json
+# re-attested at voicing law a8c2a491; attested builds 25C56, 25G72, 25G83, 26A428).
 # README.md says how it runs on the J714s and what was tested.
 pkgbase=speakerguardd-v2
 pkgname=('speakerguardd-v2')
 pkgver=1.0.0alpha.1
-pkgrel=40.1
-_commit=bd2b2099eb7333857ad05adc1c7b8c15b8428f58
+pkgrel=41.1
+_commit=04169c4470650f8e2554db70d4072fb92e484138
 _src=speakerguardd-$_commit
 pkgdesc='In-graph speaker protection for Apple Silicon Macs (speakerguardd 1.0, preview: not yet a full macOS match; the legacy protection stays the default)'
 arch=('aarch64')
@@ -23,7 +23,7 @@ license=('MIT')
 makedepends=('rust' 'cargo' 'python')
 source=("$pkgbase-$_commit.tar.gz::https://codeload.github.com/aurora-silicon/speakerguardd/tar.gz/$_commit"
         README.alarm-aurora.md)
-sha256sums=('8f2a7eefec5ee107682513550d459b5d54702386ea055545577a01557db948de'
+sha256sums=('c6d8b07251eb34f42d97fee293ff87a1da3fc765d1e42c7af8786ee22ae27e88'
             '4f8114220e567ff577cdd55d8086180b9376544acacad7087e1becedb2fb7d2c')
 # The crates this package ships; the rig and benchmark crates stay out.
 _crates=(-p sgv2-core -p sgv2-lv2 -p sgv2-supervisor -p aurora-speaker-tuning)

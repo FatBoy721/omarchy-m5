@@ -1,59 +1,29 @@
-From aaa0215bb4ed7fbeb6b67f273ba631b818b3188c Mon Sep 17 00:00:00 2001
+From 643302f57c3af654d3d64ce878859729b07cd96d Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Wed, 11 Nov 2026 17:02:15 -0500
-Subject: [PATCH 1/9] kboot: T6050: hand the GPU and the internal display over
+Subject: [PATCH 1/6] kboot: T6050: hand the GPU and the internal display over
  on 27.3 beta 1
 
 The J714s needs the macOS 27.3 beta 1 stub (26C5035r, mBoot-20457.60.65.0.1) to boot all of
-its cores, and the T6050 GPU and DCP handoffs only accepted 27.0.
+its cores with a raw Stage 1, and the T6050 GPU and DCP handoffs only accepted 27.0 (GPU also
+26B8125 since #187).
 
-- firmware: know 27.2 (mBoot-20457.41.3) and 27.3 beta 1 (<27 2 98 1>), as betizzel's m1n1
-  for the J714s does.
-- GPU: admit each build Linux's hw/t6050.rs identifies (27.0, 27.2, 27.3 beta 1): per build
-  the 0x740/0x231 boot-filled records and the TEXT digest, from aurora-silicon/linux #1173
-  (Rolando Trevino, rolotrealanis98). 27.0's digest and ranges are unchanged.
-- DCP: accept 27.3 beta 1 beside 27.0, take its DCP image as the ADT names it (27.0 stays
-  pinned), and publish apple,firmware-compat <27 3 0>, the key aurora-silicon/linux #1174
-  chooses its 27.3 method table and swap layout by. dcpext engines must run the internal
-  display's image. The compat idea follows TripleU613's J714s m1n1 (0004; betizzel,
-  FatBoy721); its notch rows and display default (0006/0007) are not ported.
+- GPU: add the J714s's 27.2 (26B123) and 27.3 beta 1 (26C5035r) G17S builds to #187's build
+  table: per build the boot-filled ranges and the TEXT digest Linux's hw/t6050.rs identifies,
+  from aurora-silicon/linux #1173 (Rolando Trevino, rolotrealanis98).
+- DCP: accept 27.3 beta 1 (V27_3B, #216) beside 27.0, take its DCP image as the ADT names it
+  (27.0 stays pinned), and publish apple,firmware-compat <27 3 0>, the key aurora-silicon/linux
+  #1174 chooses its 27.3 method table and swap layout by. dcpext engines must run the internal
+  display's image. The compat idea follows TripleU613's J714s m1n1 (0004; betizzel, FatBoy721).
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- src/firmware.c              |  3 ++
- src/firmware.h              |  1 +
- src/kboot_display_handoff.c | 32 ++++++++++++------
- src/kboot_gpu.c             | 65 ++++++++++++++++++++++++-------------
- 4 files changed, 69 insertions(+), 32 deletions(-)
+ src/kboot_display_handoff.c | 32 +++++++++++++++++---------
+ src/kboot_gpu.c             | 45 ++++++++++++++++++++++++++++++-------
+ 2 files changed, 59 insertions(+), 18 deletions(-)
 
-diff --git a/src/firmware.c b/src/firmware.c
-index af8b2cf8..13b3f325 100644
---- a/src/firmware.c
-+++ b/src/firmware.c
-@@ -217,6 +217,9 @@ const struct fw_version_info fw_versions[NUM_FW_VERSIONS] = {
-     [V27_0]      = {V27_0,      "27.0",        {27, 0, 0},     3, "mBoot-20457.1.29"},
-     // macOS 27.2 (26B123), read from a J813 stub booted by it (system and OS iBoot alike).
-     [V27_2]      = {V27_2,      "27.2",        {27, 2, 0},     3, "mBoot-20457.41.3"},
-+    // From betizzel's m1n1 (J714s): 27.3 beta 1 (26C5035r) is the first stub that boots all of
-+    // the M5 Pro's cores; m1n1 reports a beta as <major>.<minor-1>.98.<n>.
-+    [V27_3B1]    = {V27_3B1,    "27.3 beta",   {27, 2, 98, 1}, 4, "mBoot-20457.60.65.0.1"},
-     // clang-format on
- };
- 
-diff --git a/src/firmware.h b/src/firmware.h
-index bcab363d..24144bd4 100644
---- a/src/firmware.h
-+++ b/src/firmware.h
-@@ -193,6 +193,7 @@ enum fw_version {
-     V26_7_1,
-     V27_0,
-     V27_2,
-+    V27_3B1,
-     NUM_FW_VERSIONS,
- };
- 
 diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
-index ad3edb2a..0b39c12f 100644
+index ad3edb2a..1ce1df49 100644
 --- a/src/kboot_display_handoff.c
 +++ b/src/kboot_display_handoff.c
 @@ -3235,7 +3235,11 @@ static bool dcp6_dt_describes(void *dt)
@@ -77,7 +47,7 @@ index ad3edb2a..0b39c12f 100644
 +    const struct fw_version_info *compat;
  } t6050;
  
-+static const struct fw_version_info t6050_compat_27_3 = {V27_3B1, "27.3", {27, 3, 0}, 3, "compat"};
++static const struct fw_version_info t6050_compat_27_3 = {V27_3B, "27.3", {27, 3, 0}, 3, "compat"};
 +
  /* The dcp's reg entries and the ADT reg each equals (coproc: a prefix of it) */
  static const struct {
@@ -89,9 +59,9 @@ index ad3edb2a..0b39c12f 100644
 -    if (os_firmware.version != V27_0)
 -        bail("OS firmware %s is not 27.0\n", os_firmware.string);
 -    if (!dcp6_is_uuid(uuid, len) || strcmp(uuid, T6050_DCP_UUID))
-+    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B1)
++    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B)
 +        bail("OS firmware %s is not 27.0 or 27.3 beta 1\n", os_firmware.string);
-+    t6050.compat = os_firmware.version == V27_3B1 ? &t6050_compat_27_3 : &os_firmware;
++    t6050.compat = os_firmware.version == V27_3B ? &t6050_compat_27_3 : &os_firmware;
 +    if (!dcp6_is_uuid(uuid, len) || len > sizeof(t6050.uuid) ||
 +        (os_firmware.version == V27_0 && strcmp(uuid, T6050_DCP_UUID)))
          bail("DCP image %s is not " T6050_DCP_UUID "\n", dcp6_is_uuid(uuid, len) ? uuid : "(none)");
@@ -134,108 +104,82 @@ index ad3edb2a..0b39c12f 100644
          return -1;
      if (output && fdt_appendprop(dt, kboot_fdt_path_exact(dt, t6050.path[T6050_DISP]), "iommus",
 diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
-index f4274aa8..da6fcc00 100644
+index 99f172fa..19572731 100644
 --- a/src/kboot_gpu.c
 +++ b/src/kboot_gpu.c
-@@ -3994,10 +3994,10 @@ disable:
+@@ -3994,12 +3994,12 @@ disable:
  }
  
  /*
-- * T6050 G17S (M5 Pro, J714s) on the 27.0 firmware. iBoot loads both roles' __TEXT back to back,
-- * their __DATA and __DATA_SHARED_RO in one run, and leaves the UAT ranges empty: each role
-+ * T6050 G17S (M5 Pro, J714s) on the 27.0, 27.2 and 27.3 beta 1 firmware. iBoot loads both roles'
-+ * __TEXT back to back, their __DATA and __DATA_SHARED_RO in one run, and leaves the UAT ranges empty: each role
-  * publishes its kernel root while it boots. Linux's driver takes the four UAT ranges, fw-text and
-- * fw-data as no-map reservations, and admits only the build whose TEXT normalizes to this digest
-+ * fw-data as no-map reservations, and admits only the builds whose TEXT normalizes to these digests
-  * (its fwid rule: the boot-filled ranges, the entropy records among them, zeroed; Linux also
-  * checks the records' tags).
+- * T6050 G17S (M5 Pro: J714s on the 27.0 firmware, K116s on 27.2). iBoot loads both roles' __TEXT
+- * back to back, their __DATA and __DATA_SHARED_RO in one run, and leaves the UAT ranges empty:
+- * each role publishes its kernel root while it boots. Linux's driver takes the four UAT ranges,
+- * fw-text and fw-data as no-map reservations, and admits only a build whose TEXT normalizes to
+- * that build's digest (its fwid rule: the build's boot-filled ranges, the entropy records among
+- * them, zeroed; Linux also checks the records' tags).
++ * T6050 G17S (M5 Pro: J714s on the 27.0, 27.2 and 27.3 beta 1 firmware, K116s on 27.2). iBoot
++ * loads both roles' __TEXT back to back, their __DATA and __DATA_SHARED_RO in one run, and leaves
++ * the UAT ranges empty: each role publishes its kernel root while it boots. Linux's driver takes
++ * the four UAT ranges, fw-text and fw-data as no-map reservations, and admits only a build whose
++ * TEXT normalizes to that build's digest (its fwid rule: the build's boot-filled ranges, the
++ * entropy records among them, zeroed; Linux also checks the records' tags).
   *
-@@ -4014,8 +4014,6 @@ disable:
- 
- static const struct {
-     const char *props[11], *resv[6], *on[7];
--    u32 fill[8][2];
--    u8 sha[32];
+  * When the device tree describes the GPU (alias "gpu", apple,agx-g17s, disabled), check the ADT
+  * and this build, then fill the reservations and enable the GPU power states, both mailboxes and
+@@ -4018,7 +4018,7 @@ static const struct {
+         u32 fill[8][2];
+         u8 sha[32];
+         char name[8];
+-    } build[2];
++    } build[4];
  } t6050_gpu = {
      /* The UAT ranges (base, size), then the bounds of both roles' __DATA and SRO */
      {"gpu-region-base", "gpu-region-size", "gfx-shared-region-base", "gfx-shared-region-size",
-@@ -4029,18 +4027,31 @@ static const struct {
-      "/soc/power-management@2300e80000/power-controller@100",
-      "/soc/power-management@2300e80000/power-controller@110", "/soc/mailbox@2302600000",
-      "/soc/mailbox@2302e00000", "gpu"},
--    {{0x224, 4},
--     {0x23c, 8},
--     {0x49720, 0x740},
--     {0x49e60, 0x231},
--     {0x50224, 4},
--     {0x5023c, 8},
--     {0x9d1d8, 0x740},
--     {0x9d918, 0x231}},
--    /* 26A428 G17S, both roles: Linux's hw/t6050.rs CONFIG digest */
--    {0x85, 0xd0, 0xfd, 0x82, 0x80, 0xf7, 0x24, 0x65, 0x5c, 0xa9, 0xa9,
--     0x71, 0x7b, 0xc9, 0x1a, 0x8a, 0x5e, 0xf6, 0x09, 0x28, 0xd7, 0x72,
--     0x00, 0xf6, 0xd5, 0x3b, 0xd0, 0x99, 0xb9, 0x47, 0x39, 0xc6},
-+};
-+
-+/*
-+ * The builds Linux's hw/t6050.rs CONFIG identifies, newest first. Every build has the same boot-
-+ * filled ranges at 0x224 (4), 0x23c (8) and 0x50000 above them; per build: where each role's
-+ * 0x740- and 0x231-byte records start (primary, primary, secondary, secondary) and the digest of
-+ * the TEXT with all eight zeroed. 27.2 and 27.3 (26B123, 26C5035r) from aurora-silicon/linux
-+ * #1173 (Rolando Trevino).
-+ */
-+static const struct {
-+    u32 fill[4];
-+    u8 sha[32];
-+} t6050_gpu_builds[] = {
-+    /* 27.3 beta 1 (26C5035r) */
-+    {{0x4976c, 0x49eac, 0x9d1ec, 0x9d92c},
-+     {0xb5, 0x53, 0x7c, 0x8f, 0x06, 0xbd, 0x19, 0xeb, 0xf0, 0xef, 0xd0, 0xcb, 0xfb, 0x65, 0x52, 0x33,
-+      0x9a, 0x10, 0xd4, 0xaf, 0xc4, 0xed, 0xa9, 0xd2, 0x1c, 0xbe, 0xdc, 0x36, 0x66, 0x76, 0x36, 0x00}},
-+    /* 27.2 (26B123) */
-+    {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
-+     {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41, 0x01, 0x70, 0x2c, 0x9a, 0xc6,
-+      0xc4, 0xe9, 0x0f, 0x2e, 0x12, 0x3f, 0x3b, 0x36, 0xfb, 0xe6, 0xff, 0xea, 0x91, 0x3f, 0x0f, 0xd9}},
-+    /* 27.0 (26A428) */
-+    {{0x49720, 0x49e60, 0x9d1d8, 0x9d918},
-+     {0x85, 0xd0, 0xfd, 0x82, 0x80, 0xf7, 0x24, 0x65, 0x5c, 0xa9, 0xa9, 0x71, 0x7b, 0xc9, 0x1a, 0x8a,
-+      0x5e, 0xf6, 0x09, 0x28, 0xd7, 0x72, 0x00, 0xf6, 0xd5, 0x3b, 0xd0, 0x99, 0xb9, 0x47, 0x39, 0xc6}},
+@@ -4061,7 +4061,36 @@ static const struct {
+       {0xaf, 0x68, 0xd0, 0x34, 0xa3, 0xf0, 0x06, 0xb4, 0x3d, 0xab, 0x66,
+        0x1b, 0x82, 0x5f, 0x12, 0x59, 0x8c, 0xb8, 0x6e, 0x4d, 0x2a, 0x0e,
+        0x38, 0x44, 0xf1, 0x4f, 0xa5, 0x05, 0x9f, 0x38, 0xf6, 0xcb},
+-      "26B8125"}},
++      "26B8125"},
++     /*
++      * 26B123 (27.2) G17S, the J714s restore image: 26B8125's record offsets, its own digest.
++      * 27.2 and 27.3 beta 1 from aurora-silicon/linux #1173 (Rolando Trevino).
++      */
++     {{{0x224, 4},
++       {0x23c, 8},
++       {0x49764, 0x740},
++       {0x49ea4, 0x231},
++       {0x50224, 4},
++       {0x5023c, 8},
++       {0x9d1ec, 0x740},
++       {0x9d92c, 0x231}},
++      {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41,
++       0x01, 0x70, 0x2c, 0x9a, 0xc6, 0xc4, 0xe9, 0x0f, 0x2e, 0x12, 0x3f,
++       0x3b, 0x36, 0xfb, 0xe6, 0xff, 0xea, 0x91, 0x3f, 0x0f, 0xd9},
++      "26B123"},
++     /* 26C5035r (27.3 beta 1) G17S, J714s */
++     {{{0x224, 4},
++       {0x23c, 8},
++       {0x4976c, 0x740},
++       {0x49eac, 0x231},
++       {0x50224, 4},
++       {0x5023c, 8},
++       {0x9d1ec, 0x740},
++       {0x9d92c, 0x231}},
++      {0xb5, 0x53, 0x7c, 0x8f, 0x06, 0xbd, 0x19, 0xeb, 0xf0, 0xef, 0xd0,
++       0xcb, 0xfb, 0x65, 0x52, 0x33, 0x9a, 0x10, 0xd4, 0xaf, 0xc4, 0xed,
++       0xa9, 0xd2, 0x1c, 0xbe, 0xdc, 0x36, 0x66, 0x76, 0x36, 0x00},
++      "26C5035"}},
  };
  extern void aura_sha256(const void *data, size_t size, u8 digest[32]);
  
-@@ -4074,12 +4085,22 @@ static T6050_GPU_TEXT_FN int t6050_gpu_check(void *dt, u64 r[12])
-     u8 *copy = malloc(T6050_GPU_TEXT), digest[32];
-     if (!copy)
-         return 1;
--    memcpy(copy, (const void *)seg[0], T6050_GPU_TEXT);
--    for (int i = 0; i < 8; i++)
--        memset(copy + t6050_gpu.fill[i][0], 0, t6050_gpu.fill[i][1]);
--    aura_sha256(copy, T6050_GPU_TEXT, digest);
-+    for (size_t b = 0; b < ARRAY_SIZE(t6050_gpu_builds); b++) {
-+        memcpy(copy, (const void *)seg[0], T6050_GPU_TEXT);
-+        for (int i = 0; i < 2; i++) {
-+            memset(copy + 0x50000 * i + 0x224, 0, 4);
-+            memset(copy + 0x50000 * i + 0x23c, 0, 8);
-+            memset(copy + t6050_gpu_builds[b].fill[2 * i], 0, 0x740);
-+            memset(copy + t6050_gpu_builds[b].fill[2 * i + 1], 0, 0x231);
-+        }
-+        aura_sha256(copy, T6050_GPU_TEXT, digest);
-+        if (!memcmp(digest, t6050_gpu_builds[b].sha, sizeof(digest))) {
-+            free(copy);
-+            return 2;
-+        }
-+    }
-     free(copy);
--    return memcmp(digest, t6050_gpu.sha, sizeof(digest)) ? 1 : 2;
-+    return 1;
- }
- 
- /* Enables every node of t6050_gpu.on, in order, if they all exist */
-From d2ce34bf0d60e016a0bc16fd8f9bb3815edf4829 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 383577ab302e9b2e624f6d3e9ed79aad6b425413 Mon Sep 17 00:00:00 2001
 From: TripleU <usher@gentechsolution.com>
 Date: Wed, 11 Nov 2026 18:39:56 -0500
-Subject: [PATCH 2/9] kboot: M5: show the notch rows by default
+Subject: [PATCH 2/6] kboot: M5: show the notch rows by default
 
 The full 3024x1964 panel (notch rows included) is what the J714s image wants by
 default, as our m1n1 (m1n1-installer 0006/0007) did. Without a config line
@@ -247,7 +191,7 @@ opts out.
  1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/src/kboot.c b/src/kboot.c
-index 90b67b6b..c12d0f69 100644
+index f5da83b6..81428a95 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
 @@ -171,7 +171,8 @@ static bool kboot_show_notch(void)
@@ -260,7 +204,7 @@ index 90b67b6b..c12d0f69 100644
  }
  
  static int dt_set_rng_seed_sep(int node)
-@@ -1149,6 +1150,13 @@ static int dt_set_chosen(void)
+@@ -1158,6 +1159,13 @@ static int dt_set_chosen(void)
          printf("FDT: set chosen.%s\n", name);
      }
  
@@ -274,10 +218,13 @@ index 90b67b6b..c12d0f69 100644
      if (dt_set_stdout_path(node))
          return -1;
  
-From 27333183e264e35fcb1af12c51122c52ec6d5ecc Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From b10b85be0eeea839f4ee410bdd3962520bc194cc Mon Sep 17 00:00:00 2001
 From: TripleU <usher@gentechsolution.com>
 Date: Wed, 11 Nov 2026 19:25:29 -0500
-Subject: [PATCH 3/9] kboot: T6050: also admit the M5 Max's 27.3 GPU build
+Subject: [PATCH 3/6] kboot: T6050: also admit the M5 Max's 27.3 GPU build
  (aura #172)
 
 joshuaswarren's aurora-silicon/aura #172 (60a3b0fdb3) accepts the 26C5035r digest he
@@ -287,162 +234,49 @@ table of builds, so his digest goes in as one more entry rather than a second ch
 Co-authored-by: Joshua Warren <816217+joshuaswarren@users.noreply.github.com>
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- src/kboot_gpu.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ src/kboot_gpu.c | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
 
 diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
-index da6fcc00..0f9ca662 100644
+index 19572731..d44fcddc 100644
 --- a/src/kboot_gpu.c
 +++ b/src/kboot_gpu.c
-@@ -4044,6 +4044,10 @@ static const struct {
-     {{0x4976c, 0x49eac, 0x9d1ec, 0x9d92c},
-      {0xb5, 0x53, 0x7c, 0x8f, 0x06, 0xbd, 0x19, 0xeb, 0xf0, 0xef, 0xd0, 0xcb, 0xfb, 0x65, 0x52, 0x33,
-       0x9a, 0x10, 0xd4, 0xaf, 0xc4, 0xed, 0xa9, 0xd2, 0x1c, 0xbe, 0xdc, 0x36, 0x66, 0x76, 0x36, 0x00}},
-+    /* 27.3 (26C5035r) on the M5 Max, with the 27.0 records: aura #172 (joshuaswarren) */
-+    {{0x49720, 0x49e60, 0x9d1d8, 0x9d918},
-+     {0xb7, 0x97, 0x17, 0x83, 0x72, 0xd1, 0xde, 0xb2, 0x8b, 0x56, 0xb5, 0xcc, 0x43, 0xe6, 0x45, 0xb1,
-+      0x09, 0x88, 0x60, 0xc1, 0x6d, 0x69, 0x1f, 0x59, 0x91, 0xc1, 0xad, 0x8a, 0xfd, 0x5c, 0x07, 0xeb}},
-     /* 27.2 (26B123) */
-     {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
-      {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41, 0x01, 0x70, 0x2c, 0x9a, 0xc6,
-From e1e804e4a2055f78bb48dd379737e199128088d5 Mon Sep 17 00:00:00 2001
-From: Jens Axboe <axboe@kernel.dk>
-Date: Wed, 11 Nov 2026 13:30:32 -0700
-Subject: [PATCH 4/9] kboot: T6050: hand the K116s camera over on 27.2
+@@ -4018,7 +4018,7 @@ static const struct {
+         u32 fill[8][2];
+         u8 sha[32];
+         char name[8];
+-    } build[4];
++    } build[5];
+ } t6050_gpu = {
+     /* The UAT ranges (base, size), then the bounds of both roles' __DATA and SRO */
+     {"gpu-region-base", "gpu-region-size", "gfx-shared-region-base", "gfx-shared-region-size",
+@@ -4090,6 +4090,19 @@ static const struct {
+       {0xb5, 0x53, 0x7c, 0x8f, 0x06, 0xbd, 0x19, 0xeb, 0xf0, 0xef, 0xd0,
+        0xcb, 0xfb, 0x65, 0x52, 0x33, 0x9a, 0x10, 0xd4, 0xaf, 0xc4, 0xed,
+        0xa9, 0xd2, 0x1c, 0xbe, 0xdc, 0x36, 0x66, 0x76, 0x36, 0x00},
++      "26C5035"},
++     /* 26C5035r (27.3) on the M5 Max, with 26A428's records: aura #172 (joshuaswarren) */
++     {{{0x224, 4},
++       {0x23c, 8},
++       {0x49720, 0x740},
++       {0x49e60, 0x231},
++       {0x50224, 4},
++       {0x5023c, 8},
++       {0x9d1d8, 0x740},
++       {0x9d918, 0x231}},
++      {0xb7, 0x97, 0x17, 0x83, 0x72, 0xd1, 0xde, 0xb2, 0x8b, 0x56, 0xb5,
++       0xcc, 0x43, 0xe6, 0x45, 0xb1, 0x09, 0x88, 0x60, 0xc1, 0x6d, 0x69,
++       0x1f, 0x59, 0x91, 0xc1, 0xad, 0x8a, 0xfd, 0x5c, 0x07, 0xeb},
+       "26C5035"}},
+ };
+ extern void aura_sha256(const void *data, size_t size, u8 digest[32]);
+-- 
+2.56.0
 
-The T6050 camera hand-off admits the J716c (sensor type 0x75) and the
-J714s (0x74) on 27.0. Make the board test a table that also admits the
-K116s (Mac17,12, 16-inch M5 Pro): sensor type 0xbc on 27.2 (26B8125),
-whose isp0 has the same two firmware segments. Its firmware is the
-IPSW's isp_bni/adc-nyx-sck11pm (uuid 980F533B-34EA-3FBA-878C-809F6AF57345),
-and the K116 connection table has one FrontRGB IMX958.
-
-Say why a hand-off is refused, and print the connections scheme with the
-platform.
-
-Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
-[thomas: the camera part of Jens's K116s aura-internal patch "kboot: hand
- the speaker amps' configuration and the T6050 camera to the kernel",
- ported to main, which already has the amp configuration, exact paths and
- the ISP memory-region helper.]
-Signed-off-by: Thomas Glanzmann <thomas@glanzmann.de>
----
- src/kboot.c | 50 +++++++++++++++++++++++++++++++++++++-------------
- 1 file changed, 37 insertions(+), 13 deletions(-)
-
-diff --git a/src/kboot.c b/src/kboot.c
-index c12d0f69..dc9d2bfb 100644
---- a/src/kboot.c
-+++ b/src/kboot.c
-@@ -9377,7 +9377,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
-  * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
-  * snapshot physical addresses. The kernel allocates the small main-memory
-  * tail and owns all power, DART and firmware-start operations. J716c's camera
-- * is sensor type 0x75, J714s's 0x74; both have the same two segments.
-+ * is sensor type 0x75, J714s's 0x74 (both measured on 27.0), K116s's 0xbc
-+ * (27.2); all three have the same two segments.
-  */
- __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
-                                                                                 const char *name)
-@@ -9391,26 +9392,45 @@ __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(
-     return 0;
- }
- 
--static int dt_set_t6050_isp(void)
-+static const struct {
-+    const char *compat;
-+    u32 sensor_type;
-+    enum fw_version fw;
-+} t6050_isp_boards[] = {
-+    {"apple,j716c", 0x75, V27_0},
-+    {"apple,j714s", 0x74, V27_0},
-+    /*
-+     * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
-+     * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.
-+     */
-+    {"apple,k116s", 0xbc, V27_2},
-+};
-+
-+static int dt_set_t6050_isp(const char **why)
- {
-     /* Exact paths: "/soc/isp@..." must not resolve "soc" to "soc@200000000". */
-     int node = kboot_fdt_path_exact(dt, "isp");
-+    *why = NULL;
-     if (node < 0)
-         return 0;
--    u32 want;
--    if (!fdt_node_check_compatible(dt, 0, "apple,j716c"))
--        want = 0x75;
--    else if (!fdt_node_check_compatible(dt, 0, "apple,j714s"))
--        want = 0x74;
--    else
--        return -1;
--    if (os_firmware.version != V27_0)
-+
-+    u32 want = 0;
-+    *why = "board or firmware not in the table";
-+    for (unsigned int i = 0; i < ARRAY_SIZE(t6050_isp_boards); i++) {
-+        if (fdt_node_check_compatible(dt, 0, t6050_isp_boards[i].compat))
-+            continue;
-+        if (os_firmware.version != t6050_isp_boards[i].fw)
-+            return -1;
-+        want = t6050_isp_boards[i].sensor_type;
-+    }
-+    if (!want)
-         return -1;
- 
-     int chosen = adt_path_offset(adt, "/chosen");
-     int isp = adt_path_offset(adt, "/arm-io/isp0");
-     u64 ram, ram_size;
-     u32 len, platform, scheme = 0;
-+    *why = "ADT isp0, sensor type or firmware segments";
-     if (chosen < 0 || isp < 0)
-         return -1;
-     const struct adt_segment_ranges *seg = adt_getprop(adt, isp, "segment-ranges", &len);
-@@ -9423,6 +9443,7 @@ static int dt_set_t6050_isp(void)
-         return -1;
-     ADT_GETPROP(adt, isp, "cam-connections-scheme", &scheme);
- 
-+    *why = "device tree update";
-     uint32_t owner = fdt_get_phandle(dt, node);
-     if (!owner && (fdt_generate_phandle(dt, &owner) || fdt_setprop_u32(dt, node, "phandle", owner)))
-         return -1;
-@@ -9461,25 +9482,28 @@ static int dt_set_t6050_isp(void)
-         if (node < 0 || fdt_setprop_string(dt, node, "status", "okay"))
-             return -1;
-     }
--    printf("FDT: T6050 ISP: reserved text/data, main memory 32 MiB; platform 0x%x\n", platform);
-+    printf("FDT: T6050 ISP: reserved text/data, main memory 32 MiB; platform 0x%x scheme 0x%x\n",
-+           platform, scheme);
-     return 0;
- }
- 
-+/* All or nothing: a refused or half-done hand-off leaves the device tree as it was. */
- static int dt_t6050_isp_transaction(void)
- {
-     void *original = dt;
-     size_t capacity = fdt_totalsize(original);
-     void *scratch = malloc(capacity);
-+    const char *why;
-     if (!scratch) {
-         printf("FDT: no space for camera handoff; leaving it disabled\n");
-         return 0;
-     }
-     memcpy(scratch, original, capacity);
-     dt = scratch;
--    if (!dt_set_t6050_isp())
-+    if (!dt_set_t6050_isp(&why))
-         memcpy(original, scratch, capacity);
-     else
--        printf("FDT: rejected T6050 ISP handoff; leaving it disabled\n");
-+        printf("FDT: rejected T6050 ISP handoff (%s); leaving it disabled\n", why);
-     dt = original;
-     free(scratch);
-     return 0;
-From 7934cb1291fbbcfadca1daa7cfb161a969f7f234 Mon Sep 17 00:00:00 2001
+From 71f828b5794bcdefbbc08fb194f1c9f39e2d2d50 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 03:36:02 -0500
-Subject: [PATCH 5/9] kboot: T6050: hand the J714s camera over on 27.3 beta 1
+Subject: [PATCH 4/6] kboot: T6050: hand the J714s camera over on 27.3 beta 1
 
 The J714s's isp0 on the 27.3 beta 1 stub (mBoot-20457.60.65.0.1) keeps
 27.0's sensor type 0x74 and the same two firmware segments: TEXT 0xc1c000
@@ -456,37 +290,35 @@ skipped instead of refusing the hand-off.
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01H3rUWsmTuAiei3A7JojjHG
 ---
- src/kboot.c | 16 +++++++++++-----
- 1 file changed, 11 insertions(+), 5 deletions(-)
+ src/kboot.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
 
 diff --git a/src/kboot.c b/src/kboot.c
-index dc9d2bfb..c12b625e 100644
+index 81428a95..323b85ae 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
-@@ -9377,8 +9377,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
-  * T6050 firmware lives below Linux RAM. Publish its current ADT ranges, not
+@@ -9387,7 +9387,7 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
   * snapshot physical addresses. The kernel allocates the small main-memory
-  * tail and owns all power, DART and firmware-start operations. J716c's camera
-- * is sensor type 0x75, J714s's 0x74 (both measured on 27.0), K116s's 0xbc
-- * (27.2); all three have the same two segments.
-+ * is sensor type 0x75, J714s's 0x74 (both measured on 27.0; the J714s also on
-+ * 27.3 beta 1), K116s's 0xbc (27.2); all three have the same two segments.
+  * tail and owns all power, DART and firmware-start operations. J716c (0x75)
+  * and J714s (0x74) on 27.0, K114c (0xb9) on 27.3 beta and K116s (0xbc) on
+- * 27.2 use the same two segment names.
++ * 27.2 use the same two segment names; so does the J714s on 27.3 beta 1.
   */
  __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
                                                                                  const char *name)
-@@ -9399,6 +9399,11 @@ static const struct {
- } t6050_isp_boards[] = {
+@@ -9409,6 +9409,11 @@ static const struct {
      {"apple,j716c", 0x75, V27_0},
      {"apple,j714s", 0x74, V27_0},
+     {"apple,k114c", 0xb9, V27_3B},
 +    /*
 +     * J714s on the 27.3 beta 1 stub (mBoot-20457.60.65.0.1): its ADT isp0 keeps 27.0's sensor
 +     * type and the same two segments (TEXT 0xc1c000, DATA 0x13d0000 at remap 0x10000000000).
 +     */
-+    {"apple,j714s", 0x74, V27_3B1},
++    {"apple,j714s", 0x74, V27_3B},
      /*
       * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
       * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.
-@@ -9417,11 +9422,12 @@ static int dt_set_t6050_isp(const char **why)
+@@ -9427,11 +9432,12 @@ static int dt_set_t6050_isp(const char **why)
      u32 want = 0;
      *why = "board or firmware not in the table";
      for (unsigned int i = 0; i < ARRAY_SIZE(t6050_isp_boards); i++) {
@@ -502,90 +334,13 @@ index dc9d2bfb..c12b625e 100644
      }
      if (!want)
          return -1;
-From 313ad5ebcc3ef703dede80b38b6f6e1c35d1b38f Mon Sep 17 00:00:00 2001
-From: TripleU <182648541+TripleU613@users.noreply.github.com>
-Date: Thu, 12 Nov 2026 13:17:37 -0500
-Subject: [PATCH 6/9] kboot: T6050: PCIe: let an auto-PM storage domain gate
- itself during port bring-up
+-- 
+2.56.0
 
-storage_check() stopped the GP bring-up when a storage power-state register changed outside its
-actual-state and was-gated bits. APCIE_SYS_ST0 runs under auto power management (AUTO_ENABLE,
-bit 28), and its hardware gates it while storage is idle: on a J714s (macOS 27.3 beta 1) it read
-0x1f0003ff -> 0x1000030f after stage F, PS_AUTO (27:24) and the actual state both 0xf -> 0. The
-check reported "storage changed after F" and left port 0, the N1 Wi-Fi, down (2 of 14 RAM test
-boots on 2026-11-12). A domain with AUTO_ENABLE set before and after may now also move PS_AUTO; target,
-auto-enable and every other bit still stop the bring-up, as do the ANS and NVMe checks after it.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
----
- src/pcie_t6050.c | 12 ++++++++++--
- 1 file changed, 10 insertions(+), 2 deletions(-)
-
-diff --git a/src/pcie_t6050.c b/src/pcie_t6050.c
-index 861b9959..f0bc22f3 100644
---- a/src/pcie_t6050.c
-+++ b/src/pcie_t6050.c
-@@ -350,8 +350,16 @@ static int storage_check(const char *tag, bool reference)
-         printf("pcie-t6050: storage %s: 0x%lx 0x%08x -> 0x%08x\n", tag, storage_addr[i],
-                storage_ref[i], cur[i]);
-         changed++;
--        /* PS actual state and was-gated flags may move; target and auto must not */
--        if (i >= ST_PS && i < ST_SART && !((cur[i] ^ storage_ref[i]) & ~0x3f0))
-+        /*
-+         * PS actual state and was-gated flags may move; target and auto-enable must not. A
-+         * domain under auto power management (AUTO_ENABLE, bit 28, set before and after) also
-+         * moves its auto state (bits 27:24) on its own: on a J714s APCIE_SYS_ST0 went 0x1f0003ff
-+         * -> 0x1000030f while the N1's link came up (storage idle, gated by the hardware).
-+         */
-+        u32 may_move = 0x3f0;
-+        if (storage_ref[i] & cur[i] & BIT(28))
-+            may_move |= 0x0f000000;
-+        if (i >= ST_PS && i < ST_SART && !((cur[i] ^ storage_ref[i]) & ~may_move))
-             continue;
-         if (i >= ST_PS || i == ST_BOOT_STATUS || i == ST_CC)
-             FAIL("storage changed %s\n", tag);
-From f0a7093209cd8aff8f9f69ff67eee42cae85ec4f Mon Sep 17 00:00:00 2001
-From: TripleU <182648541+TripleU613@users.noreply.github.com>
-Date: Thu, 12 Nov 2026 23:55:17 -0500
-Subject: [PATCH 7/9] kboot: T6050: also admit the 27.2 (26B8125) G17S firmware
- of the K116s
-
-aura #187 (Thomas Glanzmann), carried onto the build table of the 27.2/27.3
-GPU hand-off: the K114/K116 27.2 restore image (26B8125) has the 26B123
-boot-filled records and its own fwid digest, af68d034...9f38f6cb, the value
-of Jens Axboe's hw/t6050.rs entry (aurora-silicon/linux #1650).
-
-Not run on a K116s through this table; the J714s loads 26B123.
-
-Co-Authored-By: Thomas Glanzmann <thomas@glanzmann.de>
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
----
- src/kboot_gpu.c | 8 ++++++++
- 1 file changed, 8 insertions(+)
-
-diff --git a/src/kboot_gpu.c b/src/kboot_gpu.c
-index 0f9ca662..244f645c 100644
---- a/src/kboot_gpu.c
-+++ b/src/kboot_gpu.c
-@@ -4052,6 +4052,14 @@ static const struct {
-     {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
-      {0x2b, 0x46, 0x13, 0xc6, 0x2a, 0x8a, 0x00, 0x7f, 0x22, 0xa9, 0x41, 0x01, 0x70, 0x2c, 0x9a, 0xc6,
-       0xc4, 0xe9, 0x0f, 0x2e, 0x12, 0x3f, 0x3b, 0x36, 0xfb, 0xe6, 0xff, 0xea, 0x91, 0x3f, 0x0f, 0xd9}},
-+    /*
-+     * 27.2 (26B8125), the K114/K116 restore image, which iBoot loads on the K116s: 26B123's
-+     * records, its own digest. aura #187 (Thomas Glanzmann), from Jens Axboe's hw/t6050.rs entry
-+     * (aurora-silicon/linux #1650).
-+     */
-+    {{0x49764, 0x49ea4, 0x9d1ec, 0x9d92c},
-+     {0xaf, 0x68, 0xd0, 0x34, 0xa3, 0xf0, 0x06, 0xb4, 0x3d, 0xab, 0x66, 0x1b, 0x82, 0x5f, 0x12, 0x59,
-+      0x8c, 0xb8, 0x6e, 0x4d, 0x2a, 0x0e, 0x38, 0x44, 0xf1, 0x4f, 0xa5, 0x05, 0x9f, 0x38, 0xf6, 0xcb}},
-     /* 27.0 (26A428) */
-     {{0x49720, 0x49e60, 0x9d1d8, 0x9d918},
-      {0x85, 0xd0, 0xfd, 0x82, 0x80, 0xf7, 0x24, 0x65, 0x5c, 0xa9, 0xa9, 0x71, 0x7b, 0xc9, 0x1a, 0x8a,
-From 52b64e83f0f37762c8a9f1578c749e0218cf8d6a Mon Sep 17 00:00:00 2001
+From b914777284b14fad22356763ef9454a28aaa5c18 Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 23:55:40 -0500
-Subject: [PATCH 8/9] kboot: T6050: hand the internal display over on 27.2
+Subject: [PATCH 5/6] kboot: T6050: hand the internal display over on 27.2
 
 The J714s moves its Linux stub to macOS 27.2 (26B123, mBoot-20457.41.3),
 upstream's Mach-O target. The T6050 DCP hand-off admitted 27.0 and 27.3
@@ -608,7 +363,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 18 insertions(+), 6 deletions(-)
 
 diff --git a/src/kboot_display_handoff.c b/src/kboot_display_handoff.c
-index 0b39c12f..a127e177 100644
+index 1ce1df49..4e7cc77b 100644
 --- a/src/kboot_display_handoff.c
 +++ b/src/kboot_display_handoff.c
 @@ -3240,8 +3240,16 @@ static bool dcp6_dt_describes(void *dt)
@@ -633,12 +388,12 @@ index 0b39c12f..a127e177 100644
      int disp0 = adt_path_offset(adt, "/arm-io/disp0");
      const char *uuid = nub < 0 ? NULL : adt_getprop(adt, nub, "uuid", &len);
  
--    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B1)
+-    if (os_firmware.version != V27_0 && os_firmware.version != V27_3B)
 -        bail("OS firmware %s is not 27.0 or 27.3 beta 1\n", os_firmware.string);
 +    if (os_firmware.version != V27_0 && os_firmware.version != V27_2 &&
-+        os_firmware.version != V27_3B1)
++        os_firmware.version != V27_3B)
 +        bail("OS firmware %s is not 27.0, 27.2 or 27.3 beta 1\n", os_firmware.string);
-     t6050.compat = os_firmware.version == V27_3B1 ? &t6050_compat_27_3 : &os_firmware;
+     t6050.compat = os_firmware.version == V27_3B ? &t6050_compat_27_3 : &os_firmware;
 -    if (!dcp6_is_uuid(uuid, len) || len > sizeof(t6050.uuid) ||
 -        (os_firmware.version == V27_0 && strcmp(uuid, T6050_DCP_UUID)))
 -        bail("DCP image %s is not " T6050_DCP_UUID "\n", dcp6_is_uuid(uuid, len) ? uuid : "(none)");
@@ -651,10 +406,13 @@ index 0b39c12f..a127e177 100644
      strcpy(t6050.uuid, uuid);
      dlog("DCP image %s, firmware-compat %s\n", t6050.uuid, t6050.compat->string);
      if (dcp6_adt_u32(nub, "running", &val) || val != 1 || disp0 < 0 ||
-From 9526fd1e8e433f41b2cfc6bb9c055910063837f6 Mon Sep 17 00:00:00 2001
+-- 
+2.56.0
+
+From 0a38505cff50b4c37e5f6303b6dd15d48705648b Mon Sep 17 00:00:00 2001
 From: TripleU <182648541+TripleU613@users.noreply.github.com>
 Date: Thu, 12 Nov 2026 23:55:40 -0500
-Subject: [PATCH 9/9] kboot: T6050: hand the J714s camera over on 27.2
+Subject: [PATCH 6/6] kboot: T6050: hand the J714s camera over on 27.2
 
 Add a J714s 27.2 (26B123) row to the T6050 camera table. The J714s identity
 of UniversalMac_27.2_26B123 loads Firmware/isp_bni/adc-nyx-sc7x.im4p (uuid
@@ -671,23 +429,23 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  1 file changed, 9 insertions(+), 1 deletion(-)
 
 diff --git a/src/kboot.c b/src/kboot.c
-index c12b625e..201e0b7a 100644
+index 323b85ae..aee96a0e 100644
 --- a/src/kboot.c
 +++ b/src/kboot.c
-@@ -9378,7 +9378,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
+@@ -9387,7 +9387,8 @@ t6050_isp_segments_valid(const struct adt_segment_ranges *seg, u32 len, u64 ram,
   * snapshot physical addresses. The kernel allocates the small main-memory
-  * tail and owns all power, DART and firmware-start operations. J716c's camera
-  * is sensor type 0x75, J714s's 0x74 (both measured on 27.0; the J714s also on
-- * 27.3 beta 1), K116s's 0xbc (27.2); all three have the same two segments.
-+ * 27.3 beta 1, and 27.2 from its IPSW), K116s's 0xbc (27.2); all three have the
-+ * same two segments.
+  * tail and owns all power, DART and firmware-start operations. J716c (0x75)
+  * and J714s (0x74) on 27.0, K114c (0xb9) on 27.3 beta and K116s (0xbc) on
+- * 27.2 use the same two segment names; so does the J714s on 27.3 beta 1.
++ * 27.2 use the same two segment names; so does the J714s on 27.3 beta 1 and
++ * (from its IPSW) on 27.2.
   */
  __attribute__((section(".init.t6050_isp"))) static int t6050_isp_add_mem_region(uint32_t phandle,
                                                                                  const char *name)
-@@ -9404,6 +9405,13 @@ static const struct {
+@@ -9414,6 +9415,13 @@ static const struct {
       * type and the same two segments (TEXT 0xc1c000, DATA 0x13d0000 at remap 0x10000000000).
       */
-     {"apple,j714s", 0x74, V27_3B1},
+     {"apple,j714s", 0x74, V27_3B},
 +    /*
 +     * J714s on the 27.2 stub (26B123): the J714s identity's ISP firmware, isp_bni/adc-nyx-sc7x
 +     * (uuid 889F5ADB-BDE7-3B93-A531-24587C4CF3D5), has 27.0's TEXT 0xc1c000 and DATA 0x13d0000
@@ -698,3 +456,6 @@ index c12b625e..201e0b7a 100644
      /*
       * K116s: ADT isp0 of 27.2 (26B8125). Firmware uuid 980F533B-34EA-3FBA-878C-809F6AF57345,
       * the IPSW's isp_bni/adc-nyx-sck11pm; its K116 connection table has one FrontRGB IMX958.
+-- 
+2.56.0
+

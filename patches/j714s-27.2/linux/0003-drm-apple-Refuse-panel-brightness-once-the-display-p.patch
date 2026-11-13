@@ -1,7 +1,7 @@
-From c590c5abb71e97c2a52419974359c69ed8715f7d Mon Sep 17 00:00:00 2001
+From 4d042d88fe6b805d6106707b7dff4d6b65e322ff Mon Sep 17 00:00:00 2001
 From: Rolando Trevino <rolotrealanis@gmail.com>
 Date: Sat, 7 Nov 2026 18:21:40 -0500
-Subject: [PATCH 03/18] drm/apple: Refuse panel brightness once the display
+Subject: [PATCH 03/15] drm/apple: Refuse panel brightness once the display
  processor crashed
 
 A panel that presents its level in the swap gets a new level only with
@@ -44,3 +44,6 @@ index 00f29157241f..46c162f20121 100644
  
  	if (dcp_backlight_active(dcp) || dcp_backlight_desktop(dcp)) {
  		struct dcp_backlight_state *state = &dcp->backlight.state;
+-- 
+2.56.0
+
