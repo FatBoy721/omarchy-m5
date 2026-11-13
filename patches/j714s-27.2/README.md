@@ -109,3 +109,12 @@ goes on.
    PSNR) before making it the default.
 7. **Wi-Fi port 0** (Aura's `storage after ...` lines), trackpad, NVMe, SError/Oops-free journal,
    and a reboot (`macsmc-reboot`; there is no PSCI reset under the window).
+
+## Next re-pin
+
+Merged upstream at 06:12 UTC on 2026-11-13, after both pins (572eb88e is 04:38 UTC, Aura 2232ae7a
+is 02:07 UTC), so this series still carries them and the built packages stay as they are:
+- aurora-silicon/linux #1745 (17903f58cab4) is kernel 0017 (the appledrm softdep): drop it.
+- aurora-silicon/linux #1747 (e3acfff0d34f), the AVE 27.3 table: 0008's AVE half overlaps it.
+  Rebase 0008 and 0018 onto it, keeping 0018's 26B123 row and CRC selection.
+- aurora-silicon/aura #203 (e3c1075f4144) is Aura 0006 (the storage auto-PM fix): drop it.
