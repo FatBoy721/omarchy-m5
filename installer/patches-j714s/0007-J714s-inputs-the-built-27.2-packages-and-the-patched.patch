@@ -1,0 +1,137 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 03:17:48 -0500
+Subject: [PATCH] J714s inputs: the built 27.2 packages and the patched
+ Recovery app
+
+candidate-package-manifest.json: linux-aurora 7.3.0.aurora17.v272-1
+(sha256 7ed98691..., 44157755 bytes) and m1n1-aurora 1.6.1.aurora24.v272-1
+(1f30e3ff..., 2458500 bytes), built from betizzel/omarchy-m5 0b813e9
+(recipes linux-aurora-j714s and m1n1-aurora-j714s); aurora-sep and
+libfprint-aurora are the 27.2 rebuilds from 88be5ff (aurora-sep payload
+unchanged, read-only by default; libfprint check() timeout multiplier).
+set_sha256 and the set name are recomputed: j714s-dev-runtime-60db92441590.
+
+build-input-provenance.json: the Recovery app is the one betizzel/omarchy-m5
+run 43379125218 built from this patch set's Recovery/ (tree 21baedbc, commit
+8029657 = c07e54c + installer/patches + patches-upstream-27.3 +
+patches-j714s 0001-0006), artifact 14015278818 (zip sha256 36cf0a27...),
+app inventory sha256 725aab0c....
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../build-input-provenance.json               | 14 ++++++----
+ .../candidate-package-manifest.json           | 28 +++++++++----------
+ 2 files changed, 22 insertions(+), 20 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/build-input-provenance.json b/Integration/M5/J714s-Normal-System/build-input-provenance.json
+index c5e21fd..b2f2cc5 100644
+--- a/Integration/M5/J714s-Normal-System/build-input-provenance.json
++++ b/Integration/M5/J714s-Normal-System/build-input-provenance.json
+@@ -17,12 +17,14 @@
+   },
+   "recovery": {
+     "repository": "omacom/omarchy-mac-installer",
+-    "source_commit": "c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9",
+-    "source_tree": "13705bf0ccab8cc841ee9d418c36b7d7ddcafb48",
+-    "ci_run": 42164687304,
+-    "artifact_id": 13479080380,
+-    "artifact_sha256": "b2b3f243c71ddf578595dcf6a1a81a50df34ffff80a369269543b69a6fda0f93",
+-    "inventory_sha256": "f32296121b1145619f7dff52155fc056b00c1c67942891252bb977ce8291b386"
++    "ci_repository": "betizzel/omarchy-m5",
++    "patch_sets": "installer/patches, patches-upstream-27.3, patches-j714s (on omacom c07e54c)",
++    "source_commit": "80296579759ca7421035aa84fbfd2c17b063e301",
++    "source_tree": "21baedbc611e659ef063611281caeabb618da14a",
++    "ci_run": 43379125218,
++    "artifact_id": 14015278818,
++    "artifact_sha256": "36cf0a27fd4d1372b4fd82809feea5daecefe4888fd040f80bb0340c3ab800c9",
++    "inventory_sha256": "725aab0c70f759ac622f9e7017996af23015ba240a52468aca489bac777a06a6"
+   },
+   "native_mesa": {
+     "repository": "TripleU613/omarchy-pkgs",
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index b7fedbe..65c2191 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-ee093296b339",
++  "set": "j714s-dev-runtime-60db92441590",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -56,12 +56,12 @@
+       "version": "1.17.g8679514f4dff-1",
+       "arch": "any",
+       "filename": "aurora-sep-1.17.g8679514f4dff-1-any.pkg.tar.zst",
+-      "sha256": "9ac095ea61b4ae6da35acac6f94f6ded3d72734c0a268340180d7b0b997236aa",
++      "sha256": "6fa7ec892ea43462a5cbaa4d59bc5db224040c30ca342e0ef0a80d6be17f411c",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "2183b9ab58a8c40e8c4f2bbc4504a4138e94992a"
++        "commit": "88be5fff45a67bb091b7cb262b2225874657b12e"
+       },
+-      "size_bytes": 80147
++      "size_bytes": 72452
+     },
+     {
+       "name": "hyprland-m5",
+@@ -80,12 +80,12 @@
+       "version": "1.94.100-1",
+       "arch": "aarch64",
+       "filename": "libfprint-aurora-1.94.100-1-aarch64.pkg.tar.zst",
+-      "sha256": "46ff5c86de78fd4e380aac28308540dae189f44c08df25c5862439cc63a00ead",
++      "sha256": "6f4c2ca4c795f66d0b700c935be6c6646d9b974d19e0a1e6b5d1235d710d8172",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "2183b9ab58a8c40e8c4f2bbc4504a4138e94992a"
++        "commit": "88be5fff45a67bb091b7cb262b2225874657b12e"
+       },
+-      "size_bytes": 526970
++      "size_bytes": 521161
+     },
+     {
+       "name": "limine-mkinitcpio-hook",
+@@ -105,24 +105,24 @@
+       "version": "7.3.0.aurora17.v272-1",
+       "arch": "aarch64",
+       "filename": "linux-aurora-7.3.0.aurora17.v272-1-aarch64.pkg.tar.zst",
+-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
++      "sha256": "7ed9869122af9ac70361a41521833fd495f8a98edbb1ee01a4c513bb03fa19e2",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "0000000000000000000000000000000000000000"
++        "commit": "0b813e9a1abff58da08f68db471aa50313a0610c"
+       },
+-      "size_bytes": 0
++      "size_bytes": 44157755
+     },
+     {
+       "name": "m1n1-aurora",
+       "version": "1.6.1.aurora24.v272-1",
+       "arch": "aarch64",
+       "filename": "m1n1-aurora-1.6.1.aurora24.v272-1-aarch64.pkg.tar.zst",
+-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
++      "sha256": "1f30e3fffb1b6a36cad8e5b91d4cd8b844a5ded50565c9f82ff2c3a420b094bf",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "0000000000000000000000000000000000000000"
++        "commit": "0b813e9a1abff58da08f68db471aa50313a0610c"
+       },
+-      "size_bytes": 0
++      "size_bytes": 2458500
+     },
+     {
+       "name": "mesa-aurora",
+@@ -240,5 +240,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "ee093296b339b72161f4cb30619ebe02e307d392d3570f3a1733f9a7a733e888"
++  "set_sha256": "60db92441590a9d5974b0da8291845faf5fb5de95f4e1f9a63e13873c4946367"
+ }
+-- 
+2.56.0
+

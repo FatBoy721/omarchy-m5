@@ -108,6 +108,7 @@ Patch set [`patches-j714s/`](patches-j714s) goes on top of `patches/` and
 | 0004 | Image profile `j714s`: `esp/aurora/stage1-j714s.{bin,macho}`, `esp/m1n1/boot-ctxr.bin` (kept current by a pacman hook), payload `omarchy-j714s-<N>-aarch64-apple-silicon-mac-os-package.zip` | ours |
 | 0005 | Candidate manifest pins for `linux-aurora 7.3.0.aurora17.v272-1` and `m1n1-aurora 1.6.1.aurora24.v272-1` (recipes `recipes/linux-aurora-j714s`, `recipes/m1n1-aurora-j714s`); sha256/size still zero until the packages are built | ours |
 | 0006 | Developer builds admit `apple,j714s` from a developer-only sealed catalog | ours |
+| 0007 | The built packages in the manifest: `linux-aurora` `7ed98691…` and `m1n1-aurora` `1f30e3ff…` (source 0b813e9), the 27.2 rebuilds of `aurora-sep` `6fa7ec89…` and `libfprint-aurora` `6f4c2ca4…` (88be5ff); set `j714s-dev-runtime-60db92441590`. Recovery provenance: the app run 43379125218 built from this set's `Recovery/` (tree `21baedbc`, commit `8029657`, which `rebuild-installer-tree.sh` reproduces), artifact 14015278818 (zip `36cf0a27…`), inventory `725aab0c…` | ours |
 
 Builds:
 - Image: `installer-image.yml` with `patch-set: upstream-27.3 j714s`, `image-profile: j714s`, the bundle's Recovery tree/inventory, and a bundle made by `finish-inputs.py` with the engine above.
