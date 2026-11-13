@@ -374,3 +374,7 @@ So the 4-second progress bar and power-off is iBoot trying to boot a stub with n
 - **Fix without 1TR:** Stage 2 is an unsigned ESP file. `m1n1/boot-ctxr.bin` on the new ESP was replaced with release 2's Aura Stage 2 (main `22b71758`, has #213) + the original DTB/U-Boot payload tail (sha256 `c4211d92…`); original kept as `boot-ctxr.bin.orig`.
 - **Result:** booted once into the new stub (one-time `bless --nextonly`) at 12:48; it did not fall back to the default (old) stub or macOS for 8+ minutes, where every earlier attempt looped within seconds. On-screen confirmation by the owner is pending.
 - Release 2 already pins Aura `22b71758`, so it carries the fix. An installed release 1 must get m1n1-aurora v272-2 before any package update rewrites `boot-ctxr.bin`.
+
+## Confirmed 2026-11-13 13:05
+
+With the aura #213 Stage 2 the install boots and the owner completed first-boot setup. On `7.3.0-17.v272-1-ARCH`: 15 CPUs at EL2 with the CTXR exec window, GPU on 27.2 (26B123), internal display 3024x1964 at 120 Hz through DCP, four external outputs present, Wi-Fi, Bluetooth, front camera (10 frames at 1080p), AVE recognises the 26B123 encoder firmware (probe only). ANE stays off and logs `preloaded TEXT sha256 b15dd8fb3367a6d5a77935a62b4c6c9d6a6e166cd11c1b2a886c65f114d7c40e`, the pin release 2's kernel needs. Installing m1n1-aurora v272-2 made the package hook write the same Stage 2, so the fix survives updates.
