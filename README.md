@@ -10,9 +10,10 @@ test it on a real J714s, and say who made each part.
 
 ## What works
 
-Two images. **Stable** (`2026.11.11-7`) is the one to install. **Upstream** (`upstream-2026.11.12-7`,
+Two images. **Stable** (`2026.11.11-7`) is the one to install. **Upstream** (`upstream-2026.11.13-8`,
 a prerelease) moves to aurora-silicon's kernel and the Aura bootloader on Apple's 27.3 firmware: every row
-below was tested on a real J714s by booting it from RAM, but nobody has installed it yet.
+below was tested on a real J714s by booting -7's kernel from RAM. -8's kernel (newer upstream, plus the
+external display fix) has not booted yet. -7 has been installed and booted end to end on one J714s.
 
 | Thing | Stable | Upstream (experimental) | Whose work |
 | --- | --- | --- | --- |
@@ -34,7 +35,7 @@ below was tested on a real J714s by booting it from RAM, but nobody has installe
 | Ambient light sensor | 🟡 needs this Mac's calibration ([`save-als-cal.py`](tools/als-calibration/save-als-cal.py)) | 🟡 same | DjDeveloperr, aurora-silicon |
 | Sleep (lid close) | ✅ | untested | FatBoy721, betizzel |
 | USB host on all three USB-C ports | ✅ | ✅ | edimoldovan, DjDeveloperr |
-| USB4, external displays | ❌ | untested on 27.3 | DjDeveloperr, erikwb |
+| USB4, external displays | ❌ | 🟡 USB-C: all four display engines come up with -8's fix (tried as a config line on -7's kernel), no monitor tried yet; HDMI ❌ | DjDeveloperr, erikwb, this repo |
 | Quiet fans at idle | ✅ | ✅ | edimoldovan |
 | Updates (`omarchy update`) | ✅ (checked in CI, [`update-check`](.github/workflows/update-check.yml)) | ✅ | this repo |
 
