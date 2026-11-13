@@ -1,0 +1,311 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 12:23:38 -0500
+Subject: [PATCH] J714s: make Finish setup's Install hard to miss
+
+omarchy-j714s 1 left the new stub unenrolled (Not Paired, Security Mode
+Full, no custom kernel collection): Omarchy's Finish setup never ran, so
+the Mac could not start Omarchy (docs/install-failure-2026-11-13.md).
+The handoff copy said only "Finish setup at startup"; it now names the
+whole step and the wrong turn.
+
+macOS app (OmarchyInstallerUXCore, PlainLanguage):
+- nextActionMessage(.enterRecovery): "Omarchy's files are in place, but
+  this Mac can't start Omarchy until you finish setup. Shut down, hold
+  the power button until startup options appear, pick the highlighted
+  Omarchy, sign in, then click Install in Omarchy's Finish setup. Don't
+  use Startup Security Utility." (recoveryInstruction). The encryption
+  warnings still follow it.
+- recoverySteps step 3: "Click Install in Finish setup", detail "Pick the
+  highlighted Omarchy, click Continue and sign in with your macOS
+  account, then click Install in Omarchy's Finish setup. Don't use
+  Startup Security Utility." (recoveryFinishSetupDetail).
+- The reopened-installer handoff (OnePageInstallerView
+  pendingRecoveryHandoff) step 3 says the same.
+- PlainLanguageTests pin the new message and step.
+
+Recovery app (auto-launched in the stub's Recovery):
+- AuthorizationPrompt.introduction (install only): "This step lets this
+  Mac start Omarchy. Click Install here to finish it. Don't use Startup
+  Security Utility instead." InstallerView shows it above the password
+  request on the first screen.
+- EnrollmentGate: the not-in-Recovery, wrong-pair and ordinary-Recovery
+  messages end at Install in Finish setup and say not to use Startup
+  Security Utility.
+- AuthorizationPromptCheck and EnrollmentGateCheck pin the copy.
+
+README.md (requirements, Install step 5, What the installer does step 5)
+and Recovery/README.md match.
+
+Checked on Linux (Swift 6.2 container): AuthorizationPromptCheck and
+EnrollmentGateCheck compiled and passed; swift-format 6.2.4 lint --strict
+passes on every changed Swift file. Not compiled: PlainLanguage.swift and
+the UXCore tests (macOS-only, #if os(macOS)), OnePageInstallerView.swift
+and InstallerView.swift (AppKit/SwiftUI). They need the macOS CI run
+(checks.yml macos job / installer-app.yml: swift-format, debug and release
+Swift tests, Recovery build-app.sh fixtures), and a look at the Recovery
+first screen at its 780x440 window with the added introduction.
+
+The Recovery tree changes again, so build-input-provenance.json's
+recovery block (patches-j714s 0007) must follow that macOS run.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ README.md                                         |  6 +++---
+ Recovery/README.md                                |  2 +-
+ Recovery/Sources/AuthorizationPrompt.swift        |  8 ++++++++
+ Recovery/Sources/EnrollmentGate.swift             |  6 +++---
+ Recovery/Sources/InstallerView.swift              |  6 ++++++
+ Recovery/Tests/AuthorizationPromptCheck.swift     |  7 ++++++-
+ Recovery/Tests/EnrollmentGateCheck.swift          |  8 +++++++-
+ .../OnePage/OnePageInstallerView.swift            |  3 ++-
+ .../OmarchyInstallerUXCore/PlainLanguage.swift    | 14 ++++++++++----
+ .../PlainLanguageTests.swift                      | 15 ++++++++++++++-
+ 10 files changed, 60 insertions(+), 15 deletions(-)
+
+diff --git a/README.md b/README.md
+index 557b3e5..12c4c67 100644
+--- a/README.md
++++ b/README.md
+@@ -53,7 +53,7 @@ Why a catalog check exists: `make-unsigned-catalog.py` refuses inputs that miss,
+ - **macOS and hardware.** The app requires macOS 15 or newer (`LSMinimumSystemVersion` 15.0). The MacBook Neo target is recorded as qualified only for firmware 26.6.2 (`Recovery/README.md`).
+ - **Power and network.** Keep the Mac open and plugged in during installation (the app says so). The install downloads several gigabytes; the app resumes stalled downloads. It also needs HTTPS access to Apple's restore-image servers, see [Apple restore inputs](#apple-restore-inputs).
+ - **Accounts.** You need a macOS administrator account and its password: the app sets up a privileged helper and authorizes the boot change with your password. Do not run an install while another installer or removal runs on the Mac.
+-- **Shutdown and Recovery.** The last stage happens in macOS Recovery: you shut down, hold the power button until "Loading startup options" appears, choose Omarchy, click Continue and sign in with your macOS account. Plan for it before you start.
++- **Shutdown and Recovery.** The last stage happens in macOS Recovery: you shut down, hold the power button until "Loading startup options" appears, choose Omarchy, click Continue, sign in with your macOS account and click **Install** in Omarchy's **Finish setup** (not Startup Security Utility). Plan for it before you start.
+ 
+ ## Install
+ 
+@@ -77,7 +77,7 @@ To install from the disk image instead:
+    Each release's notes also give the digest; for 2.3.15 it is `a6ee0cc214fff9f9d194772a5b4492c055c8f74d8572c1183874449d445f3d11`.
+ 3. Open the disk image and move **Omarchy Installer** to `/Applications`. The disk image holds the app and an `/Applications` link.
+ 4. Open the app. It checks the Mac model, macOS version, power, FileVault and free disk space, then shows the plan. Choose the disk size, tick the backup box, click **Install**, and enter your macOS administrator account and password when asked. Allow the app to add its helper if macOS asks. The helper shows up under Login Items in System Settings.
+-5. Keep the Mac awake and plugged in until the app says the first stage is done. Then follow the on-screen **Finish setup** steps in Recovery (see [What the installer does](#what-the-installer-does)).
++5. Keep the Mac awake and plugged in until the app says the first stage is done. Then shut down, hold the power button until startup options appear, pick the highlighted Omarchy, sign in, then click **Install** in Omarchy's **Finish setup**. Don't use Startup Security Utility: it does not set up Omarchy, and until **Install** has run the Mac can't start Omarchy (see [What the installer does](#what-the-installer-does)).
+ 
+ The release pipeline also copies the dmg and its `.sha256` to `https://mac.omarchy.org/v1/installer/<version>/`; the catalog's `downloadURL` points there ([`docs/catalog-release.md`](docs/catalog-release.md)).
+ 
+@@ -105,7 +105,7 @@ The screens, in order, as the app words them (`PlainLanguage.swift`):
+ 2. **Plan.** Fetches and verifies the channel's signed catalog (Ed25519, trust root in `Release/trust-root.ed25519.pub`) and downloads the pinned engine and image, checking their sizes and SHA-256 digests before use. Shows the disk bar with macOS, free space and Omarchy, lets you change the Omarchy size, and holds **Install** until the download is verified and the backup box is ticked.
+ 3. **Authorize.** Takes your macOS administrator account and password, installs the privileged helper and checks that the account is a macOS administrator. The password is not stored in the journal.
+ 4. **Install.** The helper runs the pinned Asahi-based engine, which goes through these recorded phases: checking the disk; removing a previous Omarchy installation if one exists; preparing disk space (shrinking the macOS APFS container); writing boot files (stub and EFI); preparing the final setup; authorizing startup; installing Omarchy. The app tails the engine journal for progress and verifies the result against the installation record when it finishes. Afterwards the helper writes the encryption choice to `omarchy/install.conf` on the EFI partition.
+-5. **Finish setup (Recovery).** The app asks you to shut down, hold the power button until "Loading startup options" appears, choose Omarchy, click Continue and sign in with your macOS account. Omarchy's native Recovery app then asks for the owner password, installs and enrolls startup software, and shows **Installation complete!** with **Restart**. It can also create an optional recovery account (hold Shift on the finished screen, or Utilities → Create Recovery Account…); skipping it can be done later with **Installation → Set Up Recovery Password…** in the main app. See [`Recovery/README.md`](Recovery/README.md).
++5. **Finish setup (Recovery).** The app asks you to shut down, hold the power button until "Loading startup options" appears, pick the highlighted Omarchy, click Continue and sign in with your macOS account, then click **Install** in Omarchy's **Finish setup**, and not to use Startup Security Utility instead. Omarchy's native Recovery app opens by itself, says that this step lets the Mac start Omarchy, asks for the owner password, installs and enrolls startup software, and shows **Installation complete!** with **Restart**. It can also create an optional recovery account (hold Shift on the finished screen, or Utilities → Create Recovery Account…); skipping it can be done later with **Installation → Set Up Recovery Password…** in the main app. See [`Recovery/README.md`](Recovery/README.md).
+ 6. **First boot of Omarchy.** Choose the Omarchy volume at startup (hold the power button when the Mac starts to pick macOS or Omarchy) and set the disk password. This repository does not cover what happens after that; see the [Mac packages](https://github.com/omacom/omarchy-mac-pkgs).
+ 
+ The helper is a root launchd daemon registered through `SMJobBless`; the app and helper check each other's code signature, and the helper authenticates every XPC client. The destructive steps are guarded by plans bound to a digest of the disk layout, so a plan made for one layout will not run on another.
+diff --git a/Recovery/README.md b/Recovery/README.md
+index 0f7e2f9..e1c9949 100644
+--- a/Recovery/README.md
++++ b/Recovery/README.md
+@@ -33,7 +33,7 @@ The legacy `Finish Installation.app/Contents/Resources/boot.bin` remains for ups
+ 
+ Enrollment rechecks root, the configured target volume and paired power-button 1TR, then resolves a real target volume owner from APFS and target Preboot metadata. When no eligible target owner exists, the explicitly configured `source-volume-owner` bootstrap can use the original macOS owner. That path binds the original System volume and APFS group UUIDs, requires the volume still exists, and intersects copied target administrator metadata with both the specifically authorized source owner UUID recorded by Stage 1 and its current APFS VolumeOwner list. Ambiguous or unmatched owners are rejected. The recorded recovery account takes precedence once APFS reports it as a volume owner; a finalized account that loses ownership is rejected. Existing bputil/kmutil prompt handling stays in the native PTY backend. Normal macOS is rejected before writes.
+ 
+-The first screen, **Finish setup**, is the authorization itself: “Enter password for <owner>. Use your existing macOS owner’s password to set up Omarchy.”, a password field focused at launch, and **Install** (Return). A target owner such as the recovery account gets only the first sentence. The field and button stay disabled while the Recovery environment is checked, at launch and again on Install, as the former Continue button did. A refused password is asked for again in place (“…Enter it again, or choose Utilities → Show Details.”). When a wrong-Recovery issue offers **Set Startup Disk and Shut Down** and selecting the disk needs a password, the same screen becomes **Authorize startup disk** with **Shut Down** and **Cancel**. Other failures still appear as a sheet with **OK**. Repair startup keeps its Restore screen, which needs no password.
++The first screen, **Finish setup**, is the authorization itself. It opens with “This step lets this Mac start Omarchy. Click Install here to finish it. Don’t use Startup Security Utility instead.” (a stub that skips it stays unenrolled), then “Enter password for <owner>. Use your existing macOS owner’s password to set up Omarchy.”, a password field focused at launch, and **Install** (Return). A target owner such as the recovery account gets only the first sentence of the password request. The wrong-Recovery and not-in-Recovery messages also end at **Install** in Finish setup and say not to use Startup Security Utility. The field and button stay disabled while the Recovery environment is checked, at launch and again on Install, as the former Continue button did. A refused password is asked for again in place (“…Enter it again, or choose Utilities → Show Details.”). When a wrong-Recovery issue offers **Set Startup Disk and Shut Down** and selecting the disk needs a password, the same screen becomes **Authorize startup disk** with **Shut Down** and **Cancel**. Other failures still appear as a sheet with **OK**. Repair startup keeps its Restore screen, which needs no password.
+ 
+ The app retains persistent attempt logs and bounded UI log rendering. The log opens from the menu bar's **Utilities → Show Details**, not from a button on the screens; a failure sheet keeps only **OK**, and choosing Show Details while it is open replaces it with the log. Show Details is disabled while any other sheet is open and on the first screen before anything has been logged.
+ 
+diff --git a/Recovery/Sources/AuthorizationPrompt.swift b/Recovery/Sources/AuthorizationPrompt.swift
+index 50fd133..051d338 100644
+--- a/Recovery/Sources/AuthorizationPrompt.swift
++++ b/Recovery/Sources/AuthorizationPrompt.swift
+@@ -19,6 +19,14 @@ struct AuthorizationPrompt: Equatable {
+ 
+   var title: String { purpose == .repair ? "Authorize startup disk" : "Finish setup" }
+ 
++  /// Shown above the password request when installing: without this step the
++  /// Mac cannot start Omarchy, and Startup Security Utility does not do it.
++  var introduction: String? {
++    purpose == .install
++      ? "This step lets this Mac start Omarchy. Click Install here to finish it. Don’t use Startup Security Utility instead."
++      : nil
++  }
++
+   var message: String {
+     var text =
+       rejection.map { $0 + " Enter it again, or choose Utilities → Show Details." }
+diff --git a/Recovery/Sources/EnrollmentGate.swift b/Recovery/Sources/EnrollmentGate.swift
+index 7783804..b68bcb9 100644
+--- a/Recovery/Sources/EnrollmentGate.swift
++++ b/Recovery/Sources/EnrollmentGate.swift
+@@ -19,16 +19,16 @@ enum EnrollmentGateIssue: String, Error, Identifiable, LocalizedError {
+     switch self {
+     case .notRecovery:
+       return
+-        "Shut down, then hold the power button until Startup Options appears. Select Omarchy to finish setup."
++        "Shut down, then hold the power button until Startup Options appears. Select Omarchy, sign in, then click Install in Finish setup: that step lets this Mac start Omarchy. Don’t use Startup Security Utility instead."
+     case .rootRequired:
+       return
+         "Launch Aurora Installer from Recovery’s Utilities menu or Terminal. No installation changes have been made."
+     case .wrongPair:
+       return
+-        "This Recovery belongs to a different installation. Aurora will select Omarchy as the startup disk and shut down. Once powered off, hold the power button continuously until Startup Options appears, then select Omarchy."
++        "This Recovery belongs to a different installation. Aurora will select Omarchy as the startup disk and shut down. Once powered off, hold the power button continuously until Startup Options appears, then select Omarchy and click Install in Finish setup. Don’t use Startup Security Utility."
+     case .powerButtonRequired:
+       return
+-        "This is ordinary Recovery. Aurora will select Omarchy as the startup disk and shut down. Once powered off, hold the power button continuously until Startup Options appears, then select Omarchy. Do not press and release it first."
++        "This is ordinary Recovery. Aurora will select Omarchy as the startup disk and shut down. Once powered off, hold the power button continuously until Startup Options appears, then select Omarchy and click Install in Finish setup. Do not press and release it first. Don’t use Startup Security Utility."
+     case .cannotVerify:
+       return
+         "Aurora could not confirm that this is Omarchy’s paired power-button Recovery. No installation changes have been made. Restart into that Recovery and try again."
+diff --git a/Recovery/Sources/InstallerView.swift b/Recovery/Sources/InstallerView.swift
+index 5cb3ce9..8051e5c 100644
+--- a/Recovery/Sources/InstallerView.swift
++++ b/Recovery/Sources/InstallerView.swift
+@@ -293,6 +293,12 @@ final class InstallerView: NSViewController, NSTextFieldDelegate, NSMenuItemVali
+     }
+     // Finish setup is the password request itself; refresh() fills in the copy.
+     let stack = vertical(spacing: 16)
++    if let introduction = model.authorizationPrompt.introduction {
++      let intro = label(introduction, size: 13)
++      intro.textColor = OmarchyTheme.text
++      intro.preferredMaxLayoutWidth = 470
++      stack.addArrangedSubview(intro)
++    }
+     let message = label("", size: 13)
+     message.preferredMaxLayoutWidth = 470
+     stack.addArrangedSubview(message)
+diff --git a/Recovery/Tests/AuthorizationPromptCheck.swift b/Recovery/Tests/AuthorizationPromptCheck.swift
+index d065e9f..a8be35b 100644
+--- a/Recovery/Tests/AuthorizationPromptCheck.swift
++++ b/Recovery/Tests/AuthorizationPromptCheck.swift
+@@ -6,6 +6,10 @@ import Foundation
+       purpose: .install, owner: "jane", macOSOwner: true, rejection: nil)
+     precondition(install.title == "Finish setup")
+     precondition(install.action == "Install")
++    precondition(
++      install.introduction
++        == "This step lets this Mac start Omarchy. Click Install here to finish it. Don’t use Startup Security Utility instead."
++    )
+     precondition(
+       install.message
+         == "Enter password for jane. Use your existing macOS owner’s password to set up Omarchy.",
+@@ -35,6 +39,7 @@ import Foundation
+     repair.purpose = .repair
+     precondition(repair.title == "Authorize startup disk")
+     precondition(repair.action == "Shut Down")
++    precondition(repair.introduction == nil)
+     precondition(repair.message == "Enter password for jane.", repair.message)
+     repair.rejection = refused
+     precondition(
+@@ -42,7 +47,7 @@ import Foundation
+         == "The password for jane was not accepted. Enter it again, or choose Utilities → Show Details.",
+       repair.message)
+     print(
+-      "PASS authorization prompt: install, target owner, rejection retry and startup-disk repair copy"
++      "PASS authorization prompt: install (with its Finish setup introduction), target owner, rejection retry and startup-disk repair copy"
+     )
+   }
+ }
+diff --git a/Recovery/Tests/EnrollmentGateCheck.swift b/Recovery/Tests/EnrollmentGateCheck.swift
+index 89c3e60..674cc9c 100644
+--- a/Recovery/Tests/EnrollmentGateCheck.swift
++++ b/Recovery/Tests/EnrollmentGateCheck.swift
+@@ -80,8 +80,14 @@ import Foundation
+       preconditionFailure("Changed startup selection was accepted")
+     } catch RecoveryBootRepair.Failure.selectionNotVerified {}
+     precondition(!shutDown)
++    // Each way into the right Recovery ends at Finish setup's Install, never
++    // Startup Security Utility, which does not enroll Omarchy.
++    for issue in [EnrollmentGateIssue.notRecovery, .wrongPair, .powerButtonRequired] {
++      precondition(issue.message.contains("click Install in Finish setup"), issue.message)
++      precondition(issue.message.contains("Don’t use Startup Security Utility"), issue.message)
++    }
+     print(
+-      "PASS environment classifications; selection/readback/shutdown ordering; no shutdown on failed or changed selection"
++      "PASS environment classifications; selection/readback/shutdown ordering; no shutdown on failed or changed selection; Finish setup Install copy"
+     )
+   }
+ }
+diff --git a/Sources/OmarchyAppleInstallerApp/OnePage/OnePageInstallerView.swift b/Sources/OmarchyAppleInstallerApp/OnePage/OnePageInstallerView.swift
+index e0806a5..7cc6d90 100644
+--- a/Sources/OmarchyAppleInstallerApp/OnePage/OnePageInstallerView.swift
++++ b/Sources/OmarchyAppleInstallerApp/OnePage/OnePageInstallerView.swift
+@@ -573,7 +573,8 @@ struct OnePageInstallerView: View {
+         RecoveryStep(
+           number: 3,
+           title:
+-            "Choose “\(target.volumeName)”, click Continue, then sign in with your macOS account."),
++            "Choose “\(target.volumeName)”, click Continue and sign in, then click Install in Omarchy’s Finish setup. Don’t use Startup Security Utility."
++        ),
+       ],
+       warning: "Don’t restart normally yet: unfinished setup can cause a boot loop.")
+   }
+diff --git a/Sources/OmarchyInstallerUXCore/PlainLanguage.swift b/Sources/OmarchyInstallerUXCore/PlainLanguage.swift
+index 5c5726a..889b6d0 100644
+--- a/Sources/OmarchyInstallerUXCore/PlainLanguage.swift
++++ b/Sources/OmarchyInstallerUXCore/PlainLanguage.swift
+@@ -256,6 +256,13 @@
+ 
+     public static let recoveryHeadline = "Finish setup"
+     public static let recoveryShutDown = "Shut down"
++    /// The whole last stage in one place: a stub that never runs Omarchy's
++    /// Finish setup stays unenrolled and can't start Omarchy, and Startup
++    /// Security Utility does not enroll it.
++    public static let recoveryInstruction =
++      "Shut down, hold the power button until startup options appear, pick the highlighted Omarchy, sign in, then click Install in Omarchy’s Finish setup. Don’t use Startup Security Utility."
++    public static let recoveryFinishSetupDetail =
++      "Pick the highlighted Omarchy, click Continue and sign in with your macOS account, then click Install in Omarchy’s Finish setup. Don’t use Startup Security Utility."
+     public static let mediaHeadline = "Connect the installation media"
+ 
+     /// Numbered plain-language steps for the signed `requiredHumanSteps`
+@@ -274,9 +281,7 @@
+         append("Hold the power button", "Hold until “Loading startup options” appears.")
+       }
+       func authenticate() {
+-        append(
+-          "Finish installation",
+-          "Choose Omarchy, click Continue, then sign in with your macOS account.")
++        append("Click Install in Finish setup", recoveryFinishSetupDetail)
+       }
+       for token in requiredHumanSteps {
+         switch token {
+@@ -386,7 +391,8 @@
+         base = "Your approved plan was accepted. Installation is continuing."
+       case .enterRecovery:
+         base =
+-          "Omarchy’s files are in place. Finish setup at startup so this Mac can start Omarchy."
++          "Omarchy’s files are in place, but this Mac can’t start Omarchy until you finish setup. "
++          + recoveryInstruction
+       case .attachInstallationMedia:
+         base = "Preparation is complete. Connect the verified installation media to continue."
+       case .verifyInstalledSystem:
+diff --git a/Tests/OmarchyInstallerUXCoreTests/PlainLanguageTests.swift b/Tests/OmarchyInstallerUXCoreTests/PlainLanguageTests.swift
+index 461446e..5552d81 100644
+--- a/Tests/OmarchyInstallerUXCoreTests/PlainLanguageTests.swift
++++ b/Tests/OmarchyInstallerUXCoreTests/PlainLanguageTests.swift
+@@ -356,6 +356,16 @@
+       XCTAssertTrue(messages.allSatisfy { !$0.isEmpty })
+     }
+ 
++    func testRecoveryHandoffSaysToClickInstallAndAvoidStartupSecurityUtility() {
++      XCTAssertEqual(
++        PlainLanguage.nextActionMessage(.enterRecovery),
++        "Omarchy’s files are in place, but this Mac can’t start Omarchy until you finish setup. Shut down, hold the power button until startup options appear, pick the highlighted Omarchy, sign in, then click Install in Omarchy’s Finish setup. Don’t use Startup Security Utility."
++      )
++      XCTAssertTrue(
++        PlainLanguage.nextActionMessage(.enterRecovery, installConf: .notRecorded)
++          .hasPrefix(PlainLanguage.nextActionMessage(.enterRecovery)))
++    }
++
+     func testRecoveryStepsCoverSignedTokensAndUnknowns() {
+       let steps = PlainLanguage.recoverySteps(for: [
+         "enterOneTrueRecovery", "authenticateMachineOwner",
+@@ -365,8 +375,11 @@
+       XCTAssertTrue(steps.allSatisfy { !($0.detail ?? "").isEmpty })
+       XCTAssertEqual(steps[1].title, "Hold the power button")
+       XCTAssertEqual(steps[1].detail, "Hold until “Loading startup options” appears.")
++      XCTAssertEqual(steps[2].title, "Click Install in Finish setup")
+       XCTAssertEqual(
+-        steps[2].detail, "Choose Omarchy, click Continue, then sign in with your macOS account.")
++        steps[2].detail,
++        "Pick the highlighted Omarchy, click Continue and sign in with your macOS account, then click Install in Omarchy’s Finish setup. Don’t use Startup Security Utility."
++      )
+ 
+       let unknown = PlainLanguage.recoverySteps(for: ["somethingNew"])
+       XCTAssertEqual(unknown.count, 1)
+-- 
+2.56.0
+
