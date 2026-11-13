@@ -140,3 +140,9 @@ aurora-sep stays at 8679514f: up to 572eb88e only its read-only status tool chan
 diag lines), and the SEP UAPI header is byte-identical (sep-bio 5, sep-key 4). The kernel keeps
 the speakersafetyd hold for the J714s, so the speakers stay silent until speakerguardd v2 is
 switched on with this Mac's tuning.
+
+
+## Upstream since the pins (2026-11-13)
+
+- Merged: aurora-silicon/linux #1724 (Jens Axboe's T6050 EL2 errata), our 0006–0007; drop them at the next re-pin. Also #1745 and #1747 (our 0017, 0008 part) and aura #203 (our Aura 0006), plus aura #213 (post-M4 ANS started for the payload) and aura #206 (K114c camera).
+- Reference for HDMI: aurora-silicon/linux #1565 (J575c HDMI, 7robertodantas) is the first merged Apple Silicon HDMI path in this tree. The J714s HDMI port (`atc3-dpphy`, `dp2hdmi-gpio0`) still needs a DT port.
