@@ -120,6 +120,6 @@ Built (2026-11-13):
 - update-check: run 43395221712. `pacman -Syu` changed 0 packages and kept every J714s package.
 - App: `installer-app.yml` → prerelease `omarchy-j714s-1`.
 
-Left out of the set: `linux-aurora-headers` (no headers role in the j714s profile; `mac-image-check` drops it for this profile) and speakerguardd v2 / `aurora-speaker-upgrade` (no J714s board files in v2 yet).
+Left out of the set: `linux-aurora-headers` (no headers role in the j714s profile; `mac-image-check` drops it for this profile) and speakerguardd v2 / `aurora-speaker-upgrade`. They aren't in the profile's 18 package roles, and v2 ships enabled units and gate drop-ins on the existing speaker services, untried on a J714s. Adding them is a separate decision.
 
 Checked: engine overlay tests (426), engine tooling tests, `test/all`, image-builder tests, the Recovery fixtures and build on macOS-26 (throwaway run 43369240212). The engine's config fill is byte-identical to aura's `fill_stage1_config.py` on the real 27.2 Aura build, `aura-boot.macho` passes the layout check (`aura.macho` does not), and aura pads the carried object to kcrz 153141248, the value this Mac's 2026-11-07 Mach-O trial enrolled. Not booted on any J714s.
