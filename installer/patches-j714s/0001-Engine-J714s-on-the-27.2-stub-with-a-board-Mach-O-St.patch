@@ -1,0 +1,960 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Thu, 12 Nov 2026 23:57:48 -0500
+Subject: [PATCH 1/6] Engine: J714s on the 27.2 stub with a board Mach-O Stage
+ 1
+
+The J714s (j714sap, T6050) moves from the 27.3 beta 1 stub and a raw Stage 1
+to Apple's 27.2 (26B123) restore image and Aura's Mach-O boot object, the
+way aurora-silicon boots M5 on 27.2: macOS 27.2 iBoot starts SPTM only for an
+object with __TEXT_BOOT_EXEC (kcbz != 0), so Aura's object boots with SPTM
+off, and Aura brings the secondary CPUs up inside the CTXR execute window.
+
+- main.py (Engine/patches/0001): T6050 and j714sap minimum 27.2; the 27.3
+  beta row is replaced by UniversalMac_27.2_26B123_Restore.ipsw, J714s iBoot
+  mBoot-20457.41.3, RestoreLongVersion 26.2.123.0.0,0 (read from the IPSW's
+  RestoreVersion.plist). The stub may be older than the system firmware, so a
+  Mac on 27.2 or the 27.3 beta both take it.
+- omarchy_macho.py (new): Aura's Mach-O boot object layout check and fill,
+  ported from aurora-silicon/aurora-installer AuraStage1.swift
+  (MachOBootObject, MIT): no __TEXT_BOOT_EXEC, every segment file-backed at
+  its virtual offset, the raw image verbatim at the start of __TEXT_EXEC.
+- omarchy_asahi.py: a board Mach-O contract (aurora_stage1 kind
+  board-macho-ctxr-v1, BOARD_MACHO). For the J714s the template must name
+  only j714sap, qualified on 27.2, and use the native Recovery app. Preflight
+  checks esp/aurora/stage1-j714s.bin, esp/aurora/stage1-j714s.macho and
+  esp/m1n1/boot-ctxr.bin before any disk change. Install fills the raw Stage 1
+  (ESP PARTUUID, m1n1/boot-ctxr.bin), carries it into the boot object and
+  hands it to Recovery staging. The 27.3 exact-candidate lock is removed.
+- omarchy_recovery.py: a Mach-O mode: macho/aura-boot.macho (unpadded) and
+  macho/boot-ctxr.bin, ESP path m1n1/boot-ctxr.bin, executeWindow 128 MiB.
+  The native Recovery app pads and enrolls it.
+- Tests for all of it; the common-raw-v1 system-firmware tests move to a
+  neutral board.
+- Engine renamed v0.9.2-omarchy.20261113.b25a51d6df57 and repacked from the
+  authenticated engine.28 base: 17912434 bytes, sha256 bab38862...3f21, two
+  identical repacks.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Engine/overlay/src/omarchy_asahi.py           | 136 ++++++++++---
+ Engine/overlay/src/omarchy_macho.py           | 120 ++++++++++++
+ Engine/overlay/src/omarchy_recovery.py        |  40 +++-
+ Engine/overlay/tests/test_omarchy_asahi.py    | 181 +++++++++++++++---
+ Engine/overlay/tests/test_omarchy_firmware.py |  42 ++--
+ Engine/overlay/tests/test_omarchy_recovery.py |  24 +++
+ .../patches/0001-omarchy-engine-runtime.patch |  18 +-
+ Engine/source-lock.json                       |  27 +--
+ 8 files changed, 492 insertions(+), 96 deletions(-)
+ create mode 100644 Engine/overlay/src/omarchy_macho.py
+
+diff --git a/Engine/overlay/src/omarchy_asahi.py b/Engine/overlay/src/omarchy_asahi.py
+index affa274..726e365 100644
+--- a/Engine/overlay/src/omarchy_asahi.py
++++ b/Engine/overlay/src/omarchy_asahi.py
+@@ -31,6 +31,7 @@ import omarchy_mt7932
+ import omarchy_mt7932_policy
+ import omarchy_als
+ import omarchy_isp
++import omarchy_macho
+ import omarchy_recovery
+ import omarchy_planner
+ from omarchy_image import (
+@@ -559,6 +560,80 @@ ESP_STAGE2 = "esp/m1n1/boot.bin"
+ # board's Stage 2.
+ BOARD_STAGE2 = {"j700ap": "esp/m1n1/boot-j700.bin"}
+ 
++# Boards that enroll Aura's Mach-O boot object, padded for the execute window
++# (CTXR) by the native Recovery app and enrolled with kmutil --compress, as
++# aurora-silicon/aurora-installer does on M4 and later. macOS 27.2 iBoot does
++# not start SPTM for an object without __TEXT_BOOT_EXEC (kcbz 0), and Aura
++# brings the secondary CPUs up inside the window. The engine fills the raw
++# Stage 1's config block (ESP PARTUUID, confined Stage 2 path) and carries it
++# into the boot object; Recovery pads it.
++MACHO_CTXR_KIND = "board-macho-ctxr-v1"
++MACHO_CTXR_STAGE2 = "m1n1/boot-ctxr.bin"
++BoardMachO = collections.namedtuple("BoardMachO", "raw macho stage2 window_ms os_firmware macs")
++BOARD_MACHO = {
++    "j714sap": BoardMachO(
++        "esp/aurora/stage1-j714s.bin", "esp/aurora/stage1-j714s.macho",
++        "esp/" + MACHO_CTXR_STAGE2, 0, "27.2",
++        "the 14-inch MacBook Pro (M5 Pro) on macOS 27.2 stub firmware",
++    ),
++}
++
++
++def macho_ctxr_policy(template, device_class):
++    """The board Mach-O contract this template declares for DEVICE_CLASS, or None.
++
++    A template that names the contract must name exactly one board, list only
++    it in allowed_device_classes, and qualify exactly the board's OS firmware.
++    """
++    policy = template.get("aurora_stage1")
++    if not isinstance(policy, dict) or policy.get("kind") != MACHO_CTXR_KIND:
++        return None
++    machines = policy.get("qualified_machines")
++    if (set(policy) != {"kind", "qualified_machines"} or not isinstance(machines, dict)
++            or len(machines) != 1):
++        raise AsahiAdapterError("invalid board Mach-O Stage 1 contract")
++    (board_name, firmware), = machines.items()
++    board = BOARD_MACHO.get(board_name)
++    if (board is None or firmware != [board.os_firmware]
++            or template.get("allowed_device_classes") != [board_name]):
++        raise AsahiAdapterError("invalid board Mach-O Stage 1 contract")
++    if device_class != board_name:
++        raise AsahiAdapterError("this image is not qualified for this Mac")
++    return board
++
++
++def read_board_macho(board, read_member, read_size):
++    """The board's raw Stage 1 and boot object, refused unless fillable and carried."""
++    try:
++        raw = read_member(board.raw)
++        macho = read_member(board.macho)
++    except KeyError as error:
++        raise AsahiAdapterError(f"this image has no Mach-O Stage 1 for {board.macs}") from error
++    try:
++        if read_size(board.stage2) <= 0:
++            raise AsahiAdapterError(f"this image has an empty {board.stage2}")
++    except KeyError as error:
++        raise AsahiAdapterError(f"this image has no {board.stage2} for {board.macs}") from error
++    filled = fill_aurora_stage1(raw, PLACEHOLDER_UUID, MACHO_CTXR_STAGE2, board.window_ms)
++    try:
++        omarchy_macho.fill(macho, raw, filled)
++    except omarchy_macho.MachOError as error:
++        raise AsahiAdapterError(f"invalid Mach-O Stage 1 for {board.macs}: {error}") from error
++    return raw, macho
++
++
++def install_board_macho(board, read_member, read_size, esp_uuid, boot_object):
++    """Fill the board's Stage 1 for this ESP, carry it into the boot object, write it."""
++    raw, macho = read_board_macho(board, read_member, read_size)
++    filled = fill_aurora_stage1(raw, esp_uuid.lower(), MACHO_CTXR_STAGE2, board.window_ms)
++    try:
++        carried = omarchy_macho.fill(macho, raw, filled)
++    except omarchy_macho.MachOError as error:
++        raise AsahiAdapterError(f"invalid Mach-O Stage 1 for {board.macs}: {error}") from error
++    with open(boot_object, "wb") as fd:
++        fd.write(carried)
++    return carried
++
+ 
+ def esp_board_layout(device_class, members, *, common_allowed=False):
+     """Each payload ESP member's path on this board's ESP; absent ones are not installed."""
+@@ -1314,18 +1389,10 @@ class AsahiStage1Adapter:
+         board = getattr(self.installer.sysinfo, "device_class", "")
+         allowed = self.template.get("allowed_device_classes")
+         excluded = self.template.get("excluded_device_classes", [])
+-        policy = self.template.get("aurora_stage1")
+-        candidate_policy = {
+-            "kind": "common-raw-v1",
+-            "qualified_machines": {"j714sap": ["27.3"]},
+-            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
+-        }
+-        names_j714s = (isinstance(policy, dict)
+-                       and isinstance(policy.get("qualified_machines"), dict)
+-                       and "j714sap" in policy["qualified_machines"])
+-        if (board == "j714sap" or names_j714s) and (
+-                allowed != ["j714sap"] or policy != candidate_policy):
+-            raise AsahiAdapterError("J714s requires its exact single-board common Stage 1 candidate profile")
++        self.board_macho = macho_ctxr_policy(self.template, board)
++        if board in BOARD_MACHO and self.board_macho is None:
++            raise AsahiAdapterError(
++                f"{BOARD_MACHO[board].macs} needs an image with its board Mach-O Stage 1")
+         if (allowed is not None and board not in allowed) or board in excluded:
+             raise AsahiAdapterError("this image is not qualified for this Mac")
+         self.osins = OmarchyOSInstaller(
+@@ -1368,17 +1435,27 @@ class AsahiStage1Adapter:
+         self.installer.ins.load_ipsw(ipsw)
+         self.os_firmware = ipsw.version.split(maxsplit=1)[0]
+         esp_members = self._esp_members()
++        if self.board_macho is not None:
++            if self.os_firmware != self.board_macho.os_firmware:
++                raise AsahiAdapterError(
++                    f"this Stage 1 is qualified only on {self.board_macho.os_firmware} stub firmware")
++            if not self.native_recovery_gui:
++                raise AsahiAdapterError("a Mach-O Stage 1 needs the native Recovery app")
++            read_board_macho(self.board_macho, self.osins.pkg.read,
++                             lambda name: self.osins.pkg.getinfo(name).file_size)
+         common_present = COMMON_STAGE1.member in esp_members
+         policy = self.template.get("aurora_stage1")
+         system_bound = isinstance(policy, dict) and "qualified_system_firmware" in policy
+-        qualified_common_stage1 = (common_present or system_bound) and common_stage1_allowed(
++        qualified_common_stage1 = (self.board_macho is None and (common_present or system_bound)
++                                   and common_stage1_allowed(
+             self.template, self.installer.sysinfo.device_class, self.os_firmware,
+-            system_firmware=getattr(self.installer.sysinfo, "sys_firmware", None))
++            system_firmware=getattr(self.installer.sysinfo, "sys_firmware", None)))
+         if qualified_common_stage1 and not common_present:
+             raise AsahiAdapterError(f"this qualified image has no {COMMON_STAGE1.member}")
+         self.common_stage1 = qualified_common_stage1 and common_present
+-        board = board_stage1(self.installer.sysinfo.device_class, self.os_firmware, esp_members,
+-                             common_allowed=self.common_stage1)
++        board = None if self.board_macho is not None else board_stage1(
++            self.installer.sysinfo.device_class, self.os_firmware, esp_members,
++            common_allowed=self.common_stage1)
+         if board is not None:
+             read_board_stage1(board, self.osins.pkg.read, self.template["next_object"])
+         device_class = self.installer.sysinfo.device_class
+@@ -1545,15 +1622,23 @@ class AsahiStage1Adapter:
+             self.osins.firmware_package = firmware_package
+ 
+         self.osins.install(self.installer.ins)
+-        install_board_stage1(
+-            self.installer.sysinfo.device_class,
+-            self.os_firmware,
+-            self.osins.pkg.read,
+-            self.osins.efi_part.uuid,
+-            self.installer.ins.boot_obj_path,
+-            self.template.get("next_object", "m1n1/boot.bin"),
+-            common_allowed=self.common_stage1,
+-        )
++        macho_stage1 = None
++        if getattr(self, "board_macho", None) is not None:
++            macho_stage1 = install_board_macho(
++                self.board_macho, self.osins.pkg.read,
++                lambda name: self.osins.pkg.getinfo(name).file_size,
++                self.osins.efi_part.uuid, self.installer.ins.boot_obj_path,
++            )
++        else:
++            install_board_stage1(
++                self.installer.sysinfo.device_class,
++                self.os_firmware,
++                self.osins.pkg.read,
++                self.osins.efi_part.uuid,
++                self.installer.ins.boot_obj_path,
++                self.template.get("next_object", "m1n1/boot.bin"),
++                common_allowed=self.common_stage1,
++            )
+         install_esp_board_layout(
+             self.installer.sysinfo.device_class,
+             self._esp_members(),
+@@ -1574,6 +1659,7 @@ class AsahiStage1Adapter:
+                 requirement=self.recovery_requirement if self.use_helper_recovery else None,
+                 authorized_owner=self.authorized_owner if self.use_helper_recovery else None,
+                 expected_bootstrap=self.source_bootstrap if self.use_helper_recovery else None,
++                **({} if macho_stage1 is None else {"macho_stage1": macho_stage1}),
+             )
+         self._record_installation(log_only=True)
+         self._clean_esp()
+diff --git a/Engine/overlay/src/omarchy_macho.py b/Engine/overlay/src/omarchy_macho.py
+new file mode 100644
+index 0000000..68890dd
+--- /dev/null
++++ b/Engine/overlay/src/omarchy_macho.py
+@@ -0,0 +1,120 @@
++# SPDX-License-Identifier: MIT
++"""Aura's Mach-O Stage 1 boot object: check it and carry a filled Stage 1.
++
++Ported from aurora-silicon/aurora-installer macOS/Recovery/Sources/Account/
++AuraStage1.swift (MachOBootObject.layout and fill, MIT), which follows aura
++tools/macho_boot_object.py. kmutil records the size of __TEXT_BOOT_EXEC as
++the boot policy's kcbz, and macOS 27.2 iBoot starts SPTM only when kcbz is
++nonzero, so the object must not have that segment. Aura's objects keep every
++segment fully file-backed at its virtual offset, which is how iBoot places
++them, and enter the raw image at its own entry point.
++
++Padding for the execute window (CTXR) is not done here: the native Recovery
++app pads the object it enrolls, as aurora-installer's Recovery does, so the
++stub only ever stores the small unpadded object.
++"""
++
++import struct
++
++LC_SEGMENT_64 = 0x19
++LC_UNIXTHREAD = 0x5
++MH_MAGIC_64 = 0xFEEDFACF
++CPU_TYPE_ARM64 = 0x0100000C
++MH_FILESET = 12
++REQUIRED = ("__TEXT", "__TEXT_EXEC", "__PRELINK_INFO", "__LINKEDIT")
++RAW_ENTRY_OFFSET = 0x800
++MAXIMUM_SIZE = 64 << 20
++
++
++class MachOError(ValueError):
++    pass
++
++
++def layout(data, file_size=None):
++    """Segments by name and the entry point; refuse anything iBoot would not boot."""
++    if not isinstance(data, (bytes, bytearray)) or len(data) > MAXIMUM_SIZE:
++        raise MachOError("not a Mach-O boot object")
++    total = len(data) if file_size is None else file_size
++
++    def u32(offset):
++        if offset < 0 or offset + 4 > len(data):
++            raise MachOError("truncated")
++        return struct.unpack_from("<I", data, offset)[0]
++
++    def u64(offset):
++        if offset < 0 or offset + 8 > len(data):
++            raise MachOError("truncated")
++        return struct.unpack_from("<Q", data, offset)[0]
++
++    if u32(0) != MH_MAGIC_64 or u32(4) != CPU_TYPE_ARM64:
++        raise MachOError("not a 64-bit Arm Mach-O image")
++    if u32(12) != MH_FILESET:
++        raise MachOError("not a fileset boot object")
++    count, size = u32(16), u32(20)
++    if 32 + size > len(data):
++        raise MachOError("load commands are truncated")
++    segments, entry, offset = {}, None, 32
++    for _ in range(count):
++        command, length = u32(offset), u32(offset + 4)
++        if length < 8 or length % 8 or offset + length > 32 + size:
++            raise MachOError("malformed load command")
++        if command == LC_SEGMENT_64:
++            if length < 72:
++                raise MachOError("malformed segment")
++            name = data[offset + 8:offset + 24].split(b"\0", 1)[0].decode("ascii", "replace")
++            if name in segments:
++                raise MachOError(f"duplicate segment {name}")
++            segments[name] = (u64(offset + 24), u64(offset + 32), u64(offset + 40), u64(offset + 48))
++        elif command == LC_UNIXTHREAD:
++            if length < 16 + 34 * 8 or u32(offset + 8) != 6:
++                raise MachOError("malformed entry thread")
++            entry = u64(offset + 16 + 32 * 8)
++        offset += length
++    if offset != 32 + size:
++        raise MachOError("load command sizes disagree")
++    boot = segments.get("__TEXT_BOOT_EXEC")
++    if boot is not None and (boot[1] or boot[3]):
++        raise MachOError("it has __TEXT_BOOT_EXEC, so iBoot would start SPTM")
++    for name in REQUIRED:
++        if name not in segments:
++            raise MachOError(f"it has no {name} segment")
++    base = segments["__TEXT"][0]
++    if segments["__TEXT"][2] != 0:
++        raise MachOError("__TEXT is not at offset 0")
++    for name, (vmaddr, vmsize, fileoff, filesize) in segments.items():
++        if vmsize and (vmaddr < base or fileoff != vmaddr - base or filesize != vmsize
++                       or fileoff > total or filesize > total - fileoff):
++            raise MachOError(f"{name} is not file-backed at its virtual offset")
++    code = segments["__TEXT_EXEC"]
++    if entry is None or not code[0] <= entry < code[0] + code[1]:
++        raise MachOError("its entry point is outside __TEXT_EXEC")
++    return segments, entry
++
++
++def check(data):
++    layout(data)
++
++
++def fill(macho, raw, filled):
++    """MACHO, aura's boot object for RAW, made from FILLED instead.
++
++    RAW must sit unchanged at the start of __TEXT_EXEC, followed only by
++    zeros to the end of the segment, entered at the raw image's own entry
++    point. FILLED is RAW with its Stage 1 configuration block filled.
++    """
++    segments, entry = layout(macho)
++    vmaddr, _, fileoff, filesize = segments["__TEXT_EXEC"]
++    if not raw or len(filled) != len(raw) or len(raw) > filesize:
++        raise MachOError("it does not carry this Stage 1")
++    if entry != vmaddr + RAW_ENTRY_OFFSET:
++        raise MachOError("it does not enter this Stage 1 at its entry point")
++    start, end = fileoff, fileoff + len(raw)
++    if macho[start:end] != raw or any(macho[end:fileoff + filesize]):
++        raise MachOError("it does not carry this Stage 1")
++    return bytes(macho[:start]) + bytes(filled) + bytes(macho[end:])
++
++
++def read_only_size(macho):
++    """The kcrz kmutil derives for an unpadded object: load address to the end of __TEXT_EXEC."""
++    _, vmsize, fileoff, _ = layout(macho)[0]["__TEXT_EXEC"]
++    return fileoff + vmsize
+diff --git a/Engine/overlay/src/omarchy_recovery.py b/Engine/overlay/src/omarchy_recovery.py
+index 8913f8b..a487110 100644
+--- a/Engine/overlay/src/omarchy_recovery.py
++++ b/Engine/overlay/src/omarchy_recovery.py
+@@ -25,6 +25,13 @@ INSTALL_DATA_DIRECTORY = "Aurora/Recovery/InstallData"
+ PAYLOAD_DIRECTORY = "aurora/recovery"
+ MANIFEST_NAME = "omarchy-recovery-app.json"
+ STAGE2_PATH = "m1n1/boot.bin"
++# A board that enrolls Aura's Mach-O boot object (omarchy_asahi.BOARD_MACHO):
++# Recovery pads it for the execute window and enrolls it with kmutil
++# --compress, and its Stage 1 loads the confined Stage 2.
++MACHO_STAGE1_PATH = "macho/aura-boot.macho"
++MACHO_STAGE2_PATH = "macho/boot-ctxr.bin"
++MACHO_ESP_STAGE2_PATH = "m1n1/boot-ctxr.bin"
++EXECUTE_WINDOW_BYTES = 128 << 20
+ VENDOR_FIRMWARE = ("vendorfw/firmware.tar", "vendorfw/firmware.cpio", "vendorfw/manifest.txt")
+ OPTIONAL_VENDOR_FIRMWARE = "vendorfw/u-boot/asmedia/asm2214a-apple.bin"
+ UUID_PATTERN = re.compile(r"[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}\Z")
+@@ -235,7 +242,8 @@ def source_bootstrap(dutil, source_os, authorized_owner=None, target_group=None)
+                  "sourceGroupUUID": source_group, "ownerUUIDs": [selected]}
+ 
+ 
+-def target_config(installer, esp_uuid, esp_root, source_os=None, authorized_owner=None, expected_bootstrap=None):
++def target_config(installer, esp_uuid, esp_root, source_os=None, authorized_owner=None, expected_bootstrap=None,
++                  boot_mode="raw", stage2_path=STAGE2_PATH):
+     osi = installer.osi
+     system = Path(osi.system)
+     info = installer.dutil.get("info", "-plist", str(system))
+@@ -261,7 +269,7 @@ def target_config(installer, esp_uuid, esp_root, source_os=None, authorized_owne
+     return {
+         "schema": 2, "volumeName": name, "systemUUID": identifier(info.get("VolumeUUID")),
+         "groupUUID": group, "prebootUUID": preboot_uuid, "espUUID": esp_uuid,
+-        "bootMode": "raw", "stage2Path": STAGE2_PATH, "bootstrap": bootstrap,
++        "bootMode": boot_mode, "stage2Path": stage2_path, "bootstrap": bootstrap,
+         "allowCustomBootArguments": getattr(getattr(installer, "sysinfo", None), "device_class", "") == "j700ap",
+     }
+ 
+@@ -360,9 +368,14 @@ def _payload(path, maximum=256 << 20):
+ 
+ def stage(installer, esp_uuid, esp_root, app_source=None,
+           manifest_path=None, run=subprocess.run, source_os=None,
+-          requirement=None, authorized_owner=None, expected_bootstrap=None):
++          requirement=None, authorized_owner=None, expected_bootstrap=None,
++          macho_stage1=None):
+     """Called after OS/ESP installation and common stage-1 target patching.
+ 
++    MACHO_STAGE1 is a board's finalized, unpadded Mach-O boot object; with it
++    the installation's only boot mode is Mach-O and its Stage 2 is the
++    confined m1n1/boot-ctxr.bin.
++
+     Preserve upstream's Finish Installation resource paths for resume checks;
+     its step2.sh becomes a relative launcher for the native app. The GUI remains
+     on the stub after successful enrollment disables .IAPhysicalMedia.
+@@ -371,11 +384,17 @@ def stage(installer, esp_uuid, esp_root, app_source=None,
+     app_source = Path(app_source) if app_source is not None else template_root / APP_NAME
+     manifest_path = Path(manifest_path) if manifest_path is not None else template_root / MANIFEST_NAME
+     template = validate_source(app_source, manifest_path, run, requirement=requirement)
+-    config = target_config(installer, esp_uuid, esp_root, source_os, authorized_owner, expected_bootstrap)
++    macho = macho_stage1 is not None
++    config = target_config(
++        installer, esp_uuid, esp_root, source_os, authorized_owner, expected_bootstrap,
++        boot_mode="macho" if macho else "raw",
++        stage2_path=MACHO_ESP_STAGE2_PATH if macho else STAGE2_PATH)
+     system = Path(installer.osi.system)
+     esp_root = Path(esp_root)
+     stage1 = _payload(installer.boot_obj_path)
+-    stage2 = _payload(esp_root / STAGE2_PATH)
++    if macho and stage1 != macho_stage1:
++        raise RecoveryError("finalized Mach-O Stage 1 differs from the stub's boot object")
++    stage2 = _payload(esp_root / (MACHO_ESP_STAGE2_PATH if macho else STAGE2_PATH))
+     # Copy only this installation's finalized package. Never put these
+     # per-device inputs in the distributable application template.
+     firmware = {
+@@ -404,11 +423,16 @@ def stage(installer, esp_uuid, esp_root, app_source=None,
+         'resources=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
+         'exec "$resources/../../../Omarchy Installer.app/Contents/MacOS/OmarchyRecovery" "$@"\n'
+     )
+-    files = {"raw/aura-raw.bin": stage1, "raw/boot.bin": stage2, **firmware}
++    if macho:
++        files = {MACHO_STAGE1_PATH: stage1, MACHO_STAGE2_PATH: stage2, **firmware}
++        modes = {"macho": {"espPath": MACHO_ESP_STAGE2_PATH, "executeWindow": EXECUTE_WINDOW_BYTES}}
++    else:
++        files = {"raw/aura-raw.bin": stage1, "raw/boot.bin": stage2, **firmware}
++        modes = {"raw": {"espPath": STAGE2_PATH}}
+     install_data = _install_data_root(system)
+     payload_manifest = {
+-        "schema": 2, "defaultMode": "raw", "nestedVirtualization": False,
+-        "modes": {"raw": {"espPath": STAGE2_PATH}},
++        "schema": 2, "defaultMode": "macho" if macho else "raw", "nestedVirtualization": False,
++        "modes": modes,
+         "vendorFirmware": sorted(firmware),
+         "files": {name: {"sha256": digest(data), "bytes": len(data)} for name, data in files.items()},
+     }
+diff --git a/Engine/overlay/tests/test_omarchy_asahi.py b/Engine/overlay/tests/test_omarchy_asahi.py
+index 8a28d13..cf20331 100644
+--- a/Engine/overlay/tests/test_omarchy_asahi.py
++++ b/Engine/overlay/tests/test_omarchy_asahi.py
+@@ -608,17 +608,17 @@ class AsahiStage1AdapterTests(unittest.TestCase):
+     def test_exact_system_firmware_preflight_rejects_before_partitioning(self):
+         self._common_payload()
+         metadata = self._target_metadata()
+-        metadata["allowed_device_classes"] = ["j714sap"]
++        metadata["allowed_device_classes"] = ["j604ap"]
+         metadata["aurora_stage1"] = {
+             "kind": "common-raw-v1",
+-            "qualified_machines": {"j714sap": ["27.3"]},
+-            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++            "qualified_machines": {"j604ap": ["27.3"]},
++            "qualified_system_firmware": {"j604ap": ["mBoot-20457.60.65.0.1"]},
+         }
+         self._write_metadata([metadata])
+         for firmware in (None, "mBoot-20457.41.2", "mBoot-20457.60.65.0.10"):
+             with self.subTest(firmware=firmware):
+                 installer = FakeInstaller(FakeDiskUtil([[self.free]]))
+-                installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware=firmware)
++                installer.sysinfo = SimpleNamespace(device_class="j604ap", sys_firmware=firmware)
+                 installer.ipsw.version = "27.3"
+                 adapter = self._adapter(installer)
+                 with self.assertRaisesRegex(AsahiAdapterError, "not qualified.*system firmware"):
+@@ -629,15 +629,15 @@ class AsahiStage1AdapterTests(unittest.TestCase):
+ 
+     def test_exact_system_firmware_contract_is_checked_without_common_payload(self):
+         metadata = self._target_metadata()
+-        metadata["allowed_device_classes"] = ["j714sap"]
++        metadata["allowed_device_classes"] = ["j604ap"]
+         metadata["aurora_stage1"] = {
+             "kind": "common-raw-v1",
+-            "qualified_machines": {"j714sap": ["27.3"]},
+-            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++            "qualified_machines": {"j604ap": ["27.3"]},
++            "qualified_system_firmware": {"j604ap": ["mBoot-20457.60.65.0.1"]},
+         }
+         self._write_metadata([metadata])
+         installer = FakeInstaller(FakeDiskUtil([[self.free]]))
+-        installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
++        installer.sysinfo = SimpleNamespace(device_class="j604ap", sys_firmware="mBoot-20457.60.65.0.1")
+         installer.ipsw.version = "27.3"
+         adapter = self._adapter(installer)
+         with self.assertRaisesRegex(AsahiAdapterError, "qualified image has no esp/aurora/stage1.bin"):
+@@ -647,44 +647,149 @@ class AsahiStage1AdapterTests(unittest.TestCase):
+     def test_exact_system_firmware_contract_can_pass_preflight_without_granting_catalog_support(self):
+         self._common_payload()
+         metadata = self._target_metadata()
+-        metadata["allowed_device_classes"] = ["j714sap"]
++        metadata["allowed_device_classes"] = ["j604ap"]
+         metadata["aurora_stage1"] = {
+             "kind": "common-raw-v1",
+-            "qualified_machines": {"j714sap": ["27.3"]},
+-            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++            "qualified_machines": {"j604ap": ["27.3"]},
++            "qualified_system_firmware": {"j604ap": ["mBoot-20457.60.65.0.1"]},
+         }
+         self._write_metadata([metadata])
+         installer = FakeInstaller(FakeDiskUtil([[self.free]]))
+-        installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
++        installer.sysinfo = SimpleNamespace(device_class="j604ap", sys_firmware="mBoot-20457.60.65.0.1")
+         installer.ipsw.version = "27.3"
+         adapter = self._adapter(installer)
+         adapter.preflight(self.plan)
+         self.assertTrue(adapter.common_stage1)
+         self.assertEqual(installer.dutil.add_calls, [])
+ 
++    J714S_POLICY = {"kind": "board-macho-ctxr-v1", "qualified_machines": {"j714sap": ["27.2"]}}
++    J714S_ESP = "a1b2c3d4-0000-4000-8000-000000000000"
++
++    def _j714s_payload(self, macho=None, stage2=b"aura ctxr stage2", drop=()):
++        raw = j700_stage1()
++        with zipfile.ZipFile(self.payload) as archive:
++            entries = {name: archive.read(name) for name in archive.namelist()}
++        entries["esp/aurora/stage1-j714s.bin"] = raw
++        entries["esp/aurora/stage1-j714s.macho"] = aura_macho(raw) if macho is None else macho
++        entries["esp/m1n1/boot-ctxr.bin"] = stage2
++        for name in drop:
++            entries.pop(name)
++        with zipfile.ZipFile(self.payload, "w") as archive:
++            for name, data in entries.items():
++                archive.writestr(name, data)
++        # As extract_tree leaves the ESP: every payload member under its own name.
++        for name, data in entries.items():
++            if name.startswith("esp/"):
++                path = self.installed_esp / name[len("esp/"):]
++                path.parent.mkdir(parents=True, exist_ok=True)
++                path.write_bytes(data)
++        return raw
++
++    def _j714s_metadata(self, policy=None, allowed=("j714sap",), native=True):
++        metadata = self._target_metadata()
++        metadata["allowed_device_classes"] = list(allowed)
++        metadata["aurora_stage1"] = self.J714S_POLICY if policy is None else policy
++        if native:
++            metadata["recovery_gui"] = "omarchy-native-v1"
++        self._write_metadata([metadata])
++
++    def _j714s_installer(self, ipsw="27.2"):
++        installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++        installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
++        installer.ipsw.version = ipsw
++        return installer
++
+     def test_j714s_cannot_fall_back_to_generic_or_mixed_board_install_metadata(self):
++        self._j714s_payload()
+         for allowed, policy in ((None, None), (["j714sap"], None),
+-                                (["j714sap", "j714cap"], {
+-                                    "kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.3"]},
+-                                    "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]}}),
+                                 (["j714sap"], {
+-                                    "kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.3"]}})):
++                                    "kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.2"]}}),
++                                (["j714sap", "j714cap"], self.J714S_POLICY),
++                                (["j714sap"], {
++                                    "kind": "board-macho-ctxr-v1", "qualified_machines": {"j714sap": ["27.3"]}}),
++                                (["j714sap"], {
++                                    "kind": "board-macho-ctxr-v1",
++                                    "qualified_machines": {"j714sap": ["27.2"], "j714cap": ["27.2"]}}),
++                                (["j714sap"], dict(self.J714S_POLICY, qualified_system_firmware={
++                                    "j714sap": ["mBoot-20457.41.3"]}))):
+             with self.subTest(allowed=allowed, policy=policy):
+                 metadata = self._target_metadata()
++                metadata["recovery_gui"] = "omarchy-native-v1"
+                 if allowed is not None:
+                     metadata["allowed_device_classes"] = allowed
+                 if policy is not None:
+                     metadata["aurora_stage1"] = policy
+                 self._write_metadata([metadata])
+-                installer = FakeInstaller(FakeDiskUtil([[self.free]]))
+-                installer.sysinfo = SimpleNamespace(device_class="j714sap", sys_firmware="mBoot-20457.60.65.0.1")
+-                installer.ipsw.version = "27.3"
++                installer = self._j714s_installer()
+                 adapter = self._adapter(installer)
+-                with self.assertRaisesRegex(AsahiAdapterError, "exact single-board.*candidate profile"):
++                with self.assertRaisesRegex(AsahiAdapterError, "Mach-O Stage 1"), patch(
++                        "omarchy_asahi.omarchy_recovery.validate_payload"):
+                     adapter.preflight(self.plan)
+                 self.assertEqual(installer.dutil.add_calls, [])
+                 self.assertFalse(hasattr(installer, "ins"), "reject before selecting/loading firmware")
+ 
++    def test_board_macho_contract_is_refused_on_other_macs(self):
++        self._j714s_payload()
++        self._j714s_metadata(allowed=("j714sap",))
++        installer = FakeInstaller(FakeDiskUtil([[self.free]]))
++        installer.sysinfo = SimpleNamespace(device_class="j614sap", sys_firmware="mBoot-20457.41.3")
++        adapter = self._adapter(installer)
++        with self.assertRaisesRegex(AsahiAdapterError, "not qualified for this Mac"), patch(
++                "omarchy_asahi.omarchy_recovery.validate_payload"):
++            adapter.preflight(self.plan)
++        self.assertEqual(installer.dutil.add_calls, [])
++
++    def test_j714s_preflight_checks_the_stub_firmware_and_boot_objects(self):
++        raw = j700_stage1()
++        other = j700_stage1(window=7)
++        cases = (
++            ("27.3", {}, "qualified only on 27.2"),
++            ("27.2", {"native": False}, "needs the native Recovery app"),
++            ("27.2", {"macho": aura_macho(other)}, "does not carry this Stage 1"),
++            ("27.2", {"macho": aura_macho(raw, boot_exec=True)}, "SPTM"),
++            ("27.2", {"macho": aura_macho(raw, entry=0x400)}, "entry point"),
++            ("27.2", {"macho": b"not a mach-o"}, "Mach-O"),
++            ("27.2", {"stage2": b""}, "empty esp/m1n1/boot-ctxr.bin"),
++            ("27.2", {"drop": ("esp/m1n1/boot-ctxr.bin",)}, "no esp/m1n1/boot-ctxr.bin"),
++            ("27.2", {"drop": ("esp/aurora/stage1-j714s.macho",)}, "no Mach-O Stage 1"),
++        )
++        for ipsw, case, message in cases:
++            with self.subTest(ipsw=ipsw, case=sorted(case), message=message):
++                native = case.pop("native", True)
++                self._j714s_payload(**case)
++                self._j714s_metadata(native=native)
++                installer = self._j714s_installer(ipsw)
++                adapter = self._adapter(installer)
++                with self.assertRaisesRegex(AsahiAdapterError, message), patch(
++                        "omarchy_asahi.omarchy_recovery.validate_payload"):
++                    adapter.preflight(self.plan)
++                self.assertFalse(adapter.preflight_complete)
++                self.assertEqual(installer.dutil.add_calls, [])
++
++    def test_j714s_installs_a_filled_mach_o_stage1_for_the_confined_stage2(self):
++        raw = self._j714s_payload()
++        self._j714s_metadata()
++        installer = self._j714s_installer()
++        adapter = self._adapter(installer)
++        with patch("omarchy_asahi.omarchy_recovery.validate_payload"):
++            adapter.preflight(self.plan)
++        self.assertTrue(adapter.preflight_complete)
++        self.assertFalse(adapter.common_stage1)
++        adapter.prepare_target(self.plan)
++        partition_disk = adapter.osins.partition_disk
++        def with_a_real_esp_uuid(name, size):
++            partition_disk(name, size)
++            adapter.osins.efi_part.uuid = self.J714S_ESP.upper()
++        adapter.osins.partition_disk = with_a_real_esp_uuid
++        with patch("omarchy_asahi.omarchy_recovery.stage") as stage:
++            adapter.install_stub_and_esp(self.plan)
++        boot_object = Path(installer.ins.boot_obj_path).read_bytes()
++        expected_raw = fill_aurora_stage1(raw, self.J714S_ESP, "m1n1/boot-ctxr.bin", 0)
++        self.assertEqual(boot_object, aura_macho(expected_raw))
++        self.assertIn(b";m1n1/boot-ctxr.bin", boot_object)
++        self.assertEqual(stage.call_args.kwargs["macho_stage1"], boot_object)
++        self.assertEqual((self.installed_esp / "m1n1/boot-ctxr.bin").read_bytes(), b"aura ctxr stage2")
++
+     def test_legacy_common_policy_without_common_member_keeps_legacy_preflight(self):
+         metadata = self._target_metadata()
+         metadata["aurora_stage1"] = {
+@@ -2135,25 +2240,51 @@ def j700_stage1(path=b"", window=0, uuid=b""):
+     return b"m1n1 j700 stage 1" + block + b"\0" * 64 + b"STACKBOT"
+ 
+ 
++def aura_macho(raw, *, boot_exec=False, entry=0x800):
++    """An MH_FILESET boot object carrying RAW at the start of __TEXT_EXEC, as aura builds it."""
++    import struct as _struct
++    page, base = 0x4000, 0xFFFFFE0007004000
++    code = -(-len(raw) // page) * page
++    names = [("__TEXT", page), ("__TEXT_EXEC", code), ("__PRELINK_INFO", page), ("__LINKEDIT", page)]
++    if boot_exec:
++        names.insert(2, ("__TEXT_BOOT_EXEC", page))
++    commands, offset = [], 0
++    for name, size in names:
++        commands.append(_struct.pack("<II16sQQQQIIII", 0x19, 72, name.encode(), base + offset,
++                                     size, offset, size, 5, 5, 0, 0))
++        if name == "__TEXT_EXEC":
++            code_offset = offset
++        offset += size
++    state = [0] * 34
++    state[32] = base + code_offset + entry
++    commands.append(_struct.pack("<IIII", 0x5, 16 + 34 * 8, 6, 68) + _struct.pack("<34Q", *state))
++    body = b"".join(commands)
++    header = _struct.pack("<IIIIIIII", 0xFEEDFACF, 0x0100000C, 2, 12, len(commands), len(body), 0, 0)
++    image = bytearray(offset)
++    image[:len(header) + len(body)] = header + body
++    image[code_offset:code_offset + len(raw)] = raw
++    return bytes(image)
++
++
+ class BoardStage1Tests(unittest.TestCase):
+     UUID = "97c92d03-2cb3-461f-9134-134a58cc9fdc"
+ 
+     def test_exact_system_firmware_qualification_is_board_and_stub_specific(self):
+         template = {"aurora_stage1": {
+             "kind": "common-raw-v1",
+-            "qualified_machines": {"j714sap": ["27.3"]},
+-            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++            "qualified_machines": {"j604ap": ["27.3"]},
++            "qualified_system_firmware": {"j604ap": ["mBoot-20457.60.65.0.1"]},
+         }}
+-        self.assertTrue(common_stage1_allowed(template, "j714sap", "27.3",
++        self.assertTrue(common_stage1_allowed(template, "j604ap", "27.3",
+                         system_firmware="mBoot-20457.60.65.0.1"))
+-        for board in ("j714cap", "j716sap", "j714s", "j714sapx"):
++        for board in ("j714cap", "j716sap", "j604", "j604apx"):
+             with self.subTest(board=board):
+                 self.assertFalse(common_stage1_allowed(template, board, "27.3",
+                                  system_firmware="mBoot-20457.60.65.0.1"))
+         for version in ("27.2", "27.3 beta 1", "27.30"):
+             with self.subTest(version=version), self.assertRaisesRegex(
+                     AsahiAdapterError, "not qualified.*installation firmware"):
+-                common_stage1_allowed(template, "j714sap", version,
++                common_stage1_allowed(template, "j604ap", version,
+                                       system_firmware="mBoot-20457.60.65.0.1")
+ 
+     def test_malformed_system_firmware_policy_fails_closed(self):
+diff --git a/Engine/overlay/tests/test_omarchy_firmware.py b/Engine/overlay/tests/test_omarchy_firmware.py
+index c31aea8..d13d93d 100644
+--- a/Engine/overlay/tests/test_omarchy_firmware.py
++++ b/Engine/overlay/tests/test_omarchy_firmware.py
+@@ -116,35 +116,41 @@ class PatchedFirmwareTableTests(unittest.TestCase):
+                       "+            omarchy_firmware.require_available(minver, avail, split_ver)\n", main)
+         self.assertNotIn("+                stub_size=(STUB_SIZE_MACOS26", main)
+ 
+-    def test_j714s_candidate_has_one_exact_device_restricted_apple_restore(self):
+-        candidate, = [item for item in IPSW_VERSIONS if item.version == "27.3"]
+-        self.assertEqual((candidate.min_macos, candidate.min_iboot, candidate.min_sfr,
++    def test_j714s_has_one_device_restricted_27_2_apple_restore(self):
++        self.assertEqual([item for item in IPSW_VERSIONS if item.version.startswith("27.3")], [])
++        candidate, = [item for item in IPSW_VERSIONS if "j714sap" in (item.devices or [])]
++        self.assertEqual((candidate.version, candidate.min_macos, candidate.min_iboot, candidate.min_sfr,
+                           candidate.expert_only, candidate.devices),
+-                         ("27.3", "mBoot-20457.60.65.0.1", "26.3.35.5.18,0", False, ["j714sap"]))
++                         ("27.2", "27.2", "mBoot-20457.41.3", "26.2.123.0.0,0", False, ["j714sap"]))
+         self.assertEqual(candidate.url,
+-                         "https://updates.cdn-apple.com/2026FallSeed/53df7654-4865-4259-8dae-30177b76f104/"
+-                         "UniversalMac_27.3_26C5035r_Restore.ipsw")
++                         "https://updates.cdn-apple.com/2026FallFCS/c9671975-52db-4fb5-9af2-00217169ba8d/"
++                         "UniversalMac_27.2_26B123_Restore.ipsw")
+ 
+-    def test_j714s_requires_its_os_system_and_restore_firmware_and_large_stub(self):
+-        versions = dict(sys_firmware="mBoot-20457.60.65.0.1", macos_ver="27.3",
+-                        sfr_full_ver="26.3.35.5.18,0")
+-        system, device = mac("j714sap", 0x6050, **versions)
+-        self.assertEqual(choose(system, device, ["27.3"]), ("27.3", STUB_SIZE_MACOS26))
+-        self.assertEqual(choose(system, device, TODAY), (None, STUB_SIZE_MACOS26))
+-        for key, value in (("sys_firmware", "mBoot-20457.41.2"), ("macos_ver", "27.2"),
+-                           ("sfr_full_ver", "26.3.35.5.17,0")):
+-            with self.subTest(key=key):
+-                system, device = mac("j714sap", 0x6050, **{**versions, key: value})
++    def test_j714s_takes_the_27_2_stub_under_27_2_or_newer_system_firmware(self):
++        stock = dict(sys_firmware="mBoot-20457.41.3", macos_ver="27.2", sfr_full_ver="26.2.123.0.0,0")
++        # A 27.3 beta 1 Mac: a stub may be older than the system firmware.
++        newer = dict(sys_firmware="mBoot-20457.60.65.0.1", macos_ver="27.3",
++                     sfr_full_ver="26.3.35.5.18,0")
++        for versions in (stock, newer):
++            with self.subTest(versions=versions):
++                system, device = mac("j714sap", 0x6050, **versions)
++                self.assertEqual(choose(system, device, ["27.2"]), ("27.2", STUB_SIZE_MACOS26))
+                 self.assertEqual(choose(system, device, ["27.3"]), (None, STUB_SIZE_MACOS26))
++                self.assertEqual(choose(system, device, TODAY), (None, STUB_SIZE_MACOS26))
++        for key, value in (("sys_firmware", "mBoot-20457.41.2"), ("macos_ver", "27.1"),
++                           ("sfr_full_ver", "26.2.122.0.0,0")):
++            with self.subTest(key=key):
++                system, device = mac("j714sap", 0x6050, **{**stock, key: value})
++                self.assertEqual(choose(system, device, ["27.2"]), (None, STUB_SIZE_MACOS26))
+ 
+     def test_j714s_restore_is_not_offered_to_legacy_or_sibling_devices(self):
+         for board in ("j700ap", "j613ap", "j714cap", "j716sap"):
+             system = SimpleNamespace(device_class=board, chip_id=0x6050,
+                                      sys_firmware="mBoot-20457.60.65.0.1", macos_ver="27.3",
+                                      sfr_full_ver="26.3.35.5.18,0")
+-            device = SimpleNamespace(min_ver="27.3")
++            device = SimpleNamespace(min_ver="27.2")
+             _, available = available_ipsws(IPSW_VERSIONS, CHIP_MIN_VER, system, device,
+-                                           ["27.3"], False, split_ver)
++                                           ["27.2"], False, split_ver)
+             self.assertEqual(available, [], board)
+ 
+ 
+diff --git a/Engine/overlay/tests/test_omarchy_recovery.py b/Engine/overlay/tests/test_omarchy_recovery.py
+index 04f976d..04a1098 100644
+--- a/Engine/overlay/tests/test_omarchy_recovery.py
++++ b/Engine/overlay/tests/test_omarchy_recovery.py
+@@ -183,6 +183,30 @@ class RecoveryTests(unittest.TestCase):
+         self.assertFalse((app / "Contents/Resources/AuraPayloads").exists())
+         self.assertTrue(all("--verify" in command for command in self.commands))
+ 
++    def test_board_macho_install_stages_only_the_mach_o_mode_and_confined_stage2(self):
++        macho = b"filled-unpadded-aura-boot-object"
++        self.boot.write_bytes(macho)
++        (self.esp / recovery.MACHO_ESP_STAGE2_PATH).write_bytes(b"aura-ctxr-stage2")
++        result = recovery.stage(self.installer, ESP, str(self.esp), run=self.fake_run,
++                                macho_stage1=macho)
++        config = result["configuration"]
++        self.assertEqual((config["bootMode"], config["stage2Path"]), ("macho", "m1n1/boot-ctxr.bin"))
++        payloads = self.system / recovery.INSTALL_DATA_DIRECTORY / "AuraPayloads"
++        self.assertEqual((payloads / "macho/aura-boot.macho").read_bytes(), macho)
++        self.assertEqual((payloads / "macho/boot-ctxr.bin").read_bytes(), b"aura-ctxr-stage2")
++        self.assertFalse((payloads / "raw").exists())
++        manifest = json.loads((payloads / "manifest.json").read_text())
++        self.assertEqual(manifest["defaultMode"], "macho")
++        self.assertEqual(manifest["modes"], {"macho": {
++            "espPath": "m1n1/boot-ctxr.bin", "executeWindow": 128 << 20}})
++
++    def test_board_macho_install_refuses_a_stub_boot_object_that_differs(self):
++        (self.esp / recovery.MACHO_ESP_STAGE2_PATH).write_bytes(b"aura-ctxr-stage2")
++        with self.assertRaisesRegex(recovery.RecoveryError, "differs from the stub"):
++            recovery.stage(self.installer, ESP, str(self.esp), run=self.fake_run,
++                           macho_stage1=b"another object")
++        self.assertFalse((self.system / recovery.APP_NAME).exists())
++
+     def test_neo_configuration_explicitly_allows_custom_boot_arguments(self):
+         self.installer.sysinfo = SimpleNamespace(device_class="j700ap")
+         result = self.stage()
+diff --git a/Engine/patches/0001-omarchy-engine-runtime.patch b/Engine/patches/0001-omarchy-engine-runtime.patch
+index 11dce50..e7bd27d 100644
+--- a/Engine/patches/0001-omarchy-engine-runtime.patch
++++ b/Engine/patches/0001-omarchy-engine-runtime.patch
+@@ -60,11 +60,11 @@ index 88dd2ab..9f40a4f 100644
+      0x6031: "14.8.3",   # T6031, M3 Max (16-core)
+      0x6034: "14.8.3",   # T6034, M3 Max (14-core)
+ +    0x8140: "26.6",     # T8140, A18 Pro
+-+    0x6050: "27.3",     # T6050, exact J714s candidate firmware
+++    0x6050: "27.2",     # T6050, J714s on the 27.2 stub (Mach-O Stage 1)
+  }
+  
+  DEVICES = {
+-+    "j714sap":  Device("27.3", False),  # MacBook Pro (14-inch, M5 Pro)
+++    "j714sap":  Device("27.2", False),  # MacBook Pro (14-inch, M5 Pro)
+ +    "j700ap":   Device("26.6", False),  # MacBook Neo (A18 Pro, 2026)
+      "j274ap":   Device("11.0", False),  # Mac mini (M1, 2020)
+      "j293ap":   Device("11.0", False),  # MacBook Pro (13-inch, M1, 2020)
+@@ -89,15 +89,15 @@ index 88dd2ab..9f40a4f 100644
+ +         False,
+ +         ["j613ap", "j615ap", "j700ap"],
+ +         "https://updates.cdn-apple.com/2026SummerFCS/fullrestores/140-75212/A2A24B94-1FC1-45A3-93F7-C51B02AF1F4D/UniversalMac_26.6.2_25G83_Restore.ipsw"),
+-+    # Device-restricted candidate: Apple 27.3 beta 1 (26C5035r).
+-+    # RestoreLongVersion is from the selected IPSW's RestoreVersion.plist.
+-+    IPSW("27.3",
+-+         "27.3",
+-+         "mBoot-20457.60.65.0.1",
+-+         "26.3.35.5.18,0",
+++    # Device-restricted: Apple 27.2 (26B123), J714s iBoot mBoot-20457.41.3, the
+++    # stub aurora-silicon targets on T6050. RestoreLongVersion is from its RestoreVersion.plist.
+++    IPSW("27.2",
+++         "27.2",
+++         "mBoot-20457.41.3",
+++         "26.2.123.0.0,0",
+ +         False,
+ +         ["j714sap"],
+-+         "https://updates.cdn-apple.com/2026FallSeed/53df7654-4865-4259-8dae-30177b76f104/UniversalMac_27.3_26C5035r_Restore.ipsw"),
+++         "https://updates.cdn-apple.com/2026FallFCS/c9671975-52db-4fb5-9af2-00217169ba8d/UniversalMac_27.2_26B123_Restore.ipsw"),
+      IPSW("12.3.1",
+           "12.1",
+           "iBoot-7459.101.3",
+diff --git a/Engine/source-lock.json b/Engine/source-lock.json
+index 729dbb0..9e0c5a0 100644
+--- a/Engine/source-lock.json
++++ b/Engine/source-lock.json
+@@ -141,7 +141,7 @@
+     }
+   },
+   "downstream_overlay": {
+-    "version": "v0.9.2-omarchy.20261112.e9d6b719a549",
++    "version": "v0.9.2-omarchy.20261113.b25a51d6df57",
+     "capability": "candidate_bound_full_os_stage_one_authenticated_recovery",
+     "minimum_app_version": "2.3.0",
+     "engine_modes": [
+@@ -151,7 +151,7 @@
+     ],
+     "patch": {
+       "path": "patches/0001-omarchy-engine-runtime.patch",
+-      "sha256": "a10baaadc0317a1e655496ed95edfb18f778128bb153d72fe4791b906179b906"
++      "sha256": "c8887a7f5813184c992b4e2863b2082348e0fb2b2f8213121d4f5c6707c61bdf"
+     },
+     "files": [
+       {
+@@ -172,7 +172,7 @@
+       {
+         "path": "overlay/src/omarchy_asahi.py",
+         "destination": "src/omarchy_asahi.py",
+-        "sha256": "46fcb4e54244fe888fdb0725e961196d3c807d556698d5462c82f1a3e982d246"
++        "sha256": "af4df7b59b303e0c2025593071b23e5cce4c15c5523d303c8127ef49fc1976d2"
+       },
+       {
+         "path": "overlay/src/omarchy_contract.py",
+@@ -207,7 +207,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_asahi.py",
+         "destination": "tests/test_omarchy_asahi.py",
+-        "sha256": "aadbb3870082e84a0cf5be7d9e5df6b5f9ef149231608b595d84f8bda622c1c0"
++        "sha256": "e0df04f73e8a10e9be483af702d55ea6bafc5bef11f644483c160d89d2071da2"
+       },
+       {
+         "path": "overlay/tests/test_omarchy_contract.py",
+@@ -292,7 +292,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_firmware.py",
+         "destination": "tests/test_omarchy_firmware.py",
+-        "sha256": "65fcaab9d28c3887b68746ca62acf826c0b22710812b61a16997c33925bbbf89"
++        "sha256": "13e922ec9e2e5700882f80fbb3b1880b066ecd0539c739f38601d3ce6f7bb97c"
+       },
+       {
+         "path": "overlay/src/omarchy_als.py",
+@@ -307,7 +307,12 @@
+       {
+         "path": "overlay/src/omarchy_recovery.py",
+         "destination": "src/omarchy_recovery.py",
+-        "sha256": "4d495597d9d1b6e169fe55ac8d1ee9c30d969ee50e6987e58cd2d62e23f2bcfd"
++        "sha256": "8211663697d6fb4531e75d0068a338addd5653092a9978a950863522a8460bcb"
++      },
++      {
++        "path": "overlay/src/omarchy_macho.py",
++        "destination": "src/omarchy_macho.py",
++        "sha256": "f4a76e20940b99691f1c17a9fed99733fbadd466c5e2d4f368cac6eeb9de9dc6"
+       },
+       {
+         "path": "overlay/src/omarchy_apple_aea.py",
+@@ -332,7 +337,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_recovery.py",
+         "destination": "tests/test_omarchy_recovery.py",
+-        "sha256": "769dfa871dc59371099f7bea59f3e4209159ef4123522f31001626c4484f7541"
++        "sha256": "e47e66a5a97304a94cbf5214680e5b305c95433710047df5350ed6e2ca09fca9"
+       },
+       {
+         "path": "overlay/src/omarchy_centauri.py",
+@@ -477,9 +482,9 @@
+     }
+   ],
+   "validation_artifact": {
+-    "filename": "installer-v0.9.2-omarchy.20261112.e9d6b719a549.tar.gz",
+-    "size_bytes": 17909447,
+-    "sha256": "cc5c25dfe8ca7845d80c3360768fd516ac10aef553637b2d3e311a584d806d30",
++    "filename": "installer-v0.9.2-omarchy.20261113.b25a51d6df57.tar.gz",
++    "size_bytes": 17912434,
++    "sha256": "bab388624d7dd19077afba4aedb0a0fc9008caf0bc4a1cb5bb097141ff5a3f21",
+     "reproducibility_scope": "two-identical-python-overlay-repacks-authenticated-base",
+     "signature": "absent",
+     "metadata_sha256": "2e6181ce6b6e17c11039e04bfadade8d10ae0e11889885ad8c9960b68f179a5d"
+@@ -506,7 +511,7 @@
+           "upstream_base_sha256": "c8d4d2a80f3a88a9ba4d6d4024c0001062e35d15d72ae530681a0612e6525984",
+           "upstream_sha256": "894fb8cd2ffc672bb96a14969ee9de2879d250c8c5990fee122ccf66d9b50024",
+           "base_sha256": "95760ed02d44b5457acb81559a4e2d892ffbb7f0f2b7417c0b2eb02937945ae7",
+-          "sha256": "b71a9a65c930c6568788b1f57c1be49d061ff8f3fd24310086af78abdf5a91cb"
++          "sha256": "28d102e20103e7063038af5f6eaefc2905c0eee554d45421422b663fd1e2f913"
+         }
+       ]
+     },
+-- 
+2.56.0
+

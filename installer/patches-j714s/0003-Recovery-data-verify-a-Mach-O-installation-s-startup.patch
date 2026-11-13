@@ -1,0 +1,109 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 00:09:07 -0500
+Subject: [PATCH 3/6] Recovery data: verify a Mach-O installation's startup
+ pair after install
+
+The app's Recovery handoff re-verifies the published install data
+(RecoveryInstallData.migrateLegacy) before it updates the stub's Recovery
+app, and that check required raw/aura-raw.bin and raw/boot.bin. A J714s
+Mach-O installation stages macho/aura-boot.macho and macho/boot-ctxr.bin
+instead, so the handoff would have failed after the disk had changed. The
+inventory now follows the configuration's bootMode; raw stays the default.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../Sources/Account/RecoveryInstallData.swift | 13 +++--
+ .../RecoveryAccountTests.swift                | 51 +++++++++++++++++++
+ 2 files changed, 61 insertions(+), 3 deletions(-)
+
+diff --git a/Recovery/Sources/Account/RecoveryInstallData.swift b/Recovery/Sources/Account/RecoveryInstallData.swift
+index 8ebc0a5..bc0cb68 100644
+--- a/Recovery/Sources/Account/RecoveryInstallData.swift
++++ b/Recovery/Sources/Account/RecoveryInstallData.swift
+@@ -98,10 +98,17 @@ public enum RecoveryInstallData {
+       value["schema"] as? Int == 2,
+       let files = value["files"] as? [String: [String: Any]]
+     else { throw AccountSetupFailure("The old Recovery payload manifest is invalid.") }
+-    let required: Set<String> = [
+-      "raw/aura-raw.bin", "raw/boot.bin", "vendorfw/firmware.tar",
+-      "vendorfw/firmware.cpio", "vendorfw/manifest.txt",
++    // The installation's boot mode decides its startup pair: raw, or a board's
++    // Mach-O Stage 1 with the confined Stage 2 (the engine's omarchy_recovery).
++    let firmware: Set<String> = [
++      "vendorfw/firmware.tar", "vendorfw/firmware.cpio", "vendorfw/manifest.txt",
+     ]
++    let mode = (try? JSONSerialization.jsonObject(with: config) as? [String: Any])?["bootMode"]
++    let startup: Set<String> =
++      mode as? String == "macho"
++      ? ["macho/aura-boot.macho", "macho/boot-ctxr.bin"]
++      : ["raw/aura-raw.bin", "raw/boot.bin"]
++    let required = firmware.union(startup)
+     let allowed = required.union(["vendorfw/u-boot/asmedia/asm2214a-apple.bin"])
+     guard required.isSubset(of: files.keys), Set(files.keys).isSubset(of: allowed) else {
+       throw AccountSetupFailure("The old Recovery payload inventory is invalid.")
+diff --git a/Tests/OmarchyAppleInstallerTrustCoreTests/RecoveryAccountTests.swift b/Tests/OmarchyAppleInstallerTrustCoreTests/RecoveryAccountTests.swift
+index 6847d26..be38670 100644
+--- a/Tests/OmarchyAppleInstallerTrustCoreTests/RecoveryAccountTests.swift
++++ b/Tests/OmarchyAppleInstallerTrustCoreTests/RecoveryAccountTests.swift
+@@ -98,6 +98,57 @@
+           system: system, appName: appName, target: target, read: fixtureRead))
+     }
+ 
++    func testPublishedMachOInstallDataIsVerifiedByItsOwnBootMode() throws {
++      let fm = FileManager.default
++      let system = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
++      let appName = InstallerProductIdentity.recoveryAppBundleName
++      let external = try RecoveryInstallData.directory(system: system)
++      let payloads = external.appendingPathComponent("AuraPayloads")
++      try fm.createDirectory(at: payloads, withIntermediateDirectories: true)
++      defer { try? fm.removeItem(at: system) }
++      func publish(mode: String, names: [String]) throws {
++        let config = try JSONSerialization.data(withJSONObject: [
++          "schema": 2, "systemUUID": target.systemUUID, "groupUUID": target.groupUUID,
++          "prebootUUID": target.prebootUUID, "bootMode": mode,
++        ])
++        try config.write(to: external.appendingPathComponent("install-config.json"))
++        var entries: [String: [String: Any]] = [:]
++        for name in names {
++          let path = payloads.appendingPathComponent(name)
++          let data = Data(name.utf8)
++          try fm.createDirectory(
++            at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
++          try data.write(to: path)
++          entries[name] = [
++            "bytes": data.count,
++            "sha256": SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
++          ]
++        }
++        try JSONSerialization.data(withJSONObject: ["schema": 2, "files": entries])
++          .write(to: payloads.appendingPathComponent("manifest.json"))
++      }
++      let firmware = ["vendorfw/firmware.tar", "vendorfw/firmware.cpio", "vendorfw/manifest.txt"]
++      // The J714s's Mach-O install: its own startup pair and no raw files.
++      try publish(mode: "macho", names: ["macho/aura-boot.macho", "macho/boot-ctxr.bin"] + firmware)
++      XCTAssertEqual(
++        try RecoveryInstallData.migrateLegacy(
++          system: system, appName: appName, target: target, read: fixtureRead),
++        external)
++      // A Mach-O configuration never accepts a raw-only inventory, nor the reverse.
++      try fm.removeItem(at: payloads)
++      try fm.createDirectory(at: payloads, withIntermediateDirectories: true)
++      try publish(mode: "macho", names: ["raw/aura-raw.bin", "raw/boot.bin"] + firmware)
++      XCTAssertThrowsError(
++        try RecoveryInstallData.migrateLegacy(
++          system: system, appName: appName, target: target, read: fixtureRead))
++      try fm.removeItem(at: payloads)
++      try fm.createDirectory(at: payloads, withIntermediateDirectories: true)
++      try publish(mode: "raw", names: ["macho/aura-boot.macho", "macho/boot-ctxr.bin"] + firmware)
++      XCTAssertThrowsError(
++        try RecoveryInstallData.migrateLegacy(
++          system: system, appName: appName, target: target, read: fixtureRead))
++    }
++
+     func testTokenAuthorityWaitsForNativePersistence() throws {
+       let id = UUID().uuidString
+       let hashes = [Data("fixture-hash".utf8)]
+-- 
+2.56.0
+

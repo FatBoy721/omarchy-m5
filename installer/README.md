@@ -86,3 +86,31 @@ EFI Linux chain), then first boot, Wi-Fi, encryption prompt input.
 the U-Boot payload) and, with that fixed, U-Boot found no NVMe (merged tree's
 `apple,t8140-nvme-ans2` only). 0008 fixes both; with them U-Boot reads the
 J714s GPT under the HV.
+
+## omarchy-j714s: one image line on the 27.2 stub (2026-11-13)
+
+The J714s moves off the 27.3 beta stub and the raw Stage 1 to the way
+aurora-silicon boots M5 on 27.2: the stub comes from Apple's non-beta
+`UniversalMac_27.2_26B123_Restore.ipsw` (J714s iBoot `mBoot-20457.41.3`), and
+Stage 1 is Aura's Mach-O boot object without `__TEXT_BOOT_EXEC` (kcbz 0, so
+SPTM is off), padded for the 128 MiB execute window and enrolled with
+`kmutil configure-boot --compress`. Product name `omarchy-j714s`, plain
+version numbers, no channel suffix.
+
+Patch set [`patches-j714s/`](patches-j714s) goes on top of `patches/` and
+`patches-upstream-27.3/` (tree in its `TREE`):
+
+| # | What | Credit |
+| --- | --- | --- |
+| 0001 | Engine: 26B123 IPSW row (RestoreLongVersion `26.2.123.0.0,0` from the IPSW), T6050/j714sap minimum 27.2, new `aurora_stage1` kind `board-macho-ctxr-v1`, `omarchy_macho.py` (fill the raw Stage 1 config, carry it into the boot object), Recovery staging in Mach-O mode. Engine `v0.9.2-omarchy.20261113.b25a51d6df57`, two identical repacks of the authenticated engine.28 base | Mach-O layout/fill ported from aurora-silicon/aurora-installer `AuraStage1.swift` (MIT) |
+| 0002 | Recovery app: Mach-O mode; pads the object for the window, checks `kmutil inspect` (kcbz 0, kcrz), `bputil -nc`, `kmutil --compress` (60 min allowed) | `MachOBootObject`, `ExpandedMachOBootObject`, padding, inspection and its check ported from aurora-installer (MIT) |
+| 0003 | The app's Recovery handoff verifies a Mach-O install's payloads | ours |
+| 0004 | Image profile `j714s`: `esp/aurora/stage1-j714s.{bin,macho}`, `esp/m1n1/boot-ctxr.bin` (kept current by a pacman hook), payload `omarchy-j714s-<N>-aarch64-apple-silicon-mac-os-package.zip` | ours |
+| 0005 | Candidate manifest pins for `linux-aurora 7.3.0.aurora17.v272-1` and `m1n1-aurora 1.6.1.aurora24.v272-1` (recipes `recipes/linux-aurora-j714s`, `recipes/m1n1-aurora-j714s`); sha256/size still zero until the packages are built | ours |
+| 0006 | Developer builds admit `apple,j714s` from a developer-only sealed catalog | ours |
+
+Builds:
+- Image: `installer-image.yml` with `patch-set: upstream-27.3 j714s`, `image-profile: j714s`, the bundle's Recovery tree/inventory, and a bundle made by `finish-inputs.py` with the engine above.
+- App: `installer-app.yml` (macOS runner) builds an ad hoc developer app with a sealed catalog signed by a per-run key, as an offline package (engine and image inside, split into `.partN`) and an online one (downloads the image parts from the image release).
+
+Checked: engine overlay tests (426), engine tooling tests, `test/all`, image-builder tests, the Recovery fixtures and build on macOS-26 (throwaway run 43369240212). The engine's config fill is byte-identical to aura's `fill_stage1_config.py` on the real 27.2 Aura build, `aura-boot.macho` passes the layout check (`aura.macho` does not), and aura pads the carried object to kcrz 153141248, the value this Mac's 2026-11-07 Mach-O trial enrolled. Not booted on any J714s.

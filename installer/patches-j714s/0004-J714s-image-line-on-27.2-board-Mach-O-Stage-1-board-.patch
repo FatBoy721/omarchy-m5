@@ -1,0 +1,1916 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 00:13:39 -0500
+Subject: [PATCH 4/6] J714s image line on 27.2: board Mach-O Stage 1
+ (board-macho-ctxr-v1), confined Stage 2, omarchy-j714s-N
+
+The j714s-developer profile (27.3 stub, common raw Stage 1) becomes the j714s
+profile: the one J714s image line, booted from macOS 27.2 stub firmware through
+Aura's padded Mach-O Stage 1 (SPTM off, CTXR execute window).
+
+- stage1_qualification: a new kind, board-macho-ctxr-v1, next to common-raw-v1:
+  one known board on its one OS firmware (j714sap on 27.2), no system firmware
+  pin. The J714s budgets now need exactly that profile. The 27.2 kernel pin is
+  7.3.0.aurora17.v272-1 / 7.3.0-17.v272-1-ARCH, from the linux-aurora-j714s
+  recipe before its first build.
+- The image carries esp/aurora/stage1-j714s.bin (m1n1-aurora's raw Stage 1),
+  esp/aurora/stage1-j714s.macho (aura's MH_FILESET wrap of it: m1n1-boot.macho,
+  else m1n1.macho) and esp/m1n1/boot-ctxr.bin, and no stage1.bin or J700 pair.
+  builder/aura_macho.py holds the object to the engine's rules (raw Stage 1 at
+  the start of __TEXT_EXEC, zeros after, entry at +0x800, no __TEXT_BOOT_EXEC).
+- boot-ctxr.bin is made right after update-m1n1 by the profile's helper: a copy
+  of m1n1/boot.bin (m1n1-aurora's m1n1.bin is the ESP_STAGE2=1 build), or
+  m1n1-ctxr.bin + boot.bin's tail after m1n1.bin when a package ships it apart.
+  Its pacman hook, 96-omarchy-j714s-boot-ctxr.hook (after asahi-scripts'
+  95-m1n1-install.hook, same targets), keeps it current on the installed system.
+- installer_data: allowed_device_classes [j714sap], aurora_stage1 board-macho-ctxr-v1,
+  supported_fw [27.2], next_object stays m1n1/boot.bin (the engine picks
+  boot-ctxr.bin from the kind), recovery_gui omarchy-native-v1.
+- Payload omarchy-j714s-<N>-aarch64-apple-silicon-mac-os-package.zip, N from
+  --image-version / MAC_IMAGE_VERSION (default 1); IMAGE and PROVENANCE record
+  image_line and image_version and mac-image-check holds the name to them. The
+  line has no lab variant.
+- Inspection checks the Stage 1 pair against the set's m1n1-aurora, boot-ctxr.bin
+  against boot.bin (or the m1n1-ctxr.bin splice), and the helper and hook bytes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .github/workflows/recovery-image.yml          |  12 +-
+ .../tools/finish-inputs.py                    |   2 +-
+ image-builder/bin/build-mac-image             | 129 ++++++++++++++-
+ image-builder/bin/mac-image-check             | 140 +++++++++++-----
+ image-builder/builder/aura_macho.py           | 150 ++++++++++++++++++
+ image-builder/builder/candidate_set.py        |   4 +-
+ image-builder/builder/image_profile.py        |  15 +-
+ image-builder/builder/inspection.py           |  91 +++++++++--
+ .../j714s-developer/stage1-qualification.json |  13 --
+ .../boot-ctxr/96-omarchy-j714s-boot-ctxr.hook |  14 ++
+ .../profiles/j714s/boot-ctxr/update-boot-ctxr |  38 +++++
+ .../candidate-trust/policy.json               |   0
+ .../candidate-trust/public.asc                |   0
+ .../profiles/j714s/stage1-qualification.json  |   8 +
+ image-builder/builder/stage1_qualification.py |  87 ++++++++--
+ image-builder/test/all                        |   1 +
+ image-builder/test/build-mac-image-test.sh    |  53 +++++++
+ image-builder/test/fixtures.py                |  18 ++-
+ image-builder/test/mac-image-inputs-test.sh   |   2 +-
+ image-builder/test/test_aura_macho.py         |  67 ++++++++
+ image-builder/test/test_candidate_set.py      |   9 +-
+ image-builder/test/test_engine_contract.py    |  23 ++-
+ image-builder/test/test_image_profile.py      |  16 +-
+ image-builder/test/test_inspection.py         |  76 ++++++++-
+ image-builder/test/test_mac_image_check.py    | 118 +++++++++++++-
+ .../test/test_stage1_qualification.py         |  67 ++++++--
+ 26 files changed, 1018 insertions(+), 135 deletions(-)
+ create mode 100644 image-builder/builder/aura_macho.py
+ delete mode 100644 image-builder/builder/profiles/j714s-developer/stage1-qualification.json
+ create mode 100644 image-builder/builder/profiles/j714s/boot-ctxr/96-omarchy-j714s-boot-ctxr.hook
+ create mode 100755 image-builder/builder/profiles/j714s/boot-ctxr/update-boot-ctxr
+ rename image-builder/builder/profiles/{j714s-developer => j714s}/candidate-trust/policy.json (100%)
+ rename image-builder/builder/profiles/{j714s-developer => j714s}/candidate-trust/public.asc (100%)
+ create mode 100644 image-builder/builder/profiles/j714s/stage1-qualification.json
+ create mode 100644 image-builder/test/test_aura_macho.py
+
+diff --git a/.github/workflows/recovery-image.yml b/.github/workflows/recovery-image.yml
+index 7643bae..ac9a261 100644
+--- a/.github/workflows/recovery-image.yml
++++ b/.github/workflows/recovery-image.yml
+@@ -12,7 +12,7 @@ on:
+       image-profile:
+         description: Select the public production image or the reviewed J714s developer profile
+         type: choice
+-        options: [production, j714s-developer]
++        options: [production, j714s]
+         default: production
+       build-image:
+         description: Build the full image after authenticating inputs
+@@ -118,7 +118,7 @@ jobs:
+       github.repository == 'TripleU613/omarchy-mac-installer' &&
+       github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main' &&
+-      inputs.image-profile == 'j714s-developer'
++      inputs.image-profile == 'j714s'
+     runs-on: ubuntu-24.04-arm
+     timeout-minutes: 180
+     env:
+@@ -189,20 +189,20 @@ jobs:
+           python3 Engine/prepare-engine.py --output "$WORK/engine" --cache "$WORK/engine-cache" | tee "$WORK/evidence/engine-archive.txt"
+           [[ $(git rev-parse HEAD:Recovery) == "$RECOVERY_SOURCE_TREE" ]]
+           python3 image-builder/builder/recovery_app.py "$WORK/input/recovery" --sha256 "$RECOVERY_INVENTORY"
+-          python3 image-builder/builder/candidate_set.py describe --input "$WORK/input/candidate-set" --image-profile j714s-developer | tee "$WORK/evidence/candidate-import.txt"
++          python3 image-builder/builder/candidate_set.py describe --input "$WORK/input/candidate-set" --image-profile j714s | tee "$WORK/evidence/candidate-import.txt"
+           cp "$WORK/input/source-provenance.json" "$WORK/evidence/"
+-          cp image-builder/builder/profiles/j714s-developer/candidate-trust/{policy.json,public.asc} "$WORK/evidence/"
++          cp image-builder/builder/profiles/j714s/candidate-trust/{policy.json,public.asc} "$WORK/evidence/"
+           printf 'input_url=%s\ninput_sha256=%s\n' "$INPUT_URL" "$INPUT_SHA256" > "$WORK/evidence/transport.txt"
+ 
+       - name: Resolve and build with the named developer profile
+         run: |
+           set -euo pipefail
+           bash image-builder/bin/mac-image-inputs resolve "$WORK/inputs" \
+-            --candidates "$WORK/input/candidate-set" --channel edge --image-profile j714s-developer \
++            --candidates "$WORK/input/candidate-set" --channel edge --image-profile j714s \
+             --recovery-app "$WORK/input/recovery" --cache "$WORK/cache" \
+             --alarm-server 'https://arm-mirror.omarchy.org/$arch/$repo' 2>&1 | tee "$WORK/evidence/resolve.log"
+           cp "$WORK/inputs" "$WORK/evidence/inputs"
+-          bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile j714s-developer \
++          bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile j714s \
+             --candidates "$WORK/input/candidate-set" --recovery-app "$WORK/input/recovery" \
+             --cache "$WORK/cache" "$WORK/out" 2>&1 | tee "$WORK/evidence/build.log"
+ 
+diff --git a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+index 4b6fe8b..deccae0 100644
+--- a/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
++++ b/Integration/M5/J714s-Normal-System/tools/finish-inputs.py
+@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[4]
+ INTEGRATION = Path(__file__).resolve().parents[1]
+ MANIFEST = INTEGRATION / 'candidate-package-manifest.json'
+ PROVENANCE = INTEGRATION / 'build-input-provenance.json'
+-PROFILE = 'j714s-developer'
++PROFILE = 'j714s'
+ 
+ 
+ def sha256(path: Path) -> str:
+diff --git a/image-builder/bin/build-mac-image b/image-builder/bin/build-mac-image
+index fb18190..b5f1b72 100755
+--- a/image-builder/bin/build-mac-image
++++ b/image-builder/bin/build-mac-image
+@@ -67,7 +67,7 @@ TOOLCHAIN=(pacman arch-install-scripts btrfs-progs e2fsprogs dosfstools libarchi
+ 
+ usage() {
+   cat <<'USAGE'
+-Usage: bin/build-mac-image --inputs FILE [--image-profile production|j714s-developer] [--candidates DIR] [--cache DIR] [--lab-access DIR] [--recovery-app DIR] [--dry-run] OUT
++Usage: bin/build-mac-image --inputs FILE [--image-profile production|j714s] [--image-version N] [--candidates DIR] [--cache DIR] [--lab-access DIR] [--recovery-app DIR] [--dry-run] OUT
+ 
+ Builds the Apple Silicon image for the candidate set in DIR from the inputs
+ record FILE (bin/mac-image-inputs resolve) into the empty or missing directory
+@@ -80,6 +80,12 @@ verified root filesystem, databases and package archives between runs, so a
+ later build from the same record installs the same bytes. --dry-run checks the
+ inputs and the candidate set and prints what would be built.
+ 
++--image-profile j714s builds the one J714s image line: its payload is
++omarchy-j714s-N-aarch64-apple-silicon-mac-os-package.zip, N from
++--image-version (default \$MAC_IMAGE_VERSION, else 1), a plain positive
++integer. Other profiles take no --image-version. The J714s line has no lab
++variant.
++
+ --recovery-app DIR supplies the native Recovery build directory pinned when
+ resolving the inputs. The signed app and its inventory are copied unchanged
+ into the ESP payload; the image declares the native Recovery installer flow.
+@@ -181,6 +187,11 @@ record_field() {
+   sed -n "s/^$1=//p" "$2"
+ }
+ 
++# A named image line's version: a plain positive integer.
++valid_image_version() {
++  [[ $1 =~ ^[1-9][0-9]{0,5}$ ]]
++}
++
+ input_image_profile() {
+   local value
+   value=$(record_field image_profile "$1")
+@@ -220,9 +231,10 @@ import_channel_set() {
+ host_main() {
+   local inputs="" candidates="" cache="" lab_access="" recovery_app="" out commit status clean=true started=$SECONDS dry_run=false
+   local cache_mounts=() lab_mounts=() recovery_mounts=() kind recovery_digest image_profile=production
++  local image_version=${MAC_IMAGE_VERSION:-} image_line
+   while (($#)); do
+     case $1 in
+-      --inputs|--candidates|--cache|--lab-access|--recovery-app|--image-profile)
++      --inputs|--candidates|--cache|--lab-access|--recovery-app|--image-profile|--image-version)
+         (($# > 1)) && [[ -n $2 ]] || usage_error "$1 requires a value"
+         case $1 in
+           --inputs) inputs=$2 ;;
+@@ -231,6 +243,7 @@ host_main() {
+           --lab-access) lab_access=$2 ;;
+           --recovery-app) recovery_app=$2 ;;
+           --image-profile) image_profile=$2 ;;
++          --image-version) image_version=$2 ;;
+         esac
+         shift 2
+         ;;
+@@ -249,6 +262,14 @@ host_main() {
+   "$BASH" "$ROOT/bin/mac-image-inputs" check "$inputs" >/dev/null
+   python3 "$ROOT/builder/image_profile.py" trust "$image_profile" >/dev/null || usage_error "unknown image profile: $image_profile"
+   [[ $(input_image_profile "$inputs") == "$image_profile" ]] || fail "--image-profile does not match the profile recorded in the inputs"
++  image_line=$(python3 "$ROOT/builder/image_profile.py" line "$image_profile")
++  if [[ -n $image_line ]]; then
++    image_version=${image_version:-1}
++    valid_image_version "$image_version" || usage_error "--image-version must be a positive integer: $image_version"
++    [[ -z $lab_access ]] || fail "the $image_line image line has no lab variant"
++  else
++    [[ -z $image_version ]] || usage_error "--image-version applies only to a named image line (--image-profile j714s)"
++  fi
+   inputs=$(cd -- "$(dirname -- "$inputs")" && pwd)/$(basename -- "$inputs")
+   kind=$(record_kind "$inputs")
+   if [[ $kind == channel ]]; then
+@@ -349,6 +370,7 @@ host_main() {
+     -e MAC_IMAGE_BUILDER_IMAGE="$(docker image inspect --format '{{.Id}}' "$host_image")" \
+     -e MAC_IMAGE_WORKFLOW_RUN="${GITHUB_RUN_ID:-local}" \
+     -e MAC_IMAGE_PROFILE="$image_profile" \
++    -e MAC_IMAGE_VERSION="$image_version" \
+     "$host_image" /bin/bash /src/bin/build-mac-image --in-container &
+   host_docker=$!
+   wait "$host_docker" || fail "the build failed (logs in $out/logs)"
+@@ -372,6 +394,9 @@ test_image_pin=""
+ profile=release
+ image_profile=production
+ candidate_profile=production
++# The named image line (image_profile.py line) and its version, or empty.
++image_line=""
++image_version=""
+ candidate_trust_dir="$ROOT/builder/candidate-trust"
+ lab_access_dir=/lab-access
+ lab_access_sha256=""
+@@ -492,6 +517,20 @@ read_repository_order() {
+   repository_order=("${order[@]}")
+ }
+ 
++# The profile's named image line and its version (the host checked and passed
++# MAC_IMAGE_VERSION); needs the toolchain's python3.
++select_image_line() {
++  image_line=$(python3 "$ROOT/builder/image_profile.py" line "$candidate_profile") ||
++    fail "unknown image profile: $candidate_profile"
++  if [[ -n $image_line ]]; then
++    image_version=${MAC_IMAGE_VERSION:-1}
++    valid_image_version "$image_version" || fail "invalid image version: $image_version"
++    [[ $profile == release ]] || fail "the $image_line image line has no lab variant"
++  else
++    [[ -z ${MAC_IMAGE_VERSION:-} ]] || fail "the $candidate_profile profile takes no image version"
++  fi
++}
++
+ prepare_toolchain() {
+   local repository sha server
+   {
+@@ -514,6 +553,7 @@ prepare_toolchain() {
+ 
+   candidate_trust_dir=$(python3 "$ROOT/builder/image_profile.py" trust "$candidate_profile") ||
+     fail "unknown image profile: $candidate_profile"
++  select_image_line
+ 
+   fetch \
+     --output "$work/$ASAHI_KEYRING_FILE" "$(field asahi_alarm_server)/$ASAHI_KEYRING_FILE" ||
+@@ -1328,6 +1368,7 @@ configure_image() {
+   # that order the same on every builder.
+   isolated_chroot "$target" env LC_ALL=C update-m1n1 >"$logs/update-m1n1.log" 2>&1 ||
+     fail "update-m1n1 failed (logs/update-m1n1.log)"
++  build_ctxr_stage2
+   activate_limine
+   stage_board_boot_payloads
+   stage_recovery_app
+@@ -1360,21 +1401,83 @@ stage_recovery_app() {
+     fail "could not stage the pinned Recovery app"
+ }
+ 
++# The profile's Stage 1 qualification (JSON, or null) and its kind (empty for null).
++stage1_policy() {
++  python3 "$ROOT/builder/stage1_qualification.py" --profile "$candidate_profile" || fail "invalid Stage 1 qualification policy"
++}
++
++stage1_kind() {
++  local qualification
++  qualification=$(stage1_policy) || exit 1
++  jq -r '.kind? // empty' <<<"$qualification"
++}
++
++# A board Mach-O image's confined Stage 2 (esp/m1n1/boot-ctxr.bin), which a
++# padded Stage 1 chainloads; m1n1/boot.bin stays as it is. The profile's helper
++# makes it from update-m1n1's m1n1/boot.bin (a copy, as m1n1-aurora's m1n1.bin is
++# Aura's ESP_STAGE2=1 build; or m1n1-ctxr.bin then boot.bin's tail after m1n1.bin,
++# if the package ships the confined build apart), and its pacman hook, after
++# asahi-scripts' 95-m1n1-install.hook, keeps it current on the installed system.
++CTXR_HELPER=usr/local/lib/omarchy-j714s/update-boot-ctxr
++CTXR_HOOK=etc/pacman.d/hooks/96-omarchy-j714s-boot-ctxr.hook
++build_ctxr_stage2() {
++  local kind
++  kind=$(stage1_kind) || exit 1
++  [[ $kind == board-macho-ctxr-v1 ]] || return 0
++  local source="$ROOT/builder/profiles/$candidate_profile/boot-ctxr"
++  [[ -f $source/update-boot-ctxr && -f $source/${CTXR_HOOK##*/} ]] ||
++    fail "the $candidate_profile profile has no boot-ctxr helper and hook"
++  install -D -m 0755 "$source/update-boot-ctxr" "$target/$CTXR_HELPER"
++  install -D -m 0644 "$source/${CTXR_HOOK##*/}" "$target/$CTXR_HOOK"
++  isolated_chroot "$target" "/$CTXR_HELPER" >"$logs/boot-ctxr.log" 2>&1 ||
++    fail "could not write m1n1/boot-ctxr.bin (logs/boot-ctxr.log)"
++  [[ -s $target/boot/efi/m1n1/boot-ctxr.bin ]] || fail "m1n1/boot-ctxr.bin is missing or empty"
++}
++
+ # Board payloads come from the same authenticated m1n1-aurora package as Stage 2.
+ # The engine's per-board contract (BOARD_STAGE1, BOARD_STAGE2): the MacBook
+ # Neo boots its raw Stage 1 as esp/aurora/stage1-j700.bin and takes
+ # esp/m1n1/boot-j700.bin, the same bundle as m1n1/boot.bin, in its place.
+-# Every other Mac drops boot-j700.bin.
++# Every other Mac drops boot-j700.bin. A board Mach-O image (board-macho-ctxr-v1)
++# is for its one board: it carries that board's raw Stage 1 and Aura's unpadded
++# Mach-O boot object of it (the engine's BOARD_MACHO), and neither the common
++# nor the Neo's Stage 1.
++# Where m1n1-aurora keeps Aura's MH_FILESET boot object of its raw Stage 1:
++# m1n1-boot.macho (aura's build/aura-boot.macho), else m1n1.macho
++# (stage1_qualification.PACKAGE_MACHO_STAGE1S).
++stage1_macho_source() {
++  local path
++  for path in usr/share/m1n1-aurora/stage1/m1n1-boot.macho usr/share/m1n1-aurora/stage1/m1n1.macho; do
++    if [[ -s $target/$path && ! -L $target/$path ]]; then
++      echo "$path"
++      return 0
++    fi
++  done
++  echo usr/share/m1n1-aurora/stage1/m1n1-boot.macho
++}
++
+ stage_board_boot_payloads() {
+   local stage1="$target/usr/share/m1n1-aurora/stage1/m1n1-raw.bin"
+   local stage2="$target/boot/efi/m1n1/boot.bin"
++  local qualification
++  qualification=$(stage1_policy) || exit 1
++  mkdir -p "$target/boot/efi/aurora" "$target/boot/efi/m1n1"
++  if [[ $(jq -r '.kind? // empty' <<<"$qualification") == board-macho-ctxr-v1 ]]; then
++    local macho="$target/$(stage1_macho_source)" members
++    [[ -s $stage1 && ! -L $stage1 && -s $macho && ! -L $macho && -s $target/boot/efi/m1n1/boot-ctxr.bin ]] ||
++      fail "the image lacks matched m1n1-aurora raw and Mach-O Stage 1 payloads and m1n1/boot-ctxr.bin"
++    python3 "$ROOT/builder/aura_macho.py" check "$macho" "$stage1" >>"$logs/stage1.log" 2>&1 ||
++      fail "m1n1-aurora's ${macho##*/} is not Aura's boot object of its m1n1-raw.bin (logs/stage1.log)"
++    members=$(python3 "$ROOT/builder/stage1_qualification.py" board-macho --profile "$candidate_profile") ||
++      fail "invalid board Mach-O Stage 1 qualification"
++    install -m 0644 "$stage1" "$target/boot/$(sed -n 1p <<<"$members" | sed 's|^esp/|efi/|')"
++    install -m 0644 "$macho" "$target/boot/$(sed -n 2p <<<"$members" | sed 's|^esp/|efi/|')"
++    return 0
++  fi
+   [[ -s $stage1 && ! -L $stage1 && -s $stage2 && ! -L $stage2 ]] ||
+     fail "the image lacks matched m1n1-aurora Stage 1 and Stage 2 payloads for the MacBook Neo"
+-  mkdir -p "$target/boot/efi/aurora" "$target/boot/efi/m1n1"
+   install -m 0644 "$stage1" "$target/boot/efi/aurora/stage1-j700.bin"
+   install -m 0644 "$stage2" "$target/boot/efi/m1n1/boot-j700.bin"
+-  local qualification
+-  qualification=$(python3 "$ROOT/builder/stage1_qualification.py" --profile "$candidate_profile") || fail "invalid Stage 1 qualification policy"
+   if [[ $qualification != null ]]; then
+     install -m 0644 "$stage1" "$target/boot/efi/aurora/stage1.bin"
+   fi
+@@ -1645,15 +1748,24 @@ cleanup_target() {
+ 
+ payload_name() {
+   local date lane_name=""
++  # A named image line (the J714s) is one product with a plain version: no lane, date or lab.
++  if [[ -n $image_line ]]; then
++    printf 'omarchy-%s-%s-aarch64-apple-silicon-mac-os-package.zip\n' "$image_line" "$image_version"
++    return 0
++  fi
+   date=$(field resolved_at | cut -c1-10 | tr - .)
+   # A lab image's payload says so in its name (mac-image-check PAYLOAD_NAME).
+   [[ $profile == release ]] || lane_name=$lane-$profile
+   printf 'omarchy-%s-aarch64-apple-silicon-mac-%s-os-package.zip\n' "$date" "${lane_name:-$lane}"
+ }
+ 
++# The installer_data.json for package $1, written to $2. A board Mach-O image is
++# for its one board on its one OS firmware: supported_fw is only that, not every
++# Mac's. The engine picks the confined Stage 2 (m1n1/boot-ctxr.bin) for it from
++# the kind; next_object stays m1n1/boot.bin, as the engine's payload check requires.
+ write_installer_data() {
+   local qualification
+-  qualification=$(python3 "$ROOT/builder/stage1_qualification.py" --profile "$candidate_profile") || fail "invalid Stage 1 qualification policy"
++  qualification=$(stage1_policy) || exit 1
+   jq -S -n --arg package "$1" --argjson esp "$ESP_SIZE" --argjson boot "$BOOT_SIZE" --argjson root "$ROOT_SIZE" \
+     --argjson qualification "$qualification" \
+     --arg volume_id "$ESP_VOLUME_ID" \
+@@ -1662,6 +1774,7 @@ write_installer_data() {
+       name: "Omarchy", default_os_name: "Omarchy", omarchy_target: "apple-silicon-full-os",
+       boot_object: "m1n1.bin", next_object: "m1n1/boot.bin", package: $package, icon: "omarchy-volume.icns",
+       supported_fw: (if $qualification == null then $ARGS.positional
++        elif $qualification.kind == "board-macho-ctxr-v1" then ([$qualification.qualified_machines[][]] | unique)
+         else ($ARGS.positional + [$qualification.qualified_machines[][]] | unique) end),
+       partitions: [
+         {name: "EFI", type: "EFI", size: "\($esp)B", format: "fat", volume_id: $volume_id,
+@@ -1700,6 +1813,7 @@ write_provenance() {
+     printf 'hardware_setup=%s\n' "$hardware_setup"
+     printf 'test_image_pin=%s\n' "$test_image_pin"
+     [[ $profile == release ]] || printf 'profile=%s\nlab_access_sha256=%s\n' "$profile" "$lab_access_sha256"
++    [[ -z $image_line ]] || printf 'image_line=%s\nimage_version=%s\n' "$image_line" "$image_version"
+     while read -r name; do
+       [[ -z $name ]] || printf 'unavailable=%s\n' "$name"
+     done <"$work/unavailable"
+@@ -1751,6 +1865,7 @@ write_image() {
+     printf 'hardware_setup=%s\n' "$hardware_setup"
+     printf 'test_image_pin=%s\n' "$test_image_pin"
+     [[ $profile == release ]] || printf 'profile=%s\nlab_access_sha256=%s\n' "$profile" "$lab_access_sha256"
++    [[ -z $image_line ]] || printf 'image_line=%s\nimage_version=%s\n' "$image_line" "$image_version"
+     printf 'package_set_sha256=%s\n' "$package_set_digest"
+     printf 'built=%s\n' "$built"
+     (cd "$work/final" && find . -type f | sed 's|^\./||' | LC_ALL=C sort) | while read -r path; do
+diff --git a/image-builder/bin/mac-image-check b/image-builder/bin/mac-image-check
+index 3115e6e..9562583 100755
+--- a/image-builder/bin/mac-image-check
++++ b/image-builder/bin/mac-image-check
+@@ -69,6 +69,7 @@ ROOT = Path(__file__).resolve().parents[1]
+ sys.path.insert(0, str(ROOT / "builder"))
+ import recovery_app  # noqa: E402
+ import stage1_qualification  # noqa: E402
++import aura_macho  # noqa: E402
+ import image_profile as image_profile_data  # noqa: E402
+ ROOT_UUID = "4f4d5801-524f-4f54-8000-000000000001"
+ BOOT_UUID = "4f4d5801-424f-4f54-8000-000000000001"
+@@ -97,6 +98,9 @@ REQUIRED_MEMBERS = {
+ PAYLOAD_NAME = re.compile(
+     r"^omarchy-\d{4}\.\d{2}\.\d{2}-aarch64-apple-silicon-mac-(edge|rc|stable)(-lab)?-os-package\.zip$"
+ )
++# A named image line's payload (image_profile.py line, the J714s): one product with a
++# plain positive version, no lane, date or lab variant.
++LINE_PAYLOAD_NAME = re.compile(r"^omarchy-([a-z0-9]+)-([1-9][0-9]{0,5})-aarch64-apple-silicon-mac-os-package\.zip$")
+ LANES = ("edge", "rc", "stable")
+ PROFILES = ("release", "lab")
+ # The only lane a lab image may be built for.
+@@ -152,7 +156,10 @@ def expected_metadata(package: str, native_recovery: bool = False, image_profile
+     Mac's."""
+     qualification = stage1_qualification.load(profile=image_profile)
+     supported_fw = ["13.5", "14.8.3", "26.6.2"]
+-    if qualification is not None:
++    if stage1_qualification.board_macho(qualification) is not None:
++        # One board on its one OS firmware; the engine picks m1n1/boot-ctxr.bin from the kind.
++        supported_fw = sorted({version for versions in qualification["qualified_machines"].values() for version in versions})
++    elif qualification is not None:
+         supported_fw = sorted(set(supported_fw) | {version for versions in qualification["qualified_machines"].values() for version in versions})
+     result = {
+         "os_list": [
+@@ -236,14 +243,57 @@ def check_plaintext_root(header: bytes, where: str) -> None:
+     check_root_superblock(header, where)
+ 
+ 
++def image_line(image_profile: str) -> str | None:
++    return image_profile_data.select(image_profile)["line"]
++
++
++def payload_name_matches(name: str, lane: str, image_profile: str = "production") -> bool:
++    """NAME is a payload name of IMAGE_PROFILE: its named line's, else LANE's."""
++    line = image_line(image_profile)
++    if line is not None:
++        match = LINE_PAYLOAD_NAME.fullmatch(name)
++        return match is not None and match.group(1) == line
++    match = PAYLOAD_NAME.fullmatch(name)
++    return match is not None and match.group(1) == lane
++
++
++def payload_version(name: str) -> str | None:
++    match = LINE_PAYLOAD_NAME.fullmatch(name)
++    return None if match is None else match.group(2)
++
++
++def check_line_record(fields: dict[str, list[str]], payload: Path, image_profile: str, where: str) -> None:
++    """A named line's record names its line and the payload's version once; any other names neither."""
++    line = image_line(image_profile)
++    if line is None:
++        require("image_line" not in fields and "image_version" not in fields, f"{where} names an image line")
++        return
++    require(fields.get("image_line") == [line] and fields.get("image_version") == [payload_version(payload.name)],
++            f"{where} does not name the {line} line and {payload.name}'s version")
++
++
++def check_stage1_block(stage1: bytes, what: str) -> None:
++    """STAGE1 is a raw Aurora Stage 1 with one unfilled, fillable config block, ending in STACKBOT."""
++    magic = b"AURORA-S1-CFG01\0"
++    require(stage1.endswith(b"STACKBOT") and stage1.count(magic) == 1, f"{what} is missing its configuration block")
++    offset = stage1.index(magic) + len(magic)
++    require(offset + struct.calcsize("<II40s192s") + 4 <= len(stage1) - 8
++            and struct.unpack_from("<I", stage1, offset)[0] == 1,
++            f"{what} has an invalid configuration block")
++
++
+ def check_payload(lane: str, package: Path, installer_data: Path, profile: str = "release",
+                   recovery_digest: str | None = None, image_profile: str = "production") -> dict[str, str]:
+     check_profile(lane, profile)
+     name = package.name
+-    match = PAYLOAD_NAME.fullmatch(name)
+-    require(match is not None and match.group(1) == lane, f"{name} is not a {lane} mac image payload name")
+-    require((match.group(2) == "-lab") == (profile == "lab"),
+-            f"{name} {'does not name' if profile == 'lab' else 'names'} a lab image")
++    line = image_line(image_profile)
++    require(payload_name_matches(name, lane, image_profile),
++            f"{name} is not {'an omarchy-' + line if line else 'a ' + lane} mac image payload name")
++    if line is not None:
++        require(profile == "release", f"the {line} image line has no lab variant")
++    else:
++        require((PAYLOAD_NAME.fullmatch(name).group(2) == "-lab") == (profile == "lab"),
++                f"{name} {'does not name' if profile == 'lab' else 'names'} a lab image")
+     try:
+         metadata = json.loads(installer_data.read_text(encoding="utf-8"))
+     except (OSError, ValueError) as error:
+@@ -290,10 +340,20 @@ def check_payload(lane: str, package: Path, installer_data: Path, profile: str =
+         else:
+             require(not any(n.startswith(recovery_app.PREFIX) for n in members),
+                     "Recovery app present without native Recovery metadata")
+-        required = set(REQUIRED_MEMBERS) | {"esp/aurora/stage1-j700.bin", "esp/m1n1/boot-j700.bin"}
+         qualification = stage1_qualification.load(profile=image_profile)
+-        if qualification is not None:
+-            required.add(stage1_qualification.COMMON_STAGE1)
++        board = stage1_qualification.board_macho(qualification)
++        if board is not None:
++            # A board Mach-O image is for its one board: its raw Stage 1, Aura's boot object
++            # of it and the confined Stage 2, and no common or Neo Stage 1.
++            required = set(REQUIRED_MEMBERS) | {board["raw"], board["macho"], stage1_qualification.CTXR_STAGE2}
++            foreign = sorted({stage1_qualification.COMMON_STAGE1, stage1_qualification.J700_STAGE1,
++                              stage1_qualification.J700_STAGE2} & set(members))
++            require(not foreign, "a board Mach-O image carries another board's Stage 1 or 2: " + ", ".join(foreign))
++        else:
++            required = set(REQUIRED_MEMBERS) | {stage1_qualification.J700_STAGE1, stage1_qualification.J700_STAGE2}
++            require(stage1_qualification.CTXR_STAGE2 not in members, "the image carries a confined Stage 2 it does not enroll")
++            if qualification is not None:
++                required.add(stage1_qualification.COMMON_STAGE1)
+         missing = sorted(required - set(members))
+         require(not missing, "missing members: " + ", ".join(missing))
+         require("esp/omarchy" in directories, "missing members: esp/omarchy/")
+@@ -307,20 +367,23 @@ def check_payload(lane: str, package: Path, installer_data: Path, profile: str =
+             require(size % 4096 == 0, f"{member} is not a multiple of 4 KiB")
+         esp_bytes = sum(info.file_size for member, info in members.items() if member.startswith("esp/"))
+         require(esp_bytes <= ESP_SIZE, f"the ESP tree is {esp_bytes} bytes, over its {ESP_SIZE}-byte partition")
+-        # The engine's J700 Stage 1 must be fillable, and its Stage 2 the common bundle.
+-        stage1 = archive.read("esp/aurora/stage1-j700.bin")
+-        magic = b"AURORA-S1-CFG01\0"
+-        require(stage1.endswith(b"STACKBOT") and stage1.count(magic) == 1,
+-                "the J700 Stage 1 is missing its configuration block")
+-        offset = stage1.index(magic) + len(magic)
+-        require(offset + struct.calcsize("<II40s192s") + 4 <= len(stage1) - 8
+-                and struct.unpack_from("<I", stage1, offset)[0] == 1,
+-                "the J700 Stage 1 has an invalid configuration block")
+-        require(archive.read("esp/m1n1/boot-j700.bin") == archive.read("esp/m1n1/boot.bin"),
+-                "the J700 Stage 2 differs from the common bundle")
+-        if qualification is not None:
+-            require(archive.read(stage1_qualification.COMMON_STAGE1) == stage1,
+-                    "the common Stage 1 differs from the matched package's J700 Stage 1")
++        if board is not None:
++            # The engine fills the raw Stage 1 and carries it into the boot object.
++            stage1 = archive.read(board["raw"])
++            check_stage1_block(stage1, f"the {board['raw']} Stage 1")
++            try:
++                aura_macho.check_carries(archive.read(board["macho"]), stage1)
++            except aura_macho.MachOError as error:
++                raise CheckError(f"{board['macho']} is not Aura's boot object of {board['raw']}: {error}") from error
++        else:
++            # The engine's J700 Stage 1 must be fillable, and its Stage 2 the common bundle.
++            stage1 = archive.read(stage1_qualification.J700_STAGE1)
++            check_stage1_block(stage1, "the J700 Stage 1")
++            require(archive.read(stage1_qualification.J700_STAGE2) == archive.read("esp/m1n1/boot.bin"),
++                    "the J700 Stage 2 differs from the common bundle")
++            if qualification is not None:
++                require(archive.read(stage1_qualification.COMMON_STAGE1) == stage1,
++                        "the common Stage 1 differs from the matched package's J700 Stage 1")
+ 
+         keep = {
+             "boot.img": 0x488,
+@@ -522,7 +585,7 @@ def required_image_packages(image_profile: str = "production") -> set[str]:
+     selected = image_profile_data.select(image_profile)
+     required = set(IMAGE_PACKAGES)
+     policy = _module("candidate_set").load_policy(selected["trust"])
+-    if image_profile == "j714s-developer" and "linux-aurora-headers" not in policy["boot_packages"]:
++    if image_profile == "j714s" and "linux-aurora-headers" not in policy["boot_packages"]:
+         required.remove("linux-aurora-headers")
+     return required
+ 
+@@ -732,12 +795,13 @@ def parse_fields(path: Path) -> dict[str, list[str]]:
+     return fields
+ 
+ 
+-def payload_in(directory: Path, lane: str) -> Path:
++def payload_in(directory: Path, lane: str, image_profile: str = "production") -> Path:
+     # The name's profile is checked against the records by check_payload.
+     zips = [path for path in directory.iterdir() if path.suffix == ".zip" and path.is_file()]
+-    matches = [path for path in zips if PAYLOAD_NAME.fullmatch(path.name) is not None]
++    pattern = PAYLOAD_NAME if image_line(image_profile) is None else LINE_PAYLOAD_NAME
++    matches = [path for path in zips if pattern.fullmatch(path.name) is not None]
+     require(len(matches) == 1, f"{directory} does not hold one {lane} payload")
+-    require(PAYLOAD_NAME.fullmatch(matches[0].name).group(1) == lane, f"{matches[0].name} is not a {lane} payload")
++    require(payload_name_matches(matches[0].name, lane, image_profile), f"{matches[0].name} is not a {lane} payload")
+     extra = sorted(path.name for path in zips if path != matches[0])
+     require(not extra, f"{directory} holds extra zip files: {extra}")
+     return matches[0]
+@@ -802,9 +866,14 @@ def check_provenance(lane: str, directory: Path) -> None:
+         require(record is not None and record[2] == version and record[3] == "omarchy-candidates"
+                 and record[4] == filename and record[5] == sha256,
+                 f"PROVENANCE does not install the set's {name} from the candidate set")
++    candidate_profile = recorded_image_profile(fields)
++    channel = is_channel(fields, "input.")
++    require(not channel or candidate_profile == "production",
++            "a channel image cannot use the J714s image profile")
+     name, size, sha256 = fields["payload"][0].split("|")
+     payload = directory / name
+-    require(payload.is_file() and PAYLOAD_NAME.fullmatch(name) is not None, f"{name} is not beside PROVENANCE")
++    require(payload.is_file() and payload_name_matches(name, lane, candidate_profile), f"{name} is not beside PROVENANCE")
++    check_line_record(fields, payload, candidate_profile, "PROVENANCE")
+     require(payload.stat().st_size == int(size) and file_sha256(payload) == sha256, f"{name} is not the payload PROVENANCE names")
+     installer_data = directory / "installer_data.json"
+     require(installer_data.is_file() and file_sha256(installer_data) == fields["installer_data_sha256"][0],
+@@ -823,10 +892,6 @@ def check_provenance(lane: str, directory: Path) -> None:
+     require(sources and sources == report.get("runtime_sources"),
+             "PROVENANCE's candidate sources do not match INSPECTION's runtime sources")
+     check_receipt_record(lane, report.get("install_receipt"), fields, payload)
+-    channel = is_channel(fields, "input.")
+-    candidate_profile = recorded_image_profile(fields)
+-    require(not channel or candidate_profile == "production",
+-            "a channel image cannot use the J714s developer profile")
+     if channel:
+         # The -dev runtime ships no source revision; the channel database and its archives name it.
+         require(report.get("set_kind") == "channel"
+@@ -952,7 +1017,7 @@ def check_descriptor(lane: str, directory: Path) -> None:
+     provenance_fields = parse_fields(provenance)
+     require(is_channel(input_fields) == channel, "IMAGE and the inputs record name different kinds of set")
+     require(not channel or candidate_profile == "production",
+-            "a channel image cannot use the J714s developer profile")
++            "a channel image cannot use the J714s image profile")
+     for key in image_inputs:
+         require(input_fields.get(key) == fields[key], f"IMAGE {key} does not match the inputs record")
+         require(provenance_fields.get(f"input.{key}") == fields[key], f"IMAGE {key} does not match PROVENANCE")
+@@ -969,7 +1034,10 @@ def check_descriptor(lane: str, directory: Path) -> None:
+     if channel:
+         check_public(fields, profile, "IMAGE")
+         check_public(provenance_fields, profile, "PROVENANCE")
+-    payload = payload_in(directory, lane)
++    payload = payload_in(directory, lane, candidate_profile)
++    check_line_record(fields, payload, candidate_profile, "IMAGE")
++    for key in ("image_line", "image_version"):
++        require(provenance_fields.get(key) == fields.get(key), f"IMAGE {key} does not match PROVENANCE")
+     installer_data = directory / "installer_data.json"
+     require(installer_data.is_file(), "installer_data.json is not beside IMAGE")
+     require("hardware_profile" not in fields, "IMAGE records a retired hardware profile")
+@@ -1038,9 +1106,9 @@ def image_name(lane: str, directory: Path) -> str:
+     return name
+ 
+ 
+-USAGE = """Usage: mac-image-check payload <edge|rc|stable> PAYLOAD.zip INSTALLER_DATA.json [--profile lab] [--image-profile production|j714s-developer]
+-       mac-image-check image <edge|rc|stable> ROOT.img BOOT.img ESP_DIR --candidates DIR [--report FILE] [--profile lab] [--image-profile production|j714s-developer]
+-       mac-image-check tree <edge|rc|stable> ROOT_TREE [FACTORY_TREE] --candidates DIR [--report FILE] [--profile lab] [--image-profile production|j714s-developer]
++USAGE = """Usage: mac-image-check payload <edge|rc|stable> PAYLOAD.zip INSTALLER_DATA.json [--profile lab] [--image-profile production|j714s]
++       mac-image-check image <edge|rc|stable> ROOT.img BOOT.img ESP_DIR --candidates DIR [--report FILE] [--profile lab] [--image-profile production|j714s]
++       mac-image-check tree <edge|rc|stable> ROOT_TREE [FACTORY_TREE] --candidates DIR [--report FILE] [--profile lab] [--image-profile production|j714s]
+        mac-image-check provenance <edge|rc|stable> BUILD_DIR
+        mac-image-check descriptor <edge|rc|stable> BUILD_DIR
+        mac-image-check name <edge|rc|stable> BUILD_DIR"""
+diff --git a/image-builder/builder/aura_macho.py b/image-builder/builder/aura_macho.py
+new file mode 100644
+index 0000000..5f699ad
+--- /dev/null
++++ b/image-builder/builder/aura_macho.py
+@@ -0,0 +1,150 @@
++#!/usr/bin/env python3
++"""Aura's Mach-O Stage 1 boot object, checked the way the installer engine checks it.
++
++The engine (Engine/overlay/src/omarchy_macho.py, ported from
++aurora-silicon/aurora-installer AuraStage1.swift, MIT, which follows aura
++tools/macho_boot_object.py) fills the raw Stage 1's config block and carries
++the filled image into this object. It refuses an object that does not carry
++the raw image verbatim at the start of __TEXT_EXEC, followed only by zeros to
++the end of that segment's file data, entered at the raw image's own entry
++point. kmutil records the size of __TEXT_BOOT_EXEC as kcbz, and macOS 27.2
++iBoot starts SPTM only when kcbz is nonzero, so the object must not have one.
++The builder holds the image to the same rules, so it never publishes a payload
++the engine would refuse.
++"""
++from __future__ import annotations
++
++from pathlib import Path
++import struct
++import sys
++
++LC_SEGMENT_64 = 0x19
++LC_UNIXTHREAD = 0x5
++MH_MAGIC_64 = 0xFEEDFACF
++CPU_TYPE_ARM64 = 0x0100000C
++MH_FILESET = 12
++REQUIRED = ("__TEXT", "__TEXT_EXEC", "__PRELINK_INFO", "__LINKEDIT")
++RAW_ENTRY_OFFSET = 0x800
++MAXIMUM_SIZE = 64 << 20
++
++
++class MachOError(ValueError):
++    pass
++
++
++def layout(data: bytes) -> tuple[dict[str, tuple[int, int, int, int]], int]:
++    """Segments by name (vmaddr, vmsize, fileoff, filesize) and the entry point."""
++    if not isinstance(data, (bytes, bytearray)) or len(data) > MAXIMUM_SIZE:
++        raise MachOError("not a Mach-O boot object")
++
++    def u32(offset: int) -> int:
++        if offset < 0 or offset + 4 > len(data):
++            raise MachOError("truncated Mach-O boot object")
++        return struct.unpack_from("<I", data, offset)[0]
++
++    def u64(offset: int) -> int:
++        if offset < 0 or offset + 8 > len(data):
++            raise MachOError("truncated Mach-O boot object")
++        return struct.unpack_from("<Q", data, offset)[0]
++
++    if u32(0) != MH_MAGIC_64 or u32(4) != CPU_TYPE_ARM64:
++        raise MachOError("not a 64-bit Arm Mach-O image")
++    if u32(12) != MH_FILESET:
++        raise MachOError("not a fileset boot object")
++    count, size = u32(16), u32(20)
++    if 32 + size > len(data):
++        raise MachOError("the Mach-O load commands are truncated")
++    segments: dict[str, tuple[int, int, int, int]] = {}
++    entry = None
++    offset = 32
++    for _ in range(count):
++        command, length = u32(offset), u32(offset + 4)
++        if length < 8 or length % 8 or offset + length > 32 + size:
++            raise MachOError("malformed Mach-O load command")
++        if command == LC_SEGMENT_64:
++            if length < 72:
++                raise MachOError("malformed Mach-O segment")
++            name = data[offset + 8:offset + 24].split(b"\0", 1)[0].decode("ascii", "replace")
++            if name in segments:
++                raise MachOError(f"duplicate Mach-O segment {name}")
++            segments[name] = (u64(offset + 24), u64(offset + 32), u64(offset + 40), u64(offset + 48))
++        elif command == LC_UNIXTHREAD:
++            if length < 16 + 34 * 8 or u32(offset + 8) != 6:
++                raise MachOError("malformed Mach-O entry thread")
++            entry = u64(offset + 16 + 32 * 8)
++        offset += length
++    if offset != 32 + size:
++        raise MachOError("the Mach-O load command sizes disagree")
++    boot = segments.get("__TEXT_BOOT_EXEC")
++    if boot is not None and (boot[1] or boot[3]):
++        raise MachOError("it has __TEXT_BOOT_EXEC, so iBoot would start SPTM")
++    for name in REQUIRED:
++        if name not in segments:
++            raise MachOError(f"it has no {name} segment")
++    base = segments["__TEXT"][0]
++    if segments["__TEXT"][2] != 0:
++        raise MachOError("__TEXT is not at offset 0")
++    for name, (vmaddr, vmsize, fileoff, filesize) in segments.items():
++        if vmsize and (vmaddr < base or fileoff != vmaddr - base or filesize != vmsize
++                       or fileoff > len(data) or filesize > len(data) - fileoff):
++            raise MachOError(f"{name} is not file-backed at its virtual offset")
++    code = segments["__TEXT_EXEC"]
++    if entry is None or not code[0] <= entry < code[0] + code[1]:
++        raise MachOError("its entry point is outside __TEXT_EXEC")
++    return segments, entry
++
++
++def check_carries(macho: bytes, raw: bytes) -> None:
++    """MACHO is Aura's unpadded boot object for exactly RAW, or MachOError."""
++    segments, entry = layout(macho)
++    vmaddr, _, fileoff, filesize = segments["__TEXT_EXEC"]
++    if not raw or len(raw) > filesize:
++        raise MachOError("it does not carry this Stage 1")
++    if entry != vmaddr + RAW_ENTRY_OFFSET:
++        raise MachOError("it does not enter this Stage 1 at its entry point")
++    end = fileoff + len(raw)
++    if macho[fileoff:end] != raw or any(macho[end:fileoff + filesize]):
++        raise MachOError("it does not carry this Stage 1 at the start of __TEXT_EXEC, followed only by zeros")
++
++
++def build(raw: bytes, *, boot_exec: bool = False, entry: int = RAW_ENTRY_OFFSET) -> bytes:
++    """An MH_FILESET object carrying RAW at the start of __TEXT_EXEC, laid out as aura's
++    tools/macho_boot_object.py lays it out (for tests and fixtures)."""
++    page, base = 0x4000, 0xFFFFFE0007004000
++    code = -(-len(raw) // page) * page
++    names = [("__TEXT", page), ("__TEXT_EXEC", code), ("__PRELINK_INFO", page), ("__LINKEDIT", page)]
++    if boot_exec:
++        names.insert(2, ("__TEXT_BOOT_EXEC", page))
++    commands, offset, code_offset = [], 0, 0
++    for name, size in names:
++        commands.append(struct.pack("<II16sQQQQIIII", LC_SEGMENT_64, 72, name.encode(), base + offset,
++                                    size, offset, size, 5, 5, 0, 0))
++        if name == "__TEXT_EXEC":
++            code_offset = offset
++        offset += size
++    state = [0] * 34
++    state[32] = base + code_offset + entry
++    commands.append(struct.pack("<IIII", LC_UNIXTHREAD, 16 + 34 * 8, 6, 68) + struct.pack("<34Q", *state))
++    body = b"".join(commands)
++    header = struct.pack("<IIIIIIII", MH_MAGIC_64, CPU_TYPE_ARM64, 2, MH_FILESET, len(commands), len(body), 0, 0)
++    image = bytearray(offset)
++    image[:len(header) + len(body)] = header + body
++    image[code_offset:code_offset + len(raw)] = raw
++    return bytes(image)
++
++
++def main(argv: list[str]) -> int:
++    if len(argv) != 4 or argv[1] != "check":
++        print("usage: aura_macho.py check MACHO RAW", file=sys.stderr)
++        return 64
++    try:
++        check_carries(Path(argv[2]).read_bytes(), Path(argv[3]).read_bytes())
++    except (OSError, MachOError) as error:
++        print(f"aura_macho: {argv[2]}: {error}", file=sys.stderr)
++        return 1
++    print(f"{argv[2]} carries {argv[3]} at the start of __TEXT_EXEC")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv))
+diff --git a/image-builder/builder/candidate_set.py b/image-builder/builder/candidate_set.py
+index 1892868..4b564a0 100755
+--- a/image-builder/builder/candidate_set.py
++++ b/image-builder/builder/candidate_set.py
+@@ -398,10 +398,10 @@ def main(argv=None):
+     imported.add_argument('--receipt-sha256', required=True)
+     imported.add_argument('--manifest-sha256', required=True)
+     imported.add_argument('--source-commit', required=True)
+-    imported.add_argument('--image-profile', choices=('production', 'j714s-developer'), default='production')
++    imported.add_argument('--image-profile', choices=('production', 'j714s'), default='production')
+     described = commands.add_parser('describe')
+     described.add_argument('--input', type=Path, required=True)
+-    described.add_argument('--image-profile', choices=('production', 'j714s-developer'), default='production')
++    described.add_argument('--image-profile', choices=('production', 'j714s'), default='production')
+     args = parser.parse_args(argv)
+     try:
+         if args.command == 'import':
+diff --git a/image-builder/builder/image_profile.py b/image-builder/builder/image_profile.py
+index 4a7eee0..b10ce51 100644
+--- a/image-builder/builder/image_profile.py
++++ b/image-builder/builder/image_profile.py
+@@ -10,10 +10,15 @@ PROFILES = {
+     "production": {
+         "trust": ROOT / "candidate-trust",
+         "stage1": None,
++        "line": None,
+     },
+-    "j714s-developer": {
+-        "trust": ROOT / "profiles/j714s-developer/candidate-trust",
+-        "stage1": ROOT / "profiles/j714s-developer/stage1-qualification.json",
++    # The one J714s image line (omarchy-j714s-<N>): macOS 27.2 stub firmware,
++    # Aura's padded Mach-O Stage 1 and the confined Stage 2 (board-macho-ctxr-v1).
++    "j714s": {
++        "trust": ROOT / "profiles/j714s/candidate-trust",
++        "stage1": ROOT / "profiles/j714s/stage1-qualification.json",
++        # Its payload is omarchy-j714s-<N>-aarch64-apple-silicon-mac-os-package.zip.
++        "line": "j714s",
+     },
+ }
+ 
+@@ -26,8 +31,8 @@ def select(name: str = "production") -> dict:
+ 
+ 
+ def main(argv: list[str]) -> int:
+-    if len(argv) != 3 or argv[1] not in ("trust", "stage1"):
+-        print("usage: image_profile.py trust|stage1 PROFILE", file=sys.stderr)
++    if len(argv) != 3 or argv[1] not in ("trust", "stage1", "line"):
++        print("usage: image_profile.py trust|stage1|line PROFILE", file=sys.stderr)
+         return 64
+     try:
+         value = select(argv[2])[argv[1]]
+diff --git a/image-builder/builder/inspection.py b/image-builder/builder/inspection.py
+index 5d27d09..ecd8d8c 100644
+--- a/image-builder/builder/inspection.py
++++ b/image-builder/builder/inspection.py
+@@ -74,6 +74,7 @@ def _load(name: str, file: str):
+ 
+ candidate_set = _load("candidate_set", "candidate_set.py")
+ stage1_qualification = _load("stage1_qualification", "stage1_qualification.py")
++aura_macho = _load("aura_macho", "aura_macho.py")
+ limine = _load("apple_limine", "apple_limine.py")
+ installed_system = _load("verify_installed_system", "verify_installed_system.py")
+ # The raw Stage 1 the engine enrolls on a MacBook Neo.
+@@ -296,6 +297,33 @@ def check_installed_payloads(root: Path, candidates: Candidates, image_profile:
+         installed = root / path
+         require(installed.is_file() and not installed.is_symlink(), f"/{path} is missing")
+         require(installed.read_bytes() == candidates.member(package, path), f"/{path} is not {package}'s from the set")
++    qualification = stage1_qualification.load(profile=image_profile)
++    board = stage1_qualification.board_macho(qualification)
++    esp = root / "boot"
++    if board is not None:
++        # A board Mach-O image: the board's raw Stage 1 and Aura's boot object of it, both
++        # the authenticated m1n1-aurora package's, and no common or Neo Stage 1 or 2.
++        owner = candidates.boot_owners[STAGE1]
++        raw = candidates.member(owner, STAGE1)
++        listing = candidates.listing(owner)
++        sources = [path for path in stage1_qualification.PACKAGE_MACHO_STAGE1S if path in listing]
++        require(sources, "m1n1-aurora carries no Mach-O Stage 1")
++        macho = candidates.member(owner, sources[0])
++        for member, data in ((board["raw"], raw), (board["macho"], macho)):
++            installed = esp / ("efi/" + member.removeprefix("esp/"))
++            require(installed.is_file() and not installed.is_symlink() and installed.read_bytes() == data,
++                    f"{member} does not match the authenticated m1n1-aurora package")
++        try:
++            aura_macho.check_carries(macho, raw)
++        except aura_macho.MachOError as error:
++            raise InspectionError(f"m1n1-aurora's {PurePosixPath(sources[0]).name} is not Aura's boot object "
++                                  f"of its raw Stage 1: {error}") from error
++        for member in (stage1_qualification.COMMON_STAGE1, stage1_qualification.J700_STAGE1,
++                       stage1_qualification.J700_STAGE2):
++            stray = esp / ("efi/" + member.removeprefix("esp/"))
++            require(not stray.exists() and not stray.is_symlink(), f"a board Mach-O image carries {member}")
++        return (f"m1n1, U-Boot, the kernel, {len(candidates.dtbs())} device trees and the "
++                f"{PurePosixPath(board['macho']).name} Stage 1 match the set's archives")
+     # The engine's J700 Stage 1 and Stage 2 (BOARD_STAGE1, BOARD_STAGE2).
+     stage1 = root / "boot/efi/aurora/stage1-j700.bin"
+     stage2 = root / "boot/efi/m1n1/boot-j700.bin"
+@@ -305,7 +333,8 @@ def check_installed_payloads(root: Path, candidates: Candidates, image_profile:
+     require(stage2.is_file() and not stage2.is_symlink()
+             and stage2.read_bytes() == (root / "boot/efi/m1n1/boot.bin").read_bytes(),
+             "the J700 Stage 2 does not match the inspected common bundle")
+-    qualification = stage1_qualification.load(profile=image_profile)
++    ctxr = root / "boot/efi/m1n1/boot-ctxr.bin"
++    require(not ctxr.exists() and not ctxr.is_symlink(), "the image carries a confined Stage 2 it does not enroll")
+     if qualification is not None:
+         common = root / "boot/efi/aurora/stage1.bin"
+         require(common.is_file() and not common.is_symlink()
+@@ -314,28 +343,61 @@ def check_installed_payloads(root: Path, candidates: Candidates, image_profile:
+     return f"m1n1, U-Boot, the kernel and {len(candidates.dtbs())} device trees match the set's archives"
+ 
+ 
+-def m1n1_stage2(root: Path, candidates: Candidates, report: dict) -> str:
+-    """m1n1/boot.bin is the set's m1n1, then every Aurora device tree in C
+-    order, then the set's U-Boot gzipped, then m1n1 options only."""
+-    data = limine.regular(root / "boot/efi/m1n1/boot.bin")
+-    m1n1 = candidates.member(candidates.boot_owners["usr/lib/asahi-boot/m1n1.bin"], "usr/lib/asahi-boot/m1n1.bin")
+-    require(data.startswith(m1n1), "m1n1/boot.bin does not start with the set's m1n1")
++def m1n1_stage2(root: Path, candidates: Candidates, report: dict, name: str = "m1n1/boot.bin",
++                leader: str = "usr/lib/asahi-boot/m1n1.bin", key: str = "m1n1_stage2") -> str:
++    """NAME (m1n1/boot.bin) is the set's LEADER (m1n1), then every Aurora device tree
++    in C order, then the set's U-Boot gzipped, then m1n1 options only."""
++    data = limine.regular(root / "boot/efi" / name)
++    m1n1 = candidates.member(candidates.boot_owners.get(leader, "m1n1-aurora"), leader)
++    require(data.startswith(m1n1), f"{name} does not start with the set's {PurePosixPath(leader).name}")
+     offset = len(m1n1)
+     names = candidates.dtbs()
+     for path in names:
+         dtb = candidates.member(KERNEL, path)
+         require(data[offset:offset + len(dtb)] == dtb,
+-                f"m1n1/boot.bin does not carry {PurePosixPath(path).name} from the set's kernel at its place")
++                f"{name} does not carry {PurePosixPath(path).name} from the set's kernel at its place")
+         offset += len(dtb)
+-    require(data[offset:offset + 4] != b"\xd0\x0d\xfe\xed", "m1n1/boot.bin carries a device tree the set's kernel lacks")
++    require(data[offset:offset + 4] != b"\xd0\x0d\xfe\xed", f"{name} carries a device tree the set's kernel lacks")
+     uboot, rest = limine.gunzip_prefix(data[offset:])
+     require(uboot == candidates.member(candidates.boot_owners["usr/lib/asahi-boot/u-boot-nodtb.bin"], "usr/lib/asahi-boot/u-boot-nodtb.bin"),
+-            "m1n1/boot.bin's U-Boot is not the set's")
++            f"{name}'s U-Boot is not the set's")
+     options = m1n1_options(root)
+-    require(rest == options, "m1n1/boot.bin does not end with exactly the image's m1n1 options")
+-    report["m1n1_stage2"] = {"device_trees": len(names), "bytes": len(data),
+-                             "options": options.decode(errors="replace").splitlines()}
+-    return f"m1n1 + {len(names)} device trees (C order) + U-Boot, all from the set"
++    require(rest == options, f"{name} does not end with exactly the image's m1n1 options")
++    report[key] = {"device_trees": len(names), "bytes": len(data),
++                   "options": options.decode(errors="replace").splitlines()}
++    return f"{PurePosixPath(leader).name} + {len(names)} device trees (C order) + U-Boot, all from the set"
++
++
++def ctxr_stage2(root: Path, candidates: Candidates, report: dict, image_profile: str = "production") -> str:
++    """A board Mach-O image's m1n1/boot-ctxr.bin, the confined Stage 2: m1n1/boot.bin
++    itself when the set's m1n1.bin is Aura's ESP_STAGE2=1 build, or the set's
++    m1n1-ctxr.bin followed by exactly the tail m1n1/boot.bin carries after its m1n1;
++    and the profile's helper and pacman hook that keep it current, as the profile has them."""
++    ctxr_path = root / "boot/efi/m1n1/boot-ctxr.bin"
++    helper, hook = root / stage1_qualification.CTXR_HELPER, root / stage1_qualification.CTXR_HOOK
++    if stage1_qualification.board_macho(stage1_qualification.load(profile=image_profile)) is None:
++        for path in (ctxr_path, helper, hook):
++            require(not path.exists() and not path.is_symlink(),
++                    f"/{path.relative_to(root)} is in an image that enrolls no board Mach-O Stage 1")
++        return "no confined Stage 2: the image enrolls no board Mach-O Stage 1"
++    source = HERE / "profiles" / image_profile / "boot-ctxr"
++    for installed, name, mode in ((helper, "update-boot-ctxr", 0o755), (hook, PurePosixPath(hook.name).name, 0o644)):
++        require(installed.is_file() and not installed.is_symlink()
++                and installed.read_bytes() == (source / name).read_bytes()
++                and stat.S_IMODE(installed.stat().st_mode) == mode,
++                f"/{installed.relative_to(root)} is not the {image_profile} profile's (mode {mode:o})")
++    common = limine.regular(root / "boot/efi/m1n1/boot.bin")
++    confined = limine.regular(ctxr_path)
++    if stage1_qualification.PACKAGE_CTXR_STAGE2 not in candidates.listing("m1n1-aurora"):
++        require(confined == common, "m1n1/boot-ctxr.bin is not m1n1/boot.bin (m1n1.bin is the confined build)")
++        report["ctxr_stage2"] = {"source": "m1n1/boot.bin", "bytes": len(confined)}
++        return "m1n1/boot-ctxr.bin is m1n1/boot.bin, whose m1n1.bin is the confined build"
++    detail = m1n1_stage2(root, candidates, report, "m1n1/boot-ctxr.bin",
++                         stage1_qualification.PACKAGE_CTXR_STAGE2, "ctxr_stage2")
++    leader = candidates.member(candidates.boot_owners["usr/lib/asahi-boot/m1n1.bin"], "usr/lib/asahi-boot/m1n1.bin")
++    ctxr = candidates.member("m1n1-aurora", stage1_qualification.PACKAGE_CTXR_STAGE2)
++    require(confined[len(ctxr):] == common[len(leader):], "m1n1/boot-ctxr.bin's tail is not m1n1/boot.bin's")
++    return detail
+ 
+ 
+ def m1n1_options(root: Path) -> bytes:
+@@ -821,6 +883,7 @@ def inspect(root: Path, candidates_dir: Path, channel: str, factory: Path | None
+         ("candidate-files", lambda: check_candidate_files(root, candidates, report)),
+         ("package-mtrees", lambda: check_package_mtrees(root, candidates)),
+         ("m1n1-stage2", lambda: m1n1_stage2(root, candidates, report)),
++        ("ctxr-stage2", lambda: ctxr_stage2(root, candidates, report, image_profile)),
+         ("aurora-device-trees", lambda: check_supported_models(root, candidates, report, policy)),
+         ("limine-uki", lambda: check_limine(root, candidates, report, image_profile)),
+         ("embedded-initramfs", lambda: check_embedded_initramfs(root, report)),
+diff --git a/image-builder/builder/profiles/j714s-developer/stage1-qualification.json b/image-builder/builder/profiles/j714s-developer/stage1-qualification.json
+deleted file mode 100644
+index 4cef994..0000000
+--- a/image-builder/builder/profiles/j714s-developer/stage1-qualification.json
++++ /dev/null
+@@ -1,13 +0,0 @@
+-{
+-  "kind": "common-raw-v1",
+-  "qualified_machines": {
+-    "j714sap": [
+-      "27.3"
+-    ]
+-  },
+-  "qualified_system_firmware": {
+-    "j714sap": [
+-      "mBoot-20457.60.65.0.1"
+-    ]
+-  }
+-}
+diff --git a/image-builder/builder/profiles/j714s/boot-ctxr/96-omarchy-j714s-boot-ctxr.hook b/image-builder/builder/profiles/j714s/boot-ctxr/96-omarchy-j714s-boot-ctxr.hook
+new file mode 100644
+index 0000000..442ec81
+--- /dev/null
++++ b/image-builder/builder/profiles/j714s/boot-ctxr/96-omarchy-j714s-boot-ctxr.hook
+@@ -0,0 +1,14 @@
++# After asahi-scripts' 95-m1n1-install.hook (update-m1n1), on the same targets:
++# rewrite the J714s's confined Stage 2, m1n1/boot-ctxr.bin, from m1n1/boot.bin.
++[Trigger]
++Type = Path
++Operation = Install
++Operation = Upgrade
++Operation = Remove
++Target = usr/lib/modules/*/dtbs/*
++Target = usr/lib/asahi-boot/*
++
++[Action]
++Description = Updating the confined m1n1 Stage 2 (m1n1/boot-ctxr.bin)...
++When = PostTransaction
++Exec = /usr/local/lib/omarchy-j714s/update-boot-ctxr
+diff --git a/image-builder/builder/profiles/j714s/boot-ctxr/update-boot-ctxr b/image-builder/builder/profiles/j714s/boot-ctxr/update-boot-ctxr
+new file mode 100755
+index 0000000..556ab7d
+--- /dev/null
++++ b/image-builder/builder/profiles/j714s/boot-ctxr/update-boot-ctxr
+@@ -0,0 +1,38 @@
++#!/bin/sh
++# Keeps the J714s's confined Stage 2, /boot/efi/m1n1/boot-ctxr.bin, the one the
++# padded Aura Mach-O Stage 1 chainloads, in step with update-m1n1's
++# m1n1/boot.bin: the image builder runs it once after update-m1n1, and the
++# pacman hook 96-omarchy-j714s-boot-ctxr.hook after asahi-scripts'
++# 95-m1n1-install.hook on every m1n1, U-Boot or device tree change.
++#
++# m1n1-aurora installs Aura's ESP_STAGE2=1 build as /usr/lib/asahi-boot/m1n1.bin,
++# so boot.bin already is the confined Stage 2 and this copies it. A package that
++# ships the confined build apart, as /usr/lib/asahi-boot/m1n1-ctxr.bin, gets it
++# followed by exactly the device trees, U-Boot and options boot.bin carries after
++# m1n1.bin. Written beside the target, then renamed over it.
++set -eu
++# OMARCHY_ROOT: another root's files, for the builder's own tests; empty in the image.
++root=${OMARCHY_ROOT:-}
++esp=$root/boot/efi/m1n1
++boot=$esp/boot.bin
++m1n1=$root/usr/lib/asahi-boot/m1n1.bin
++ctxr=$root/usr/lib/asahi-boot/m1n1-ctxr.bin
++if [ ! -s "$boot" ]; then
++  echo "update-boot-ctxr: $boot is missing; is the ESP mounted?" >&2
++  exit 1
++fi
++tmp=$esp/.boot-ctxr.bin.new
++trap 'rm -f "$tmp"' EXIT
++if [ -s "$ctxr" ]; then
++  size=$(stat -c %s "$m1n1")
++  if [ "$(stat -c %s "$boot")" -le "$size" ] || ! cmp -s -n "$size" "$m1n1" "$boot"; then
++    echo "update-boot-ctxr: $boot does not start with $m1n1" >&2
++    exit 1
++  fi
++  { cat "$ctxr"; tail -c +"$((size + 1))" "$boot"; } >"$tmp"
++else
++  cat "$boot" >"$tmp"
++fi
++sync "$tmp"
++mv -f "$tmp" "$esp/boot-ctxr.bin"
++trap - EXIT
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json b/image-builder/builder/profiles/j714s/candidate-trust/policy.json
+similarity index 100%
+rename from image-builder/builder/profiles/j714s-developer/candidate-trust/policy.json
+rename to image-builder/builder/profiles/j714s/candidate-trust/policy.json
+diff --git a/image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc b/image-builder/builder/profiles/j714s/candidate-trust/public.asc
+similarity index 100%
+rename from image-builder/builder/profiles/j714s-developer/candidate-trust/public.asc
+rename to image-builder/builder/profiles/j714s/candidate-trust/public.asc
+diff --git a/image-builder/builder/profiles/j714s/stage1-qualification.json b/image-builder/builder/profiles/j714s/stage1-qualification.json
+new file mode 100644
+index 0000000..8ef43b9
+--- /dev/null
++++ b/image-builder/builder/profiles/j714s/stage1-qualification.json
+@@ -0,0 +1,8 @@
++{
++  "kind": "board-macho-ctxr-v1",
++  "qualified_machines": {
++    "j714sap": [
++      "27.2"
++    ]
++  }
++}
+diff --git a/image-builder/builder/stage1_qualification.py b/image-builder/builder/stage1_qualification.py
+index 21472e2..37de886 100644
+--- a/image-builder/builder/stage1_qualification.py
++++ b/image-builder/builder/stage1_qualification.py
+@@ -1,7 +1,15 @@
+-"""Read the reviewed common Stage 1 qualification used by this image source.
++"""Read the reviewed Stage 1 qualification used by this image source.
+ 
+-This is the engine's existing aurora_stage1 metadata contract, not a device
+-admission list. The shipped null policy qualifies no new machines.
++This is the engine's aurora_stage1 metadata contract, not a device admission
++list. The shipped null policy qualifies no new machines. Two kinds:
++
++- common-raw-v1: the common raw Stage 1 (esp/aurora/stage1.bin) on exact
++  machines/OS firmware, optionally exact system firmware.
++- board-macho-ctxr-v1: one board's own Stage 1 as Aura's Mach-O boot object,
++  enrolled padded for the CTXR execute window, chainloading the confined
++  Stage 2 m1n1/boot-ctxr.bin. One board, its one OS firmware, and no system
++  firmware pin: the engine applies Apple's rule that the stub may not be newer
++  than the system firmware.
+ """
+ from __future__ import annotations
+ 
+@@ -15,11 +23,51 @@ import sys
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ from image_profile import select as select_image_profile
++COMMON_RAW = "common-raw-v1"
++BOARD_MACHO_CTXR = "board-macho-ctxr-v1"
++KINDS = (COMMON_RAW, BOARD_MACHO_CTXR)
+ COMMON_STAGE1 = "esp/aurora/stage1.bin"
++# The Neo's raw Stage 1 and Stage 2 (the engine's BOARD_STAGE1, BOARD_STAGE2), which
++# every image but a board Mach-O one carries.
++J700_STAGE1 = "esp/aurora/stage1-j700.bin"
++J700_STAGE2 = "esp/m1n1/boot-j700.bin"
++# The boards a board-macho-ctxr-v1 image may name, each with the one OS (stub)
++# firmware it boots and its ESP members (the engine's BOARD_MACHO).
++BOARD_MACHO = {
++    "j714sap": {
++        "os_firmware": "27.2",
++        "raw": "esp/aurora/stage1-j714s.bin",
++        "macho": "esp/aurora/stage1-j714s.macho",
++    },
++}
++# The confined Stage 2 a padded Stage 1 chainloads: the Aura ESP_STAGE2=1 build,
++# then the same device trees, U-Boot and options m1n1/boot.bin carries.
++CTXR_STAGE2 = "esp/m1n1/boot-ctxr.bin"
++# Their sources in the image's m1n1-aurora package. The Mach-O Stage 1 is aura's
++# build/aura-boot.macho (tools/macho_boot_object.py's MH_FILESET wrap of aura.bin),
++# which the m1n1-aurora recipes install as m1n1-boot.macho; their m1n1.macho is aura's
++# own linked Mach-O (no __TEXT_EXEC), which the engine cannot fill, and is used only
++# by a package without m1n1-boot.macho. m1n1-aurora installs Aura's ESP_STAGE2=1
++# build as m1n1.bin, so m1n1/boot.bin already is the confined Stage 2; a package may
++# instead ship that build apart as m1n1-ctxr.bin.
++PACKAGE_RAW_STAGE1 = "usr/share/m1n1-aurora/stage1/m1n1-raw.bin"
++PACKAGE_MACHO_STAGE1S = ("usr/share/m1n1-aurora/stage1/m1n1-boot.macho",
++                         "usr/share/m1n1-aurora/stage1/m1n1.macho")
++PACKAGE_CTXR_STAGE2 = "usr/lib/asahi-boot/m1n1-ctxr.bin"
++# The profile helper and pacman hook that keep m1n1/boot-ctxr.bin current
++# (profiles/<profile>/boot-ctxr/), where the image carries them.
++CTXR_HELPER = "usr/local/lib/omarchy-j714s/update-boot-ctxr"
++CTXR_HOOK = "etc/pacman.d/hooks/96-omarchy-j714s-boot-ctxr.hook"
+ DEVICE_CLASS = re.compile(r"j[0-9]+[a-z]*ap\Z")
+ SYSTEM_FIRMWARE = re.compile(r"(?:mBoot|iBoot)-[0-9]+(?:\.[0-9]+)*\Z")
+-J714S_KERNEL_VERSION = "7.3.0.aurora17.up273-10"
+-J714S_KERNEL_RELEASE = "7.3.0-17.up273-10-ARCH"
++# The J714s kernel the image must carry (the budgets below are only seeded for it).
++# From installer/recipes/linux-aurora-j714s in betizzel/omarchy-m5 before its first
++# build (_auroraver=7.3.0, _aurorarel=17.v272, pkgrel=1; "v272" sorts above "up273").
++# When the package lands, recheck both against the built archive's pkgver-pkgrel and
++# its usr/lib/modules/<release> directory, and update
++# Integration/M5/J714s-Normal-System/candidate-package-manifest.json to match.
++J714S_KERNEL_VERSION = "7.3.0.aurora17.v272-1"
++J714S_KERNEL_RELEASE = "7.3.0-17.v272-1-ARCH"
+ J714S_ARGUMENTS = ("macsmc.m5_pcio_budget=2", "macsmc.m5_n1_budget=3")
+ # What the merged kernel (betizzel/omarchy-m5 linux-aurora-n1 0001-0008) was verified
+ # with on bare metal, besides the budgets: PMGR domains read-only except the ones its
+@@ -52,7 +100,7 @@ def load(path: Path | None = None, profile: str = "production") -> dict | None:
+     required = {"kind", "qualified_machines"}
+     if (not isinstance(document, dict) or not required <= document.keys()
+             or document.keys() - required - {"qualified_system_firmware"}
+-            or document["kind"] != "common-raw-v1"):
++            or document["kind"] not in KINDS):
+         raise ValueError("invalid Stage 1 qualification contract")
+     machines = document["qualified_machines"]
+     if not isinstance(machines, dict) or not machines:
+@@ -64,6 +112,14 @@ def load(path: Path | None = None, profile: str = "production") -> dict | None:
+                            for version in versions)
+                 or len(set(versions)) != len(versions)):
+             raise ValueError("invalid Stage 1 machine/OS firmware qualification")
++    if document["kind"] == BOARD_MACHO_CTXR:
++        # The engine admits exactly one known board on exactly its OS firmware, and
++        # no system firmware pin.
++        if "qualified_system_firmware" in document or len(machines) != 1:
++            raise ValueError("a board Mach-O Stage 1 qualification names one board and no system firmware")
++        (board, versions), = machines.items()
++        if board not in BOARD_MACHO or versions != [BOARD_MACHO[board]["os_firmware"]]:
++            raise ValueError("a board Mach-O Stage 1 qualification names an unknown board or OS firmware")
+     if "qualified_system_firmware" in document:
+         system = document["qualified_system_firmware"]
+         if not isinstance(system, dict) or not system or system.keys() - machines.keys():
+@@ -85,12 +141,19 @@ def supported_firmware(base: list[str], policy: dict | None) -> list[str]:
+                               for version in versions})
+ 
+ 
++def board_macho(policy: dict | None) -> dict | None:
++    """The board's members if POLICY is a board Mach-O qualification, else None."""
++    if policy is None or policy["kind"] != BOARD_MACHO_CTXR:
++        return None
++    (board,) = policy["qualified_machines"]
++    return BOARD_MACHO[board]
++
++
+ def expected_arguments(policy: dict | None) -> tuple[str, ...]:
+     if policy is None or "j714sap" not in policy["qualified_machines"]:
+         return ()
+-    if (policy["qualified_machines"] != {"j714sap": ["27.3"]}
+-            or policy.get("qualified_system_firmware") != {"j714sap": ["mBoot-20457.60.65.0.1"]}):
+-        raise ValueError("J714s budgets require the exact single-board candidate firmware profile")
++    if policy != {"kind": BOARD_MACHO_CTXR, "qualified_machines": {"j714sap": ["27.2"]}}:
++        raise ValueError("J714s budgets require the exact single-board board Mach-O 27.2 profile")
+     return J714S_ARGUMENTS
+ 
+ 
+@@ -163,6 +226,12 @@ if __name__ == "__main__":
+             print(json.dumps(load(), separators=(",", ":"), sort_keys=True))
+         elif len(sys.argv) == 3 and sys.argv[1] == "--profile":
+             print(json.dumps(load(profile=sys.argv[2]), separators=(",", ":"), sort_keys=True))
++        elif len(sys.argv) == 4 and sys.argv[1] == "board-macho" and sys.argv[2] == "--profile":
++            board = board_macho(load(profile=sys.argv[3]))
++            if board is None:
++                raise ValueError("the profile has no board Mach-O Stage 1 qualification")
++            print(board["raw"])
++            print(board["macho"])
+         elif len(sys.argv) == 6 and sys.argv[1] == "seed-cmdline" and sys.argv[4] == "--profile":
+             seed_cmdline(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[5])
+         else:
+diff --git a/image-builder/test/all b/image-builder/test/all
+index 7e8df92..948d0dd 100755
+--- a/image-builder/test/all
++++ b/image-builder/test/all
+@@ -31,6 +31,7 @@ python3 test/test_channel_set.py
+ python3 test/test_recovery_app.py
+ python3 test/test_inspection.py
+ python3 test/test_stage1_qualification.py
++python3 test/test_aura_macho.py
+ python3 test/test_image_profile.py
+ python3 test/test_mac_image_check.py
+ python3 test/test_lab_access.py
+diff --git a/image-builder/test/build-mac-image-test.sh b/image-builder/test/build-mac-image-test.sh
+index 9dc2d26..c17e90e 100755
+--- a/image-builder/test/build-mac-image-test.sh
++++ b/image-builder/test/build-mac-image-test.sh
+@@ -1075,6 +1075,59 @@ fi
+ ) || fail "the J700 boot payloads are missing or mismatched"
+ pass "every image stages matched J700 board payloads from the canonical Stage 1 and rejects a missing one"
+ 
++# The J714s line stages its raw and Mach-O Stage 1, builds the confined Stage 2 with the
++# profile's helper, installs its pacman hook, and carries no common or Neo Stage 1.
++(
++  candidates=$scratch/j714s-boot-inputs
++  target=$scratch/j714s-boot-target
++  logs=$scratch/j714s-logs
++  candidate_profile=j714s
++  mkdir -p "$candidates" "$logs" "$target/usr/share/m1n1-aurora/stage1" "$target/usr/lib/asahi-boot" "$target/boot/efi/m1n1"
++  echo '{}' >"$candidates/import.json"
++  python3 - "$target/usr/share/m1n1-aurora/stage1" "$here/test" <<'PY'
++import sys
++from pathlib import Path
++sys.path.insert(0, sys.argv[2])
++import fixtures
++out = Path(sys.argv[1])
++(out / "m1n1-raw.bin").write_bytes(fixtures.raw_stage1())
++(out / "m1n1-boot.macho").write_bytes(fixtures.aura_macho.build(fixtures.raw_stage1()))
++(out / "m1n1.macho").write_bytes(b"aura's own linked Mach-O")
++PY
++  printf 'confined m1n1' >"$target/usr/lib/asahi-boot/m1n1.bin"
++  printf 'confined m1n1 + trees + u-boot' >"$target/boot/efi/m1n1/boot.bin"
++  # The helper runs in the image; here, on the target's ESP.
++  isolated_chroot() { local root=$1; shift; OMARCHY_ROOT=$root "$root$1"; }
++  build_ctxr_stage2
++  cmp "$target/boot/efi/m1n1/boot.bin" "$target/boot/efi/m1n1/boot-ctxr.bin" || exit 1
++  # A package shipping the confined build apart: m1n1-ctxr.bin, then boot.bin's tail after m1n1.bin.
++  printf 'CTXR' >"$target/usr/lib/asahi-boot/m1n1-ctxr.bin"
++  OMARCHY_ROOT=$target "$target/$CTXR_HELPER"
++  [[ $(<"$target/boot/efi/m1n1/boot-ctxr.bin") == 'CTXR + trees + u-boot' ]] || exit 1
++  printf 'other m1n1' >"$target/usr/lib/asahi-boot/m1n1.bin"
++  if OMARCHY_ROOT=$target "$target/$CTXR_HELPER" 2>/dev/null; then exit 1; fi
++  [[ $(<"$target/boot/efi/m1n1/boot-ctxr.bin") == 'CTXR + trees + u-boot' && ! -e $target/boot/efi/m1n1/.boot-ctxr.bin.new ]] || exit 1
++  rm "$target/usr/lib/asahi-boot/m1n1-ctxr.bin"
++  printf 'confined m1n1' >"$target/usr/lib/asahi-boot/m1n1.bin"
++  [[ -x $target/$CTXR_HELPER && -f $target/$CTXR_HOOK ]] || exit 1
++  grep -Fxq 'Exec = /usr/local/lib/omarchy-j714s/update-boot-ctxr' "$target/$CTXR_HOOK" || exit 1
++  [[ ${CTXR_HOOK##*/} > 95-m1n1-install.hook ]] || exit 1
++  stage_board_boot_payloads
++  cmp "$target/usr/share/m1n1-aurora/stage1/m1n1-raw.bin" "$target/boot/efi/aurora/stage1-j714s.bin" || exit 1
++  cmp "$target/usr/share/m1n1-aurora/stage1/m1n1-boot.macho" "$target/boot/efi/aurora/stage1-j714s.macho" || exit 1
++  [[ ! -e $target/boot/efi/aurora/stage1.bin && ! -e $target/boot/efi/aurora/stage1-j700.bin &&
++     ! -e $target/boot/efi/m1n1/boot-j700.bin ]] || exit 1
++  # Without m1n1-boot.macho the fallback m1n1.macho must carry the raw Stage 1, and here it does not.
++  rm "$target/usr/share/m1n1-aurora/stage1/m1n1-boot.macho"
++  if (fail() { builder_fail "$@"; }; stage_board_boot_payloads) >/dev/null 2>&1; then
++    exit 1
++  fi
++  image_line=j714s image_version=7
++  [[ $(payload_name) == omarchy-j714s-7-aarch64-apple-silicon-mac-os-package.zip ]] || exit 1
++  valid_image_version 12 && ! valid_image_version 0 && ! valid_image_version 01 && ! valid_image_version 1b || exit 1
++) || fail "the J714s board Mach-O payloads are missing or mismatched"
++pass "the J714s line stages its Mach-O Stage 1 and confined Stage 2, its hook, and its payload name"
++
+ # Base runtime requests must resolve to the same reviewed stack as Apple requests.
+ (
+   candidates=$scratch/runtime-inputs
+diff --git a/image-builder/test/fixtures.py b/image-builder/test/fixtures.py
+index 3016e29..0d7e73e 100755
+--- a/image-builder/test/fixtures.py
++++ b/image-builder/test/fixtures.py
+@@ -51,6 +51,7 @@ def load(name: str, relative: str):
+ candidate_set = load("candidate_set", "builder/candidate_set.py")
+ test_image_pin = load("test_image_pin", "builder/test_image_pin.py")
+ recovery_app = load("recovery_app", "builder/recovery_app.py")
++aura_macho = load("aura_macho", "builder/aura_macho.py")
+ POLICY = json.loads((ROOT / "builder/candidate-trust/policy.json").read_text())
+ 
+ VERSIONS = {
+@@ -388,9 +389,12 @@ def payload_pe(extra: bytes) -> bytes:
+ 
+ 
+ def write_payload(zip_path: Path, boot_uuid: str, root_uuid: str, omit: tuple[str, ...] = (),
+-                  empty: tuple[str, ...] = (), grow: dict[str, int] | None = None, recovery_app: Path | None = None) -> None:
++                  empty: tuple[str, ...] = (), grow: dict[str, int] | None = None, recovery_app: Path | None = None,
++                  board_macho: bool = False, macho: bytes | None = None) -> None:
+     """The payload zip build-mac-image packages, with small stand-ins for its images. OMIT drops members,
+-    EMPTY truncates them and GROW appends that many zero bytes to each member it names."""
++    EMPTY truncates them and GROW appends that many zero bytes to each member it names. BOARD_MACHO makes
++    the J714s line's payload: its raw Stage 1, Aura's boot object of it (MACHO, if given) and the confined
++    Stage 2, and no J700 Stage 1 or 2."""
+     with tempfile.TemporaryDirectory() as temporary:
+         payload = Path(temporary)
+         for directory in ("esp/EFI/BOOT", "esp/EFI/Linux", "esp/m1n1", "esp/omarchy"):
+@@ -412,8 +416,14 @@ def write_payload(zip_path: Path, boot_uuid: str, root_uuid: str, omit: tuple[st
+         (payload / "esp/m1n1/boot.bin").write_bytes(b"m1n1" * 64)
+         shutil.copy(ROOT / "builder/omarchy-volume.icns", payload / "omarchy-volume.icns")
+         (payload / "esp/aurora").mkdir()
+-        (payload / "esp/aurora/stage1-j700.bin").write_bytes(raw_stage1())
+-        shutil.copy(payload / "esp/m1n1/boot.bin", payload / "esp/m1n1/boot-j700.bin")
++        if board_macho:
++            (payload / "esp/aurora/stage1-j714s.bin").write_bytes(raw_stage1())
++            (payload / "esp/aurora/stage1-j714s.macho").write_bytes(
++                aura_macho.build(raw_stage1()) if macho is None else macho)
++            shutil.copy(payload / "esp/m1n1/boot.bin", payload / "esp/m1n1/boot-ctxr.bin")
++        else:
++            (payload / "esp/aurora/stage1-j700.bin").write_bytes(raw_stage1())
++            shutil.copy(payload / "esp/m1n1/boot.bin", payload / "esp/m1n1/boot-j700.bin")
+         if recovery_app is not None:
+             shutil.copytree(recovery_app, payload / "esp/aurora/recovery")
+         for member in omit:
+diff --git a/image-builder/test/mac-image-inputs-test.sh b/image-builder/test/mac-image-inputs-test.sh
+index daa8b05..3090877 100755
+--- a/image-builder/test/mac-image-inputs-test.sh
++++ b/image-builder/test/mac-image-inputs-test.sh
+@@ -207,7 +207,7 @@ refuse "a lowercase channel signer" \
+   sed 's/^channel_signer=.*/channel_signer=40dfb630ff42bcffb047046cf0134ee680cac571/' "$work/channel-inputs"
+ refuse "a channel record without its manifest digest" sed '/^channel_manifest_sha256=/d' "$work/channel-inputs"
+ refuse "a channel record with the developer image profile" \
+-  awk '{ print } /^channel_manifest_sha256=/ { print "image_profile=j714s-developer" }' "$work/channel-inputs"
++  awk '{ print } /^channel_manifest_sha256=/ { print "image_profile=j714s" }' "$work/channel-inputs"
+ 
+ mkdir "$work/channel-packages"
+ "$BASH" "$inputs" packages "$work/channel-inputs" "$work/channel-packages" --cache "$work/cache" >/dev/null ||
+diff --git a/image-builder/test/test_aura_macho.py b/image-builder/test/test_aura_macho.py
+new file mode 100644
+index 0000000..02ea8e6
+--- /dev/null
++++ b/image-builder/test/test_aura_macho.py
+@@ -0,0 +1,67 @@
++#!/usr/bin/env python3
++"""The builder holds Aura's Mach-O Stage 1 to the engine's rules (Engine omarchy_macho.fill):
++the raw Stage 1 verbatim at the start of __TEXT_EXEC, only zeros after it to the end of the
++segment, entered at the raw image's entry point, and no __TEXT_BOOT_EXEC (kcbz 0)."""
++from pathlib import Path
++import struct
++import subprocess
++import sys
++import tempfile
++import unittest
++
++sys.path.insert(0, str(Path(__file__).resolve().parent))
++import fixtures  # noqa: E402
++
++macho = fixtures.aura_macho
++ROOT = fixtures.ROOT
++
++
++class AuraMachOTest(unittest.TestCase):
++    def setUp(self):
++        self.raw = fixtures.raw_stage1()
++
++    def test_the_fileset_wrap_of_the_raw_stage1_is_accepted(self):
++        obj = macho.build(self.raw)
++        macho.check_carries(obj, self.raw)
++        segments, entry = macho.layout(obj)
++        self.assertEqual(entry, segments["__TEXT_EXEC"][0] + macho.RAW_ENTRY_OFFSET)
++
++    def test_what_the_engine_refuses_is_refused(self):
++        other = self.raw[:-9] + b"X" + self.raw[-8:]
++        obj = bytearray(macho.build(self.raw))
++        code = macho.layout(bytes(obj))[0]["__TEXT_EXEC"]
++        trailing = bytearray(obj)
++        trailing[code[2] + len(self.raw)] = 1
++        cases = {
++            "another Stage 1": (macho.build(other), "does not carry"),
++            "SPTM": (macho.build(self.raw, boot_exec=True), "SPTM"),
++            "entry point": (macho.build(self.raw, entry=0x400), "entry point"),
++            "not Mach-O": (b"not a mach-o boot object", "not a 64-bit Arm Mach-O"),
++            "non-zero tail": (bytes(trailing), "followed only by zeros"),
++            "truncated": (bytes(obj[:len(obj) // 2]), "file-backed|truncated"),
++        }
++        for name, (data, message) in cases.items():
++            with self.subTest(name), self.assertRaisesRegex(macho.MachOError, message):
++                macho.check_carries(data, self.raw)
++
++    def test_aura_s_own_linked_macho_is_not_a_fileset_boot_object(self):
++        # aura's build/aura.macho (the recipes' m1n1.macho) is MH_EXECUTE-style, without __TEXT_EXEC.
++        header = struct.pack("<IIIIIIII", macho.MH_MAGIC_64, macho.CPU_TYPE_ARM64, 0, 2, 0, 0, 0, 0)
++        with self.assertRaisesRegex(macho.MachOError, "not a fileset"):
++            macho.check_carries(header + bytes(64), self.raw)
++
++    def test_the_command_line_check(self):
++        with tempfile.TemporaryDirectory() as temporary:
++            raw, obj = Path(temporary, "raw.bin"), Path(temporary, "stage1.macho")
++            raw.write_bytes(self.raw)
++            obj.write_bytes(macho.build(self.raw))
++            tool = [sys.executable, str(ROOT / "builder/aura_macho.py"), "check", str(obj), str(raw)]
++            self.assertEqual(subprocess.run(tool, capture_output=True).returncode, 0)
++            obj.write_bytes(macho.build(self.raw, boot_exec=True))
++            result = subprocess.run(tool, capture_output=True, text=True)
++            self.assertEqual(result.returncode, 1)
++            self.assertIn("SPTM", result.stderr)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/image-builder/test/test_candidate_set.py b/image-builder/test/test_candidate_set.py
+index 55db99f..ad78223 100755
+--- a/image-builder/test/test_candidate_set.py
++++ b/image-builder/test/test_candidate_set.py
+@@ -102,18 +102,19 @@ class CandidateSetTest(unittest.TestCase):
+         summary = self.verify()
+         self.assertIn("uboot-aurora", {p["name"] for p in summary["packages"]})
+ 
+-    def test_j714s_developer_profile_accepts_its_exact_18_roles(self):
++    def test_j714s_profile_accepts_its_exact_18_roles(self):
+         from image_profile import select
++        import stage1_qualification
+ 
+         signer = fixtures.Signer(self.base / "j714s-signer")
+         self.addCleanup(signer.close)
+-        profile = json.loads(select("j714s-developer")["trust"].joinpath("policy.json").read_text())
++        profile = json.loads(select("j714s")["trust"].joinpath("policy.json").read_text())
+         profile.update(primary_fingerprint=signer.fingerprint, signing_fingerprint=signer.fingerprint,
+                        public_key_sha256=c.digest(signer.trust / "public.asc"))
+         (signer.trust / "policy.json").write_text(json.dumps(profile))
+         names = profile["runtime_packages"] + profile["boot_packages"] + profile["support_packages"]
+         self.assertEqual(len(names), 18)
+-        release = "7.3.0-17.up273-10-ARCH"
++        release = stage1_qualification.J714S_KERNEL_RELEASE
+         contents = fixtures.default_contents()
+         kernel = contents["linux-aurora"]
+         kernel = {path.replace(fixtures.RELEASE, release): data for path, data in kernel.items()}
+@@ -126,7 +127,7 @@ class CandidateSetTest(unittest.TestCase):
+                     package["source"] = {"repository": profile["boot_repository"], "commit": fixtures.BOOT_SOURCE}
+ 
+         receipt = fixtures.make_set(input_set, signer, names=names,
+-                                    versions={"linux-aurora": "7.3.0.aurora17.up273-10", "hyprland-m5": "0.57.2-2",
++                                    versions={"linux-aurora": stage1_qualification.J714S_KERNEL_VERSION, "hyprland-m5": "0.57.2-2",
+                                               "aurora-sep": "1.17.g8679514f4dff-1", "libfprint-aurora": "1.94.100-1"},
+                                     arches={"aurora-sep": "any"},
+                                     contents=contents, manifest_edit=developer_sources)
+diff --git a/image-builder/test/test_engine_contract.py b/image-builder/test/test_engine_contract.py
+index d09c6cf..5b64c9d 100644
+--- a/image-builder/test/test_engine_contract.py
++++ b/image-builder/test/test_engine_contract.py
+@@ -100,13 +100,13 @@ def engine_metadata(package: str) -> dict:
+     return metadata
+ 
+ 
+-def written_metadata(package: str, out: Path, recovery_digest: str = "") -> dict:
++def written_metadata(package: str, out: Path, recovery_digest: str = "", image_profile: str = "production") -> dict:
+     """The installer_data.json build-mac-image writes for PACKAGE."""
+     candidates = out.parent / "metadata-set"
+     candidates.mkdir(exist_ok=True)
+     (candidates / "import.json").write_text("{}")
+-    subprocess.run(["bash", "-c", 'source "$1" && candidates="$4" && field() { printf %s "$recovery_digest"; }; recovery_digest="$5"; write_installer_data "$2" "$3"', "bash",
+-                    str(ROOT / "bin/build-mac-image"), package, str(out), str(candidates), recovery_digest], check=True)
++    subprocess.run(["bash", "-c", 'source "$1" && candidates="$4" && candidate_profile="$6" && field() { printf %s "$recovery_digest"; }; recovery_digest="$5"; write_installer_data "$2" "$3"', "bash",
++                    str(ROOT / "bin/build-mac-image"), package, str(out), str(candidates), recovery_digest, image_profile], check=True)
+     return json.loads(out.read_text())
+ 
+ 
+@@ -222,6 +222,23 @@ class EngineContractTest(unittest.TestCase):
+         with self.assertRaisesRegex(omarchy_asahi.AsahiAdapterError, "Recovery"):
+             engine_admits(metadata, payload, "j700ap")
+ 
++    def test_the_j714s_line_writes_the_board_macho_metadata_the_builder_checks(self):
++        # The board Mach-O kind is the engine work in progress elsewhere; this tree's engine does
++        # not know it, so only the builder's side (written == expected, check_payload) is held here.
++        name = "omarchy-j714s-1-aarch64-apple-silicon-mac-os-package.zip"
++        recovery = self.out / "recovery"
++        digest = fixtures.make_recovery_app(recovery)
++        metadata = self.out / "installer_data.json"
++        written = written_metadata(name, metadata, digest, "j714s")
++        self.assertEqual(written, check.expected_metadata(name, native_recovery=True, image_profile="j714s"))
++        target = written["os_list"][0]
++        self.assertEqual(target["aurora_stage1"], {"kind": "board-macho-ctxr-v1", "qualified_machines": {"j714sap": ["27.2"]}})
++        self.assertEqual((target["allowed_device_classes"], target["supported_fw"], target["next_object"]),
++                         (["j714sap"], ["27.2"], "m1n1/boot.bin"))
++        payload = self.out / name
++        fixtures.write_payload(payload, check.BOOT_UUID, check.ROOT_UUID, recovery_app=recovery, board_macho=True)
++        check.check_payload("edge", payload, metadata, recovery_digest=digest, image_profile="j714s")
++
+     def test_missing_or_empty_j700_boot_payloads_are_rejected(self):
+         metadata = self.out / "installer_data.json"
+         written_metadata(NAME, metadata)
+diff --git a/image-builder/test/test_image_profile.py b/image-builder/test/test_image_profile.py
+index ae59280..448e9f0 100644
+--- a/image-builder/test/test_image_profile.py
++++ b/image-builder/test/test_image_profile.py
+@@ -24,13 +24,17 @@ class ImageProfileTest(unittest.TestCase):
+         self.assertIsNone(check.stage1_qualification.load())
+         self.assertIn("linux-aurora-headers", check.required_image_packages())
+ 
+-    def test_developer_profile_is_explicit_and_has_its_own_trust_and_qualification(self):
+-        developer = select("j714s-developer")
+-        self.assertNotEqual(developer["trust"], select("production")["trust"])
+-        self.assertEqual(check.stage1_qualification.load(profile="j714s-developer")["qualified_machines"],
+-                         {"j714sap": ["27.3"]})
++    def test_j714s_profile_is_explicit_and_has_its_own_trust_qualification_and_line(self):
++        j714s = select("j714s")
++        self.assertNotEqual(j714s["trust"], select("production")["trust"])
++        self.assertEqual(check.stage1_qualification.load(profile="j714s"),
++                         {"kind": "board-macho-ctxr-v1", "qualified_machines": {"j714sap": ["27.2"]}})
++        self.assertEqual(j714s["line"], "j714s")
++        self.assertIsNone(select("production")["line"])
+         self.assertEqual(check.required_image_packages("production") -
+-                         check.required_image_packages("j714s-developer"), {"linux-aurora-headers"})
++                         check.required_image_packages("j714s"), {"linux-aurora-headers"})
++        with self.assertRaisesRegex(ValueError, "unknown image profile"):
++            select("j714s-developer")
+ 
+     def test_unknown_profile_is_rejected(self):
+         with self.assertRaisesRegex(ValueError, "unknown image profile"):
+diff --git a/image-builder/test/test_inspection.py b/image-builder/test/test_inspection.py
+index 2ff92ed..97c3428 100755
+--- a/image-builder/test/test_inspection.py
++++ b/image-builder/test/test_inspection.py
+@@ -17,7 +17,7 @@ inspection = fixtures.load("inspection", "builder/inspection.py")
+ inspection.OWNER_UID = os.geteuid()
+ CHECKS = ("candidate-versions", "runtime-sources", "minimum-versions", "refused-packages", "apple-packages", "installed-boot-payloads",
+           "candidate-files", "package-mtrees",
+-          "m1n1-stage2", "aurora-device-trees", "limine-uki", "embedded-initramfs", "boot-splash", "boot-maintenance",
++          "m1n1-stage2", "ctxr-stage2", "aurora-device-trees", "limine-uki", "embedded-initramfs", "boot-splash", "boot-maintenance",
+           "image-target", "first-boot", "snapshots", "pacman-config", "installed-system", "speaker-routing", "factory")
+ # Fixture roots live on whatever filesystem the tests run on: these paths stand in for btrfs subvolumes.
+ SUBVOLUMES: set[Path] = set()
+@@ -140,6 +140,80 @@ class InspectionTest(unittest.TestCase):
+                 (self.root / rel).write_bytes(data)
+                 self.assertFails("installed-boot-payloads", "J700 Stage")
+ 
++    def j714s_set(self, ctxr: bytes | None = None, macho_path="usr/share/m1n1-aurora/stage1/m1n1-boot.macho"):
++        """A set whose m1n1-aurora carries Aura's Mach-O boot object (and CTXR, as m1n1-ctxr.bin), and
++        an image root made from it the way build-mac-image stages a board Mach-O image."""
++        name = f"j714s-{'ctxr' if ctxr else 'copy'}-{macho_path.rsplit('/', 1)[1]}"
++        base = self.base / name
++        if not base.exists():
++            contents = fixtures.default_contents()
++            contents["m1n1-aurora"] = dict(contents["m1n1-aurora"])
++            contents["m1n1-aurora"][macho_path] = fixtures.aura_macho.build(fixtures.raw_stage1())
++            if ctxr is not None:
++                contents["m1n1-aurora"]["usr/lib/asahi-boot/m1n1-ctxr.bin"] = ctxr
++            receipt = fixtures.make_set(base / "set", self.signer, contents=contents)
++            fixtures.import_set(base / "set", base / "candidates", self.signer, receipt)
++            fixtures.make_root(base / "root", base / "candidates")
++        root = Path(tempfile.mkdtemp(dir=self.base)) / "root"
++        shutil.copytree(base / "root", root, symlinks=True)
++        candidates = inspection.Candidates(base / "candidates")
++        for rel in ("boot/efi/aurora/stage1-j700.bin", "boot/efi/m1n1/boot-j700.bin"):
++            (root / rel).unlink()
++        stage1 = candidates.member("m1n1-aurora", "usr/share/m1n1-aurora/stage1/m1n1-raw.bin")
++        fixtures.write(root, "boot/efi/aurora/stage1-j714s.bin", stage1)
++        fixtures.write(root, "boot/efi/aurora/stage1-j714s.macho", candidates.member("m1n1-aurora", macho_path))
++        boot = (root / "boot/efi/m1n1/boot.bin").read_bytes()
++        m1n1 = candidates.member("m1n1-aurora", "usr/lib/asahi-boot/m1n1.bin")
++        fixtures.write(root, "boot/efi/m1n1/boot-ctxr.bin", boot if ctxr is None else ctxr + boot[len(m1n1):])
++        source = fixtures.ROOT / "builder/profiles/j714s/boot-ctxr"
++        fixtures.write(root, inspection.stage1_qualification.CTXR_HELPER, (source / "update-boot-ctxr").read_bytes(), 0o755)
++        fixtures.write(root, inspection.stage1_qualification.CTXR_HOOK,
++                       (source / "96-omarchy-j714s-boot-ctxr.hook").read_bytes())
++        return root, candidates
++
++    def test_a_j714s_image_carries_its_mach_o_stage1_and_the_confined_stage2(self):
++        for ctxr in (None, b"aura ESP_STAGE2 build"):
++            for macho_path in ("usr/share/m1n1-aurora/stage1/m1n1-boot.macho", "usr/share/m1n1-aurora/stage1/m1n1.macho"):
++                with self.subTest(ctxr=ctxr, macho=macho_path):
++                    root, candidates = self.j714s_set(ctxr, macho_path)
++                    self.assertIn("stage1-j714s.macho Stage 1",
++                                  inspection.check_installed_payloads(root, candidates, "j714s"))
++                    report = {}
++                    detail = inspection.ctxr_stage2(root, candidates, report, "j714s")
++                    self.assertIn("is m1n1/boot.bin" if ctxr is None else "m1n1-ctxr.bin +", detail)
++                    # A production image of the same set carries no confined Stage 2 or its hook.
++                    with self.assertRaisesRegex(inspection.InspectionError, "enrolls no board Mach-O"):
++                        inspection.ctxr_stage2(root, candidates, {}, "production")
++
++    def test_a_j714s_image_is_refused_when_its_boot_payloads_differ(self):
++        root, candidates = self.j714s_set()
++        cases = (
++            ("boot/efi/aurora/stage1-j714s.bin", b"another stage 1", "installed", "stage1-j714s.bin does not match"),
++            ("boot/efi/aurora/stage1-j714s.macho", b"another object", "installed", "stage1-j714s.macho does not match"),
++            ("boot/efi/aurora/stage1-j700.bin", b"the Neo's", "installed", "carries esp/aurora/stage1-j700.bin"),
++            ("boot/efi/aurora/stage1.bin", b"common", "installed", "carries esp/aurora/stage1.bin"),
++            ("boot/efi/m1n1/boot-ctxr.bin", b"stale", "ctxr", "is not m1n1/boot.bin"),
++            (inspection.stage1_qualification.CTXR_HOOK, b"[Trigger]\n", "ctxr", "is not the j714s profile's"),
++        )
++        for rel, data, check, message in cases:
++            with self.subTest(rel):
++                broken = Path(tempfile.mkdtemp(dir=self.base)) / "root"
++                shutil.copytree(root, broken, symlinks=True)
++                fixtures.write(broken, rel, data)
++                with self.assertRaisesRegex(inspection.InspectionError, message):
++                    if check == "installed":
++                        inspection.check_installed_payloads(broken, candidates, "j714s")
++                    else:
++                        inspection.ctxr_stage2(broken, candidates, {}, "j714s")
++        # The Mach-O object must carry the package's raw Stage 1 (the package's own bytes, checked).
++        root, candidates = self.j714s_set(macho_path="usr/share/m1n1-aurora/stage1/m1n1.macho")
++        real_member = candidates.member
++        candidates.member = lambda name, path: (fixtures.aura_macho.build(fixtures.raw_stage1(), boot_exec=True)
++                                                if path.endswith(".macho") else real_member(name, path))
++        fixtures.write(root, "boot/efi/aurora/stage1-j714s.macho", candidates.member("m1n1-aurora", "x.macho"))
++        with self.assertRaisesRegex(inspection.InspectionError, "SPTM"):
++            inspection.check_installed_payloads(root, candidates, "j714s")
++
+     def test_speakerguardd_starts_only_for_the_j700_and_speakersafetyd_skips_it(self):
+         self.assertIn("starts only for AppleJ700", self.inspect()["checks"]["speaker-routing"]["detail"])
+ 
+diff --git a/image-builder/test/test_mac_image_check.py b/image-builder/test/test_mac_image_check.py
+index 8b43a37..5a846e5 100755
+--- a/image-builder/test/test_mac_image_check.py
++++ b/image-builder/test/test_mac_image_check.py
+@@ -72,7 +72,7 @@ def build(out: Path, packages=PACKAGES, candidates=PACKAGES[:2], inspection="pas
+           profile=(), provenance_profile=None, name=None, inspection_digest=None, target_edit=None,
+           sources=(("omarchy", "a" * 40),), runtime_sources=None, provenance_edit=None, legacy=False,
+           inputs=INPUTS, pin=None, report_edit=None, recovery_app=None, builder_commit="c" * 40, grow=None,
+-          lane="edge") -> None:
++          lane="edge", image_profile="production", line_records=None, macho=None) -> None:
+     """A build directory as build-mac-image writes it; LEGACY, as a build before builds recorded their identity.
+     With CHANNEL_INPUTS, a channel build: the image target names the channel set and database, INSPECTION the
+     set it inspected, and PIN (the test image pin, empty for a public image) is recorded. BUILDER_COMMIT names
+@@ -81,8 +81,14 @@ def build(out: Path, packages=PACKAGES, candidates=PACKAGES[:2], inspection="pas
+     channel = "channel_set" in inputs
+     name = name or (LAB_NAME if lab else NAME if lane == "edge" else RC_NAME)
+     zip_path = out / name
+-    fixtures.write_payload(zip_path, check.BOOT_UUID, check.ROOT_UUID, recovery_app=recovery_app, grow=grow)
+-    (out / "installer_data.json").write_text(json.dumps(check.expected_metadata(name, recovery_app is not None)))
++    board_macho = check.stage1_qualification.board_macho(check.stage1_qualification.load(profile=image_profile))
++    fixtures.write_payload(zip_path, check.BOOT_UUID, check.ROOT_UUID, recovery_app=recovery_app, grow=grow,
++                           board_macho=board_macho is not None, macho=macho)
++    (out / "installer_data.json").write_text(json.dumps(check.expected_metadata(name, recovery_app is not None,
++                                                                                image_profile)))
++    if line_records is None:
++        line = check.image_line(image_profile)
++        line_records = [] if line is None else [f"image_line={line}", f"image_version={check.payload_version(name)}"]
+     if channel:
+         target = {"channel_set": inputs["channel_set"], "channel_db_sha256": inputs["omarchy_db_sha256"]}
+     else:
+@@ -119,7 +125,7 @@ def build(out: Path, packages=PACKAGES, candidates=PACKAGES[:2], inspection="pas
+     lines += [f"candidate={n}|{v}|{f}|{s}" for n, v, _, f, s in candidates]
+     lines += [f"candidate_source={n}|{c}" for n, c in sources]
+     lines += ["hardware_setup=build", *([] if pin is None else [f"test_image_pin={pin}"]),
+-              *(profile if provenance_profile is None else provenance_profile),
++              *(profile if provenance_profile is None else provenance_profile), *line_records,
+               f"package_set_sha256={package_set(packages)}", *([] if legacy else [f"built={BUILT}"]),
+               f"package_count={len(packages)}"]
+     lines += [f"package={i}|{'|'.join(p)}" for i, p in enumerate(packages, 1)]
+@@ -128,10 +134,11 @@ def build(out: Path, packages=PACKAGES, candidates=PACKAGES[:2], inspection="pas
+     if provenance_edit:
+         lines = provenance_edit(lines)
+     (out / "PROVENANCE").write_text("\n".join(lines) + "\n")
+-    digests = check.check_payload(lane, zip_path, out / "installer_data.json", "lab" if name == LAB_NAME else "release")
++    digests = check.check_payload(lane, zip_path, out / "installer_data.json", "lab" if name == LAB_NAME else "release",
++                                  image_profile=image_profile)
+     image = ["format=2", f"lane={lane}", "platform=apple-silicon", "builder_commit=" + builder_commit, "builder_tree_clean=true",
+              *[f"{k}={v}" for k, v in inputs.items()],
+-             "hardware_setup=build", *([] if pin is None else [f"test_image_pin={pin}"]), *profile,
++             "hardware_setup=build", *([] if pin is None else [f"test_image_pin={pin}"]), *profile, *line_records,
+              f"package_set_sha256={package_set(packages)}",
+              *([] if legacy else [f"built={BUILT}"]),
+              *[f"image_sha256={m}|{d}" for m, d in sorted(digests.items())], f"input_digest={sha(out / 'inputs')}"]
+@@ -140,6 +147,103 @@ def build(out: Path, packages=PACKAGES, candidates=PACKAGES[:2], inspection="pas
+     (out / "IMAGE").write_text("\n".join(image) + "\n")
+ 
+ 
++J714S_NAME = "omarchy-j714s-3-aarch64-apple-silicon-mac-os-package.zip"
++
++
++class J714sBuildDirectoryTest(unittest.TestCase):
++    """The one J714s image line: omarchy-j714s-<N>, one board on 27.2 stub firmware through Aura's
++    Mach-O Stage 1 and the confined Stage 2, and no other board's Stage 1 or 2."""
++
++    def setUp(self):
++        self.tmp = tempfile.TemporaryDirectory()
++        self.addCleanup(self.tmp.cleanup)
++        self.out = Path(self.tmp.name) / "out"
++        self.recovery = Path(self.tmp.name) / "recovery"
++        self.inputs = dict(INPUTS, image_profile="j714s",
++                           recovery_app_manifest_sha256=fixtures.make_recovery_app(self.recovery))
++
++    def build(self, **options):
++        if self.out.exists():
++            shutil.rmtree(self.out)
++        self.out.mkdir()
++        settings = dict(inputs=self.inputs, recovery_app=self.recovery, image_profile="j714s", name=J714S_NAME)
++        build(self.out, **{**settings, **options})
++
++    def test_the_j714s_build_passes_its_checks(self):
++        self.build()
++        check.check_provenance("edge", self.out)
++        check.check_descriptor("edge", self.out)
++        target = json.loads((self.out / "installer_data.json").read_text())["os_list"][0]
++        self.assertEqual(target["allowed_device_classes"], ["j714sap"])
++        self.assertEqual(target["aurora_stage1"], {"kind": "board-macho-ctxr-v1", "qualified_machines": {"j714sap": ["27.2"]}})
++        self.assertEqual(target["supported_fw"], ["27.2"])
++        self.assertEqual(target["next_object"], "m1n1/boot.bin")
++        self.assertEqual(target["recovery_gui"], "omarchy-native-v1")
++        self.assertEqual((target["name"], target["default_os_name"]), ("Omarchy", "Omarchy"))
++        image = check.parse_fields(self.out / "IMAGE")
++        self.assertEqual((image["image_line"], image["image_version"]), (["j714s"], ["3"]))
++        members = {value.split("|", 1)[0] for value in image["image_sha256"]}
++        self.assertLessEqual({"esp/aurora/stage1-j714s.bin", "esp/aurora/stage1-j714s.macho", "esp/m1n1/boot-ctxr.bin",
++                              "esp/m1n1/boot.bin"}, members)
++        self.assertFalse({"esp/aurora/stage1.bin", "esp/aurora/stage1-j700.bin", "esp/m1n1/boot-j700.bin"} & members)
++
++    def test_the_payload_name_is_the_line_and_a_plain_version(self):
++        payload = Path(self.tmp.name) / "payload"
++        payload.mkdir()
++        for name in ("omarchy-j714s-0-aarch64-apple-silicon-mac-os-package.zip",
++                     "omarchy-j714s-01-aarch64-apple-silicon-mac-os-package.zip",
++                     "omarchy-j714s-1-beta-aarch64-apple-silicon-mac-os-package.zip",
++                     "omarchy-j714s-2026.11.12-aarch64-apple-silicon-mac-os-package.zip",
++                     "omarchy-j714c-1-aarch64-apple-silicon-mac-os-package.zip",
++                     "omarchy-j714s-1-aarch64-apple-silicon-mac-edge-os-package.zip", NAME):
++            with self.subTest(name):
++                self.assertFalse(check.payload_name_matches(name, "edge", "j714s"))
++        self.assertTrue(check.payload_name_matches("omarchy-j714s-12-aarch64-apple-silicon-mac-os-package.zip",
++                                                   "edge", "j714s"))
++        # And production never takes the line's name.
++        self.assertFalse(check.payload_name_matches(J714S_NAME, "edge"))
++
++    def test_the_records_must_name_the_payload_s_version(self):
++        for records, message in (([], "does not name the j714s line"),
++                                 (["image_line=j714s", "image_version=4"], "does not name the j714s line")):
++            with self.subTest(records=records):
++                self.build(line_records=records)
++                for mode in ("provenance", "descriptor"):
++                    with self.assertRaisesRegex(check.CheckError, message):
++                        getattr(check, f"check_{mode}")("edge", self.out)
++
++    def test_a_board_macho_payload_carries_only_its_board_s_stage1(self):
++        self.build()
++        zip_path, metadata = self.out / J714S_NAME, self.out / "installer_data.json"
++        for member in ("esp/aurora/stage1-j714s.bin", "esp/aurora/stage1-j714s.macho", "esp/m1n1/boot-ctxr.bin"):
++            for kind in ("omit", "empty"):
++                with self.subTest(member=member, kind=kind):
++                    fixtures.write_payload(zip_path, check.BOOT_UUID, check.ROOT_UUID, recovery_app=self.recovery,
++                                           board_macho=True, **{kind: (member,)})
++                    with self.assertRaises(check.CheckError):
++                        check.check_payload("edge", zip_path, metadata, image_profile="j714s")
++        # Another board's members are refused, as is a J700-style payload.
++        fixtures.write_payload(zip_path, check.BOOT_UUID, check.ROOT_UUID, recovery_app=self.recovery)
++        with self.assertRaisesRegex(check.CheckError, "another board's Stage 1|missing members"):
++            check.check_payload("edge", zip_path, metadata, image_profile="j714s")
++
++    def test_the_mach_o_must_carry_the_raw_stage1(self):
++        raw = fixtures.raw_stage1()
++        other = raw[:-9] + b"X" + raw[-8:]
++        for macho, message in ((fixtures.aura_macho.build(other), "does not carry"),
++                               (fixtures.aura_macho.build(raw, boot_exec=True), "SPTM"),
++                               (fixtures.aura_macho.build(raw, entry=0x400), "entry point"),
++                               (b"\xcf\xfa\xed\xfe" + bytes(60), "not")):
++            with self.subTest(message), self.assertRaisesRegex(check.CheckError, message):
++                self.build(macho=macho)
++
++    def test_the_line_has_no_lab_variant(self):
++        self.build()
++        with self.assertRaisesRegex(check.CheckError, "no lab variant"):
++            check.check_payload("edge", self.out / J714S_NAME, self.out / "installer_data.json", "lab",
++                                image_profile="j714s")
++
++
+ class ChannelBuildDirectoryTest(unittest.TestCase):
+     """A channel build's records name the channel set and database, and describe a public image: one that
+     carries the native Recovery app, which the installer finishes every public install with."""
+@@ -255,7 +359,7 @@ class ChannelBuildDirectoryTest(unittest.TestCase):
+                 getattr(check, f"check_{mode}")("edge", self.out)
+ 
+     def test_a_channel_build_cannot_name_the_developer_image_profile(self):
+-        self.build(inputs=dict(self.inputs, image_profile="j714s-developer"))
++        self.build(inputs=dict(self.inputs, image_profile="j714s"))
+         for mode in ("provenance", "descriptor"):
+             with self.subTest(mode=mode), self.assertRaisesRegex(check.CheckError, "channel image cannot use"):
+                 getattr(check, f"check_{mode}")("edge", self.out)
+diff --git a/image-builder/test/test_stage1_qualification.py b/image-builder/test/test_stage1_qualification.py
+index 787ad1d..f30c20c 100644
+--- a/image-builder/test/test_stage1_qualification.py
++++ b/image-builder/test/test_stage1_qualification.py
+@@ -17,10 +17,12 @@ class Stage1QualificationTest(unittest.TestCase):
+         self.tmp = tempfile.TemporaryDirectory()
+         self.addCleanup(self.tmp.cleanup)
+         self.path = Path(self.tmp.name) / "policy.json"
+-        self.policy = {
++        self.policy = {"kind": "board-macho-ctxr-v1", "qualified_machines": {"j714sap": ["27.2"]}}
++        # The common raw Stage 1 contract other profiles keep using.
++        self.common = {
+             "kind": "common-raw-v1",
+-            "qualified_machines": {"j714sap": ["27.3"]},
+-            "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]},
++            "qualified_machines": {"j604ap": ["27.3"]},
++            "qualified_system_firmware": {"j604ap": ["mBoot-20457.60.65.0.1"]},
+         }
+ 
+     def test_source_default_qualifies_no_new_machines(self):
+@@ -29,11 +31,17 @@ class Stage1QualificationTest(unittest.TestCase):
+         self.assertIsNone(qualification.load())
+ 
+     def test_source_profile_contract(self):
+-        trust = ROOT / 'builder/profiles/j714s-developer/candidate-trust'
++        trust = ROOT / 'builder/profiles/j714s/candidate-trust'
+         policy = json.loads((trust / 'policy.json').read_text())
+-        self.assertEqual(qualification.load(profile='j714s-developer'), self.policy)
+-        self.assertEqual(qualification.J714S_KERNEL_VERSION, '7.3.0.aurora17.up273-10')
+-        self.assertEqual(qualification.J714S_KERNEL_RELEASE, '7.3.0-17.up273-10-ARCH')
++        self.assertEqual(qualification.load(profile='j714s'), self.policy)
++        # The 27.2 kernel: pkgver-pkgrel, and its module directory as the kernel names it.
++        version, release = qualification.J714S_KERNEL_VERSION, qualification.J714S_KERNEL_RELEASE
++        self.assertRegex(version, r"^7\.3\.0\.aurora[0-9]+\.v272-[1-9][0-9]*$")
++        upstream, _, pkgrel = version.partition(".aurora")[2].partition("-")
++        self.assertEqual(release, f"7.3.0-{upstream}-{pkgrel}-ARCH")
++        self.assertEqual(qualification.expected_arguments(self.policy), qualification.J714S_ARGUMENTS)
++        self.assertEqual(qualification.board_macho(self.policy)["raw"], "esp/aurora/stage1-j714s.bin")
++        self.assertEqual(qualification.board_macho(self.policy)["macho"], "esp/aurora/stage1-j714s.macho")
+         self.assertEqual(policy['primary_fingerprint'], '0DA040FF52D5EC6FB6538769DBFEBBB2B6D116B1')
+         self.assertEqual(policy['signing_fingerprint'], policy['primary_fingerprint'])
+         self.assertEqual(policy['public_key_sha256'], hashlib.sha256((trust / 'public.asc').read_bytes()).hexdigest())
+@@ -41,11 +49,37 @@ class Stage1QualificationTest(unittest.TestCase):
+         self.assertIn('t6050-j714s', policy['device_trees'])
+ 
+     def test_exact_qualification_round_trips_and_only_adds_its_os_firmware(self):
++        self.path.write_text(json.dumps(self.common))
++        self.assertEqual(qualification.load(self.path), self.common)
++        self.assertEqual(qualification.supported_firmware(["13.5", "26.6.2"], self.common),
++                         ["13.5", "26.6.2", "27.3"])
++        self.assertIsNone(qualification.board_macho(self.common))
++        self.assertEqual(qualification.expected_arguments(self.common), ())
++
++    def test_board_macho_qualification_names_one_known_board_on_its_firmware(self):
+         self.path.write_text(json.dumps(self.policy))
+         self.assertEqual(qualification.load(self.path), self.policy)
+-        self.assertEqual(qualification.supported_firmware(["13.5", "26.6.2"], self.policy),
+-                         ["13.5", "26.6.2", "27.3"])
+-        self.assertNotIn("j714cap", qualification.load(self.path)["qualified_machines"])
++        cases = [
++            {**self.policy, "qualified_machines": {"j714sap": ["27.3"]}},
++            {**self.policy, "qualified_machines": {"j714sap": ["27.2", "27.3"]}},
++            {**self.policy, "qualified_machines": {"j714cap": ["27.2"]}},
++            {**self.policy, "qualified_machines": {"j714sap": ["27.2"], "j714cap": ["27.2"]}},
++            {**self.policy, "qualified_system_firmware": {"j714sap": ["mBoot-20457.41.3"]}},
++            {**self.policy, "kind": "board-macho-v2"},
++        ]
++        for value in cases:
++            with self.subTest(value=value):
++                self.path.write_text(json.dumps(value))
++                with self.assertRaises(ValueError):
++                    qualification.load(self.path)
++
++    def test_the_j714s_budgets_need_the_board_macho_27_2_profile(self):
++        # The 27.3 common raw line is history: a J714s on it gets no budgets, it is refused.
++        for value in ({"kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.3"]},
++                       "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]}},
++                      {"kind": "common-raw-v1", "qualified_machines": {"j714sap": ["27.2"]}}):
++            with self.subTest(value=value), self.assertRaises(ValueError):
++                qualification.expected_arguments(value)
+ 
+     def test_missing_symlink_duplicate_or_malformed_input_is_not_silently_disabled(self):
+         with self.assertRaises(ValueError):
+@@ -63,15 +97,16 @@ class Stage1QualificationTest(unittest.TestCase):
+                     qualification.load(self.path)
+ 
+     def test_invalid_machine_or_system_firmware_constraints_are_refused(self):
++        self.policy = self.common
+         cases = [
+             {**self.policy, "qualified_machines": {}},
+-            {**self.policy, "qualified_machines": {"apple,j714s": ["27.3"]}},
+-            {**self.policy, "qualified_machines": {"j714sap": []}},
+-            {**self.policy, "qualified_machines": {"j714sap": [None]}},
++            {**self.policy, "qualified_machines": {"apple,j604": ["27.3"]}},
++            {**self.policy, "qualified_machines": {"j604ap": []}},
++            {**self.policy, "qualified_machines": {"j604ap": [None]}},
+             {**self.policy, "qualified_system_firmware": {"j714cap": ["mBoot-20457.60.65.0.1"]}},
+-            {**self.policy, "qualified_system_firmware": {"j714sap": []}},
+-            {**self.policy, "qualified_system_firmware": {"j714sap": ["mBoot-*"]}},
+-            {**self.policy, "qualified_system_firmware": {"j714sap": [None]}},
++            {**self.policy, "qualified_system_firmware": {"j604ap": []}},
++            {**self.policy, "qualified_system_firmware": {"j604ap": ["mBoot-*"]}},
++            {**self.policy, "qualified_system_firmware": {"j604ap": [None]}},
+             {**self.policy, "enabled": True},
+         ]
+         for value in cases:
+-- 
+2.56.0
+

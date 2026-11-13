@@ -1,0 +1,1294 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 00:00:53 -0500
+Subject: [PATCH 2/6] Recovery: enroll a board's padded Mach-O Stage 1 with
+ kmutil --compress
+
+The native Recovery app accepted raw mode only. It now also takes Mach-O mode
+for a board whose engine contract stages Aura's Mach-O boot object (the
+J714s on the 27.2 stub): install-config bootMode "macho" with the confined
+Stage 2 m1n1/boot-ctxr.bin, payloads macho/aura-boot.macho (unpadded) and
+macho/boot-ctxr.bin, and the manifest's executeWindow (128 MiB).
+
+Before enrollment Recovery checks the object (no __TEXT_BOOT_EXEC, so iBoot
+does not start SPTM), pads __TEXT_EXEC for the execute window as a sparse
+file, checks what `kmutil inspect --show-mach-boot-properties` derives (kcbz
+0 and the padded kcrz), then runs bputil -nc and
+`kmutil configure-boot -c <padded> --compress -v <stub>`. The native PTY
+prompt allows that one command 60 minutes (aurora-installer allows 30; Apple
+says it may take 30). Verification, restart and `aura recover` use the
+configured mode's Stage 2. The app selects the mode the installation
+recorded.
+
+MachOBootObject, ExecuteWindow, ExpandedMachOBootObject, the padding,
+inspection and free-space checks and their fixture are ported from
+aurora-silicon/aurora-installer (79a7549, MIT) Recovery/Sources/Account/
+AuraStage1.swift, RecoveryActions.stageExpandedStage1, Native/Authorization.c
+and Tests/MachOBootObjectCheck.swift.
+
+Not compiled here (no Swift toolchain on this host); the native C check
+(Tests/AuthorizationCheck.c) passes on Linux. The macOS CI builds and runs
+Recovery/test-all.sh.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Recovery/Native/Authorization.c               |  18 +-
+ Recovery/README.md                            |   2 +-
+ Recovery/Sources/AuraMachO.swift              | 436 ++++++++++++++++++
+ Recovery/Sources/BootSelection.swift          |  19 +-
+ Recovery/Sources/InstallConfiguration.swift   |   6 +-
+ Recovery/Sources/RecoveryActions.swift        |  74 ++-
+ Recovery/Sources/RecoveryBaseline.swift       |   7 +-
+ Recovery/Sources/main.swift                   |   4 +-
+ Recovery/Tests/BootSelectionCheck.swift       |  13 +-
+ .../Tests/InstallConfigurationCheck.swift     |  16 +-
+ Recovery/Tests/MachOBootObjectCheck.swift     | 414 +++++++++++++++++
+ Recovery/test-all.sh                          |   1 +
+ 12 files changed, 992 insertions(+), 18 deletions(-)
+ create mode 100644 Recovery/Sources/AuraMachO.swift
+ create mode 100644 Recovery/Tests/MachOBootObjectCheck.swift
+
+diff --git a/Recovery/Native/Authorization.c b/Recovery/Native/Authorization.c
+index 51c8773..762d130 100644
+--- a/Recovery/Native/Authorization.c
++++ b/Recovery/Native/Authorization.c
+@@ -22,6 +22,13 @@
+ #ifndef AUTHORIZATION_TIMEOUT_SECONDS
+ #define AUTHORIZATION_TIMEOUT_SECONDS 300
+ #endif
++/* kmutil configure-boot --compress works through the whole padded Mach-O
++ * object with nothing to answer, which Apple's own note says may take up to
++ * 30 minutes. Every other command keeps the short limit. From
++ * aurora-silicon/aurora-installer (1800 s there; doubled here for margin). */
++#ifndef AUTHORIZATION_COMPRESS_TIMEOUT_SECONDS
++#define AUTHORIZATION_COMPRESS_TIMEOUT_SECONDS 3600
++#endif
+ enum { INVALID=-1, PTY_FAILED=-2, TERMINAL_FAILED=-3, FORK_FAILED=-4,
+        TIMED_OUT=-5, UNEXPECTED_CONFIRMATION=-6, REPEATED_CONFIRMATION=-7,
+        REPEATED_PASSWORD=-8, REPEATED_USERNAME=-9, INPUT_FAILED=-10,
+@@ -117,6 +124,15 @@ static void output_snapshot(const char *raw, size_t length, const char *secret,
+     free(clean);
+ }
+ 
++static int authorization_timeout(const char *executable, char *const arguments[])
++{
++    if(!strcmp(executable,"/usr/bin/kmutil") && arguments[0] && arguments[1] &&
++       !strcmp(arguments[1],"configure-boot"))
++        for(size_t i=2;arguments[i];i++)
++            if(!strcmp(arguments[i],"--compress"))return AUTHORIZATION_COMPRESS_TIMEOUT_SECONDS;
++    return AUTHORIZATION_TIMEOUT_SECONDS;
++}
++
+ static int authorization_run_logged(const char *executable, char *const arguments[],
+                                     const char *username, const char *password,
+                                     bool confirm_boot_object, aurora_log_callback output,
+@@ -154,7 +170,7 @@ static int authorization_run_logged(const char *executable, char *const argument
+     unsigned user_sent=0,password_sent=0,confirmation_sent=0;
+     char pending[4096]={0}, line[4096]={0}, raw[LOG_LIMIT];
+     size_t used=0,raw_used=0;
+-    time_t deadline=time(NULL)+AUTHORIZATION_TIMEOUT_SECONDS;
++    time_t deadline=time(NULL)+authorization_timeout(executable,arguments);
+     for(;;) {
+         if(!exited) {
+             pid_t done=waitpid(child,&status,WNOHANG);
+diff --git a/Recovery/README.md b/Recovery/README.md
+index 5d541f3..5990ea0 100644
+--- a/Recovery/README.md
++++ b/Recovery/README.md
+@@ -27,7 +27,7 @@ This explicitly defines `OMARCHY_STEP2_RECOVERY`, emits `build-recovery/Omarchy
+ 
+ Put the app and adjacent manifest in the OS ZIP under `esp/aurora/recovery/`. The OS template should declare `"recovery_gui": "omarchy-native-v1"`; this requires the app and verifies its entire content inventory before partitioning. Older payloads without this contract or app retain their existing shell Step 2. After creating the target and finalizing Stage 1 and `m1n1/boot.bin`, `omarchy_recovery.stage` copies the signed app unchanged to the stub System volume. It separately publishes `Aurora/Recovery/InstallData/install-config.json` and `Aurora/Recovery/InstallData/AuraPayloads/` with the finalized Stage 1, Stage 2 and device firmware. Both inventories are checked before changing `.IAPhysicalMedia` to launch the app. The signed `OmarchyRecoveryDataLayout=external-install-data-v1` marker is required during payload preflight, staging and app packaging; an older embedded-data binary is refused before partitioning.
+ 
+-Configuration schema 2 includes `volumeName`, `systemUUID`, `groupUUID`, `prebootUUID`, `espUUID`, `bootMode`, `stage2Path` and `bootstrap`. Only raw mode and `m1n1/boot.bin` are currently accepted. The installer exposes no alternate boot-mode controls. Runtime target discovery uses the app's containing volume, verified against the configured APFS identity; it does not rely on `/Volumes/Omarchy` or a fixed disk number.
++Configuration schema 2 includes `volumeName`, `systemUUID`, `groupUUID`, `prebootUUID`, `espUUID`, `bootMode`, `stage2Path` and `bootstrap`. Two pairs are accepted: raw mode with `m1n1/boot.bin`, and Mach-O mode with the confined `m1n1/boot-ctxr.bin` for a board whose engine contract enrolls Aura's Mach-O boot object (the J714s on the 27.2 stub). In Mach-O mode Recovery checks the object (no `__TEXT_BOOT_EXEC`, so iBoot does not start SPTM), pads its `__TEXT_EXEC` for the 128 MiB execute window as a sparse file, checks `kmutil inspect --show-mach-boot-properties` (kcbz 0, the padded kcrz), and enrolls it with `kmutil configure-boot --compress`, which may take up to 30 minutes (the native prompt allows 60 for that command only). The padding, inspection and window code is ported from aurora-silicon/aurora-installer's Recovery (MIT). The installer exposes no alternate boot-mode controls. Runtime target discovery uses the app's containing volume, verified against the configured APFS identity; it does not rely on `/Volumes/Omarchy` or a fixed disk number.
+ 
+ The legacy `Finish Installation.app/Contents/Resources/boot.bin` remains for upstream resume detection; its `step2.sh` becomes a relative launcher for `Omarchy Installer.app`. The new app remains on the stub after completion removes `.IAPhysicalMedia`, and the `aura` command opens its actual executable or invokes recovery actions. The localized `CFBundleDisplayName` must remain present: Recovery's Springboard requires it for this direct native launch contract.
+ 
+diff --git a/Recovery/Sources/AuraMachO.swift b/Recovery/Sources/AuraMachO.swift
+new file mode 100644
+index 0000000..76f2593
+--- /dev/null
++++ b/Recovery/Sources/AuraMachO.swift
+@@ -0,0 +1,436 @@
++import Darwin
++import Foundation
++
++// Aura's Mach-O Stage 1: the layout check, the execute-window padding and the
++// kmutil inspection check, ported unchanged from aurora-silicon/aurora-installer
++// macOS/Recovery/Sources/Account/AuraStage1.swift (79a7549, MIT; the Aurora
++// Installer authors). The engine fills the Stage 1 configuration and carries it
++// into the object (Engine/overlay/src/omarchy_macho.py); Recovery pads the
++// object it enrolls, so the stub stores only the small unpadded one.
++
++
++/// Checks a Mach-O Stage 1 before kmutil enrolls it. kmutil records the size
++/// of __TEXT_BOOT_EXEC as the boot policy's kcbz, and iBoot starts SPTM only
++/// when kcbz is nonzero, so the object must not have that segment. Aura's
++/// boot objects (aura tools/macho_boot_object.py) also keep every segment
++/// fully file-backed at its virtual offset, which is how iBoot places them.
++public enum MachOBootObject {
++  public struct Invalid: Error, LocalizedError {
++    public let reason: String
++    public var errorDescription: String? {
++      "The Mach-O startup software is invalid: \(reason)."
++    }
++  }
++
++  struct Segment {
++    let vmaddr: UInt64
++    let vmsize: UInt64
++    let fileoff: UInt64
++    let filesize: UInt64
++  }
++
++  static let required = ["__TEXT", "__TEXT_EXEC", "__PRELINK_INFO", "__LINKEDIT"]
++  /// The raw image's entry point, which the boot object enters at.
++  static let rawEntryOffset: UInt64 = 0x800
++
++  public static func check(_ data: Data) throws {
++    _ = try layout(data)
++  }
++
++  /// `fileSize` is the size of the whole file when `data` is only its start,
++  /// as for an expanded object whose padding is never held in memory.
++  static func layout(
++    _ data: Data, fileSize: UInt64? = nil
++  ) throws -> (segments: [String: Segment], entry: UInt64) {
++    let bytes = [UInt8](data)
++    let total = fileSize ?? UInt64(bytes.count)
++    func u32(_ offset: Int) throws -> UInt32 {
++      guard offset >= 0, offset + 4 <= bytes.count else { throw Invalid(reason: "truncated") }
++      return (0..<4).reduce(UInt32(0)) { $0 | UInt32(bytes[offset + $1]) << (8 * $1) }
++    }
++    func u64(_ offset: Int) throws -> UInt64 {
++      UInt64(try u32(offset)) | UInt64(try u32(offset + 4)) << 32
++    }
++    guard try u32(0) == 0xFEED_FACF, try u32(4) == 0x0100_000C else {
++      throw Invalid(reason: "not a 64-bit Arm Mach-O image")
++    }
++    guard try u32(12) == 12 else { throw Invalid(reason: "not a fileset boot object") }
++    let count = Int(try u32(16))
++    let size = Int(try u32(20))
++    guard 32 + size <= bytes.count else { throw Invalid(reason: "load commands are truncated") }
++    var segments: [String: Segment] = [:]
++    var entry: UInt64?
++    var offset = 32
++    for _ in 0..<count {
++      let command = try u32(offset)
++      let length = Int(try u32(offset + 4))
++      guard length >= 8, length % 8 == 0, offset + length <= 32 + size else {
++        throw Invalid(reason: "malformed load command")
++      }
++      if command == 0x19 {  // LC_SEGMENT_64
++        guard length >= 72 else { throw Invalid(reason: "malformed segment") }
++        let name = String(
++          decoding: bytes[(offset + 8)..<(offset + 24)].prefix { $0 != 0 }, as: UTF8.self)
++        guard segments[name] == nil else { throw Invalid(reason: "duplicate segment \(name)") }
++        segments[name] = Segment(
++          vmaddr: try u64(offset + 24), vmsize: try u64(offset + 32),
++          fileoff: try u64(offset + 40), filesize: try u64(offset + 48))
++      } else if command == 0x5 {  // LC_UNIXTHREAD
++        guard length >= 16 + 34 * 8, try u32(offset + 8) == 6 else {
++          throw Invalid(reason: "malformed entry thread")
++        }
++        entry = try u64(offset + 16 + 32 * 8)
++      }
++      offset += length
++    }
++    guard offset == 32 + size else { throw Invalid(reason: "load command sizes disagree") }
++    if let boot = segments["__TEXT_BOOT_EXEC"], boot.vmsize != 0 || boot.filesize != 0 {
++      throw Invalid(reason: "it has __TEXT_BOOT_EXEC, so iBoot would start SPTM")
++    }
++    for name in required where segments[name] == nil {
++      throw Invalid(reason: "it has no \(name) segment")
++    }
++    let base = segments["__TEXT"]!.vmaddr
++    guard segments["__TEXT"]!.fileoff == 0 else {
++      throw Invalid(reason: "__TEXT is not at offset 0")
++    }
++    for (name, segment) in segments where segment.vmsize != 0 {
++      guard segment.vmaddr >= base, segment.fileoff == segment.vmaddr - base,
++        segment.filesize == segment.vmsize,
++        segment.fileoff <= total,
++        segment.filesize <= total - segment.fileoff
++      else { throw Invalid(reason: "\(name) is not file-backed at its virtual offset") }
++    }
++    let code = segments["__TEXT_EXEC"]!
++    guard let entry, entry >= code.vmaddr, entry - code.vmaddr < code.vmsize else {
++      throw Invalid(reason: "its entry point is outside __TEXT_EXEC")
++    }
++    return (segments, entry)
++  }
++
++  /// The kcrz kmutil should derive for an unpadded object: load address to the
++  /// end of __TEXT_EXEC, as for a padded one.
++  public static func readOnlySize(_ object: Data) throws -> UInt64 {
++    let code = try layout(object).segments["__TEXT_EXEC"]!
++    let (end, overflow) = code.fileoff.addingReportingOverflow(code.vmsize)
++    guard !overflow else { throw Invalid(reason: "__TEXT_EXEC is too large") }
++    return end
++  }
++
++  /// kmutil's own derivation, printed by `kmutil inspect --show-mach-boot-properties`.
++  public static func bootExecSize(fromInspection output: String) -> UInt64? {
++    bootProperty("kcbz", fromInspection: output)
++  }
++
++  /// Checks what kmutil derives from a padded object before it is enrolled, and
++  /// returns what it relied on. kcrz is what iBoot sizes the window from. Without
++  /// kcrz only an exact kcwf, the first writable offset, is accepted, and anything
++  /// else refuses, so an unverified object never reaches the boot policy.
++  public static func checkInspection(_ output: String, readOnlySize expected: UInt64) throws
++    -> String
++  {
++    guard let boot = bootExecSize(fromInspection: output) else {
++      throw Invalid(reason: "kmutil did not report its layout")
++    }
++    guard boot == 0 else {
++      throw Invalid(reason: "kmutil would start SPTM for it (kcbz \(boot))")
++    }
++    if let region = bootProperty("kcrz", fromInspection: output) {
++      guard region == expected else {
++        throw Invalid(
++          reason: "kmutil derives a read-only region of \(region) bytes, not \(expected)")
++      }
++      return "kcrz \(region)"
++    }
++    guard let writable = bootProperty("kcwf", fromInspection: output), writable == expected else {
++      throw Invalid(reason: "kmutil did not report a read-only region of \(expected) bytes")
++    }
++    return "kcwf \(writable), no kcrz"
++  }
++
++  static func bootProperty(_ name: String, fromInspection output: String) -> UInt64? {
++    for line in output.split(whereSeparator: \.isNewline) {
++      let parts = line.split(separator: ":", maxSplits: 1).map {
++        $0.trimmingCharacters(in: .whitespaces)
++      }
++      if parts.count == 2, parts[0] == name { return UInt64(parts[1]) }
++    }
++    return nil
++  }
++}
++
++/// How large a code-execute window to ask of iBoot.
++///
++/// On T8140 and later, iBoot confines each secondary core's EL2 execution to a
++/// locked window, CTXR_D. It runs from the device tree through the static trust
++/// cache and into the boot object, ending where the object's read-only region
++/// ends, which is kmutil's kcrz. Nothing at runtime can move that end, so the
++/// only way to grow the window is to enroll an object with a larger kcrz.
++public enum ExecuteWindow {
++  /// The region CONFIG_ARM64_CTXR_EXECMEM confines kernel code to.
++  public static let size: UInt64 = 128 << 20
++  /// An arm64 kernel image and that region start on this boundary. iBoot picks
++  /// the load address, so the padding has to hold the region at any alignment.
++  public static let alignment: UInt64 = 2 << 20
++  /// Room kept at the start of __TEXT_EXEC for aura: Stage 1 where iBoot placed
++  /// it, then Stage 2 copied over it, each with its .bss and stacks. A confined
++  /// Stage 2 file larger than this cannot load.
++  public static let auraSlot: UInt64 = 16 << 20
++  static let page: UInt64 = 0x4000
++
++  /// The size __TEXT_EXEC needs to hold aura and a `window`-byte aligned region.
++  public static func codeSize(window: UInt64 = size, slot: UInt64 = auraSlot) -> UInt64 {
++    slot + (alignment - page) + window
++  }
++}
++
++/// A Mach-O Stage 1 with __TEXT_EXEC padded by file-backed zeros. kmutil derives
++/// kcrz from file offsets, so a segment grown only in vmsize leaves it unchanged
++/// and the padding has to be in the file. `write(to:)` leaves it as a hole, and
++/// `kmutil configure-boot --compress` keeps it from reaching Preboot.
++public struct ExpandedMachOBootObject {
++  public struct WriteFailure: Error, LocalizedError {
++    public let reason: String
++    public var errorDescription: String? {
++      "The expanded startup software could not be saved: \(reason)."
++    }
++  }
++
++  /// The object through the end of the original __TEXT_EXEC, its load commands
++  /// rewritten and its code unchanged.
++  public let head: Data
++  /// Every segment after __TEXT_EXEC, unchanged.
++  public let tail: Data
++  /// The zero bytes between `head` and `tail`.
++  public let padding: UInt64
++  /// The kcrz kmutil should derive: load address to the end of __TEXT_EXEC.
++  public let readOnlySize: UInt64
++
++  public var size: UInt64 { UInt64(head.count) + padding + UInt64(tail.count) }
++
++  /// The file is sparse, but kmutil reads and compresses all of it and where it
++  /// works isn't documented, so its enrollment counts the whole decompressed size.
++  public func requireSpace(freeBytes: UInt64) throws {
++    guard freeBytes >= size else {
++      throw WriteFailure(
++        reason:
++          "this volume has \(freeBytes >> 20) MiB free and it needs \((size + (1 << 20) - 1) >> 20) MiB"
++      )
++    }
++  }
++
++  /// Atomically writes the object as a sparse file, which costs about what the
++  /// original object does on APFS. Only `head` and `tail` are read back: a new
++  /// file's hole reads as zeros, so the padding is never held in memory.
++  public func write(to path: URL) throws {
++    let directory = path.deletingLastPathComponent()
++    let temporary = directory.appendingPathComponent(
++      "." + path.lastPathComponent + "." + UUID().uuidString)
++    let fd = open(temporary.path, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
++    guard fd >= 0 else { throw WriteFailure(reason: "cannot create the file") }
++    var published = false
++    defer {
++      close(fd)
++      if !published { unlink(temporary.path) }
++    }
++    let tailOffset = off_t(UInt64(head.count) + padding)
++    // The final size first, so the padding is a hole whatever the tail holds.
++    guard ftruncate(fd, off_t(size)) == 0 else {
++      throw WriteFailure(reason: "cannot size the file")
++    }
++    try Self.writeAll(head, to: fd, at: 0)
++    try Self.writeAll(tail, to: fd, at: tailOffset)
++    var info = stat()
++    guard fstat(fd, &info) == 0, UInt64(info.st_size) == size else {
++      throw WriteFailure(reason: "its size is wrong")
++    }
++    guard try Self.read(fd, count: head.count, at: 0) == head,
++      try Self.read(fd, count: tail.count, at: tailOffset) == tail
++    else { throw WriteFailure(reason: "it did not verify") }
++    guard fsync(fd) == 0 else { throw WriteFailure(reason: "cannot flush the file") }
++    guard rename(temporary.path, path.path) == 0 else {
++      throw WriteFailure(reason: "cannot move the file into place")
++    }
++    published = true
++    let parent = open(directory.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
++    guard parent >= 0 else { throw WriteFailure(reason: "cannot open its directory") }
++    defer { close(parent) }
++    guard fsync(parent) == 0 else { throw WriteFailure(reason: "cannot flush its directory") }
++  }
++
++  private static func writeAll(_ bytes: Data, to fd: Int32, at offset: off_t) throws {
++    try bytes.withUnsafeBytes { buffer in
++      var done = 0
++      while done < buffer.count {
++        let count = pwrite(
++          fd, buffer.baseAddress! + done, buffer.count - done, offset + off_t(done))
++        guard count > 0 else { throw WriteFailure(reason: "cannot write the file") }
++        done += count
++      }
++    }
++  }
++
++  private static func read(_ fd: Int32, count: Int, at offset: off_t) throws -> Data {
++    var result = Data(count: count)
++    try result.withUnsafeMutableBytes { buffer in
++      var done = 0
++      while done < buffer.count {
++        let got = pread(fd, buffer.baseAddress! + done, buffer.count - done, offset + off_t(done))
++        guard got > 0 else { throw WriteFailure(reason: "cannot read the file back") }
++        done += got
++      }
++    }
++    return result
++  }
++}
++
++extension MachOBootObject {
++  /// Pads `object`'s __TEXT_EXEC so that iBoot arms a larger execute window:
++  /// aura's code keeps its bytes and addresses, the segment becomes
++  /// `ExecuteWindow.codeSize(window:slot:)` bytes, and the segments after it move
++  /// up by the same amount in both file and memory, so every segment stays fully
++  /// file-backed at its virtual offset, which is how iBoot places them.
++  ///
++  /// Only load commands this code can move are accepted, so anything it does not
++  /// recognize is refused rather than left pointing at the wrong bytes.
++  public static func expandExecuteWindow(
++    _ object: Data, window: UInt64 = ExecuteWindow.size, slot: UInt64 = ExecuteWindow.auraSlot
++  ) throws -> ExpandedMachOBootObject {
++    let page = ExecuteWindow.page
++    guard window > 0, window % page == 0, slot % page == 0 else {
++      throw Invalid(reason: "its execute window is not a whole number of pages")
++    }
++    guard window <= 1 << 40, slot <= 1 << 40 else {
++      throw Invalid(reason: "its execute window is too large")
++    }
++    func sum(_ first: UInt64, _ second: UInt64) throws -> UInt64 {
++      let (result, overflow) = first.addingReportingOverflow(second)
++      guard !overflow else { throw Invalid(reason: "an address or offset is out of range") }
++      return result
++    }
++    let (segments, entry) = try layout(object)
++    let code = segments["__TEXT_EXEC"]!
++    guard entry == code.vmaddr + rawEntryOffset else {
++      throw Invalid(reason: "it does not enter aura at its entry point")
++    }
++    var bytes = [UInt8](object)
++    func u32(_ offset: Int) throws -> UInt32 {
++      guard offset >= 0, offset + 4 <= bytes.count else { throw Invalid(reason: "truncated") }
++      return (0..<4).reduce(UInt32(0)) { $0 | UInt32(bytes[offset + $1]) << (8 * $1) }
++    }
++    func u64(_ offset: Int) throws -> UInt64 {
++      UInt64(try u32(offset)) | UInt64(try u32(offset + 4)) << 32
++    }
++    func put<T: FixedWidthInteger>(_ value: T, at offset: Int) {
++      withUnsafeBytes(of: value.littleEndian) {
++        bytes.replaceSubrange(offset..<(offset + MemoryLayout<T>.size), with: $0)
++      }
++    }
++
++    // aura's load header (start.S) gives the memory the image needs, past its file.
++    let start = Int(code.fileoff)
++    guard start + 0x820 <= bytes.count,
++      bytes[(start + loadHeaderOffset)..<(start + loadHeaderOffset + 8)]
++        .elementsEqual("AURALOAD".utf8)
++    else { throw Invalid(reason: "__TEXT_EXEC does not start with aura") }
++    guard try u64(start + loadHeaderOffset + 16) <= slot, code.vmsize <= slot else {
++      throw Invalid(reason: "aura does not fit the room kept for it")
++    }
++
++    let codeSize = ExecuteWindow.codeSize(window: window, slot: slot)
++    let growth = codeSize - code.vmsize
++    let codeEnd = try sum(code.vmaddr, code.vmsize)
++    let fileEnd = try sum(code.fileoff, code.filesize)
++    guard fileEnd % page == 0, code.vmaddr % page == 0 else {
++      throw Invalid(reason: "__TEXT_EXEC is not page-aligned")
++    }
++    func moved32(_ offset: UInt32) throws -> UInt32 {
++      guard let result = UInt32(exactly: try sum(UInt64(offset), growth)) else {
++        throw Invalid(reason: "its execute window is too large")
++      }
++      return result
++    }
++
++    // The fileset's own commands, then those of each member's header.
++    var headers = [0]
++    var index = 0
++    while index < headers.count {
++      guard Set(headers).count == headers.count else {
++        throw Invalid(reason: "a fileset member repeats")
++      }
++      let header = headers[index]
++      index += 1
++      guard try u32(header) == 0xFEED_FACF else {
++        throw Invalid(reason: "a fileset member has no Mach-O header")
++      }
++      var offset = header + 32
++      for _ in 0..<Int(try u32(header + 16)) {
++        let command = try u32(offset)
++        let length = Int(try u32(offset + 4))
++        guard length >= 8, offset + length <= bytes.count else {
++          throw Invalid(reason: "malformed load command")
++        }
++        switch command {
++        case 0x19:  // LC_SEGMENT_64
++          guard length >= 72 else { throw Invalid(reason: "malformed segment") }
++          let vmaddr = try u64(offset + 24)
++          let vmsize = try u64(offset + 32)
++          let name = String(
++            decoding: bytes[(offset + 8)..<(offset + 24)].prefix { $0 != 0 }, as: UTF8.self)
++          if name == "__TEXT_EXEC" {
++            guard vmaddr == code.vmaddr, vmsize == code.vmsize else {
++              throw Invalid(reason: "two headers disagree about __TEXT_EXEC")
++            }
++            put(codeSize, at: offset + 32)
++            put(codeSize, at: offset + 48)
++          } else if vmaddr >= codeEnd {
++            put(try sum(vmaddr, growth), at: offset + 24)
++            put(try sum(try u64(offset + 40), growth), at: offset + 40)
++            let sections = Int(try u32(offset + 64))
++            guard length == 72 + 80 * sections else {
++              throw Invalid(reason: "malformed segment")
++            }
++            for section in 0..<sections {
++              let entry = offset + 72 + 80 * section
++              put(try sum(try u64(entry + 32), growth), at: entry + 32)
++              let fileOffset = try u32(entry + 48)
++              if fileOffset != 0 { put(try moved32(fileOffset), at: entry + 48) }
++            }
++          } else if try sum(vmaddr, vmsize) > code.vmaddr {
++            throw Invalid(reason: "\(name) overlaps __TEXT_EXEC")
++          }
++        case 0x8000_0034:  // LC_DYLD_CHAINED_FIXUPS
++          // Aura relocates itself, so its table must name no fixup to move.
++          let data = Int(try u32(offset + 8))
++          let starts = data + Int(try u32(data + 4))
++          for segment in 0..<Int(try u32(starts)) where try u32(starts + 4 + 4 * segment) != 0 {
++            throw Invalid(reason: "it has chained fixups")
++          }
++          if UInt64(data) >= fileEnd { put(try moved32(UInt32(data)), at: offset + 8) }
++        case 0x8000_0035:  // LC_FILESET_ENTRY
++          guard try u64(offset + 8) < code.vmaddr, try u64(offset + 16) < code.fileoff else {
++            throw Invalid(reason: "a fileset member is not before __TEXT_EXEC")
++          }
++          headers.append(Int(try u64(offset + 16)))
++        case 0x2, 0xB:  // LC_SYMTAB, LC_DYSYMTAB
++          guard bytes[(offset + 8)..<(offset + length)].allSatisfy({ $0 == 0 }) else {
++            throw Invalid(reason: "it has a symbol table")
++          }
++        case 0x5, 0x1B, 0x32:  // LC_UNIXTHREAD, LC_UUID, LC_BUILD_VERSION
++          break
++        default:
++          throw Invalid(reason: "it has a load command that cannot be moved")
++        }
++        offset += length
++      }
++    }
++
++    let expanded = ExpandedMachOBootObject(
++      head: Data(bytes[0..<Int(fileEnd)]), tail: Data(bytes[Int(fileEnd)...]), padding: growth,
++      readOnlySize: try sum(code.fileoff, codeSize))
++    _ = try layout(expanded.head, fileSize: expanded.size)
++    return expanded
++  }
++
++  public static let loadHeaderOffset = 0x808
++}
+diff --git a/Recovery/Sources/BootSelection.swift b/Recovery/Sources/BootSelection.swift
+index 4e1b996..ae223b8 100644
+--- a/Recovery/Sources/BootSelection.swift
++++ b/Recovery/Sources/BootSelection.swift
+@@ -9,13 +9,25 @@ enum AuraBootMode: String, Codable {
+   }
+ 
+   var stage2Path: String {
+-    self == .raw ? "raw/boot.bin" : "macho/aura-stage2.pkg"
++    self == .raw ? "raw/boot.bin" : "macho/boot-ctxr.bin"
+   }
+ 
++  /// The ESP file this mode's Stage 1 chainloads. A Mach-O Stage 1 is padded
++  /// for the execute window and loads the confined Stage 2, as in
++  /// aurora-silicon/aurora-installer (AuraStage1Format.confinedStage2Path).
++  var espStage2Path: String {
++    self == .raw ? "m1n1/boot.bin" : "m1n1/boot-ctxr.bin"
++  }
++
++  /// kmutil records a Mach-O object's __TEXT_BOOT_EXEC size as kcbz; without it
++  /// iBoot does not start SPTM. The padded object is enrolled compressed, so its
++  /// zero padding never reaches Preboot.
+   func enrollmentArguments(stage1: String, volume: String) -> [String] {
+     var arguments = ["configure-boot", "-c", stage1, "-v", volume]
+     if self == .raw {
+       arguments += ["--raw", "--entry-point", "2048", "--lowest-virtual-address", "0"]
++    } else {
++      arguments.append("--compress")
+     }
+     return arguments
+   }
+@@ -29,6 +41,11 @@ struct BootSelection: Codable {
+     mode = machoEnabled ? .macho : .raw
+     self.nestedVirtualization = machoEnabled && nestedVirtualization
+   }
++
++  /// The installation's own mode, from its install-config.json bootMode.
++  init(configuredMode: String?) {
++    self.init(machoEnabled: configuredMode == AuraBootMode.macho.rawValue)
++  }
+ }
+ 
+ enum RecoveryBootPolicy {
+diff --git a/Recovery/Sources/InstallConfiguration.swift b/Recovery/Sources/InstallConfiguration.swift
+index f185ccc..fa577e7 100644
+--- a/Recovery/Sources/InstallConfiguration.swift
++++ b/Recovery/Sources/InstallConfiguration.swift
+@@ -29,7 +29,11 @@ struct InstallConfiguration: Decodable {
+         && (object["allowCustomBootArguments"] == nil || object["allowCustomBootArguments"] is Bool)
+     else { throw InstallConfigurationError.invalid }
+     let config = try JSONDecoder().decode(Self.self, from: data)
+-    guard config.schema == 2, config.bootMode == "raw", config.stage2Path == "m1n1/boot.bin",
++    // Raw mode loads m1n1/boot.bin; a board Mach-O Stage 1 (padded for the
++    // execute window) loads the confined m1n1/boot-ctxr.bin.
++    guard config.schema == 2,
++      (config.bootMode == "raw" && config.stage2Path == "m1n1/boot.bin")
++        || (config.bootMode == "macho" && config.stage2Path == "m1n1/boot-ctxr.bin"),
+       !config.volumeName.isEmpty, config.volumeName.count <= 80,
+       !config.volumeName.contains("/"),
+       config.volumeName.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
+diff --git a/Recovery/Sources/RecoveryActions.swift b/Recovery/Sources/RecoveryActions.swift
+index 4436edc..c53fd9c 100644
+--- a/Recovery/Sources/RecoveryActions.swift
++++ b/Recovery/Sources/RecoveryActions.swift
+@@ -79,6 +79,45 @@ enum RecoveryActions {
+   static func check(_ condition: Bool, _ message: String) throws {
+     if !condition { throw RecoveryFailure(message: message) }
+   }
++  static func configuredMode(_ config: InstallConfiguration) throws -> AuraBootMode {
++    guard let mode = AuraBootMode(rawValue: config.bootMode) else {
++      throw InstallConfigurationError.invalid
++    }
++    return mode
++  }
++  /// Bytes this volume's APFS container can still give to a file, or to kmutil in Preboot.
++  static func freeBytes(_ path: URL) throws -> UInt64 {
++    var status = statfs()
++    guard statfs(path.path, &status) == 0 else {
++      throw RecoveryFailure(message: "Could not read this volume's free space.")
++    }
++    return UInt64(status.f_bavail) * UInt64(status.f_bsize)
++  }
++  /// Pads the Mach-O Stage 1 and checks what kmutil derives from the file it will
++  /// enroll: kcbz 0, so iBoot doesn't start SPTM, and the padded kcrz. From
++  /// aurora-silicon/aurora-installer's Recovery (RecoveryActions.stageExpandedStage1).
++  static func stageExpandedStage1(_ stage1: Data, window: UInt64, at path: URL) throws {
++    let usage = try run("/usr/bin/kmutil", ["configure-boot", "--help"])
++    try check(
++      String(decoding: usage, as: UTF8.self).contains("--compress"),
++      "This Recovery's kmutil cannot compress startup software, which this Mac needs.")
++    let expanded = try MachOBootObject.expandExecuteWindow(stage1, window: window)
++    try expanded.requireSpace(freeBytes: freeBytes(path.deletingLastPathComponent()))
++    try expanded.write(to: path)
++    let output: Data
++    do {
++      output = try run(
++        "/usr/bin/kmutil", ["inspect", "-z", "-B", path.path, "--show-mach-boot-properties"])
++    } catch {
++      throw RecoveryFailure(
++        message:
++          "This Recovery's kmutil could not check the startup software, so it was not enrolled. Choose Utilities → Show Details for its output."
++      )
++    }
++    let used = try MachOBootObject.checkInspection(
++      String(decoding: output, as: UTF8.self), readOnlySize: expanded.readOnlySize)
++    InstallerLog.shared.append("Startup software padded and checked by kmutil: \(used).")
++  }
+   static func hash(_ bytes: Data) -> String {
+     RecoveryDigest.sha256(bytes)
+   }
+@@ -349,8 +388,8 @@ enum RecoveryActions {
+     }
+     let config = try configuration.get()
+     try check(
+-      selection.mode == .raw && !selection.nestedVirtualization,
+-      "This installation includes raw boot mode only.")
++      selection.mode.rawValue == config.bootMode && !selection.nestedVirtualization,
++      "The selected boot mode does not match this installation’s startup bundle.")
+     try RecoveryOwnerResolver.verify(owner, current: resolveOwner())
+     progress(0.05, "Verifying the installation files")
+     let m = try manifest()
+@@ -361,11 +400,23 @@ enum RecoveryActions {
+       manifest: m, root: payloadRoot())
+     let modes = m["modes"] as? [String: [String: Any]]
+     guard let entry = modes?[selection.mode.rawValue],
+-      let destination = entry["espPath"] as? String, destination == config.stage2Path
++      let destination = entry["espPath"] as? String, destination == config.stage2Path,
++      destination == selection.mode.espStage2Path
+     else {
+       throw RecoveryFailure(
+         message: "This boot mode’s complete startup bundle has not been staged yet.")
+     }
++    // A Mach-O Stage 1 is padded here for the execute window it names, then
++    // enrolled compressed (aurora-silicon/aurora-installer's Recovery does the same).
++    var executeWindow: UInt64?
++    if selection.mode == .macho {
++      guard let window = entry["executeWindow"] as? Int, UInt64(window) == ExecuteWindow.size
++      else {
++        throw RecoveryFailure(message: "This Mach-O startup bundle names no usable execute window.")
++      }
++      try MachOBootObject.check(stage1)
++      executeWindow = UInt64(window)
++    }
+     progress(0.15, "Checking the recovery environment")
+     try run("/sbin/mount", ["-u", "-w", volume.path])
+     let fm = FileManager.default
+@@ -422,7 +473,12 @@ enum RecoveryActions {
+     try record(journal.phase)
+     InstallerLog.shared.persist(to: operation.appendingPathComponent("installer.log"))
+     let stage1Path = operation.appendingPathComponent("stage1")
+-    try RecoveryFileTransaction.write(stage1, to: stage1Path)
++    if let window = executeWindow {
++      progress(0.2, "Preparing the startup software")
++      try stageExpandedStage1(stage1, window: window, at: stage1Path)
++    } else {
++      try RecoveryFileTransaction.write(stage1, to: stage1Path)
++    }
+     do {
+       try RecoveryInstallationCoordinator.run(
+         phase: journal.phase, persist: record,
+@@ -660,7 +716,7 @@ enum RecoveryActions {
+       hasPendingInstallation: FileManager.default.fileExists(atPath: pendingInstallation.path),
+       verifyBundle: {
+         let config = try configuration.get()
+-        let expected = try asset("raw/boot.bin", manifest: manifest())
++        let expected = try asset(try configuredMode(config).stage2Path, manifest: manifest())
+         let target = try esp().appendingPathComponent(config.stage2Path)
+         try check(
+           try Data(contentsOf: target) == expected,
+@@ -677,7 +733,7 @@ enum RecoveryActions {
+     try recoveryOnly()
+     let record = try installed()
+     let config = try configuration.get()
+-    let expected = try asset("raw/boot.bin", manifest: manifest())
++    let expected = try asset(try configuredMode(config).stage2Path, manifest: manifest())
+     let target = try esp().appendingPathComponent(config.stage2Path)
+     try check(
+       try Data(contentsOf: target) == expected,
+@@ -757,7 +813,7 @@ extension RecoveryActions {
+       let record = try installed()
+       guard let name = record["mode"] as? String, let mode = AuraBootMode(rawValue: name),
+         let path = record["stage2Path"] as? String,
+-        path == RecoveryBaseline.stage2Path, path == (try configuration.get()).stage2Path
++        path == mode.espStage2Path, path == (try configuration.get()).stage2Path
+       else {
+         throw RecoveryFailure(message: "The installed boot mode is not recorded.")
+       }
+@@ -771,7 +827,9 @@ extension RecoveryActions {
+       files[path] = bytes
+       let destination = try esp()
+       let backup = state.appendingPathComponent("recover-" + UUID().uuidString + ".before")
+-      try RecoveryBaseline.restore(files: files, root: destination, backup: backup) {
++      try RecoveryBaseline.restore(
++        files: files, root: destination, backup: backup, stage2Path: path
++      ) {
+         try atomic($0, to: $1)
+       }
+       print("Stage 2 and device firmware restored.")
+diff --git a/Recovery/Sources/RecoveryBaseline.swift b/Recovery/Sources/RecoveryBaseline.swift
+index 1ca3bed..67f9007 100644
+--- a/Recovery/Sources/RecoveryBaseline.swift
++++ b/Recovery/Sources/RecoveryBaseline.swift
+@@ -107,10 +107,15 @@ enum RecoveryBaseline {
+ 
+   // All backups finish before the first ESP write. Include the currently
+   // attempted file in rollback because a writer can fail after replacing it.
++  /// `stage2Path` is the installation's ESP Stage 2: m1n1/boot.bin, or the
++  /// confined m1n1/boot-ctxr.bin a Mach-O Stage 1 loads.
+   static func restore(
+-    files: [String: Data], root: URL, backup: URL,
++    files: [String: Data], root: URL, backup: URL, stage2Path: String = RecoveryBaseline.stage2Path,
+     write: (Data, URL) throws -> Void
+   ) throws {
++    guard [Self.stage2Path, "m1n1/boot-ctxr.bin"].contains(stage2Path) else {
++      throw RecoveryBaselineFailure(message: "Recovery cannot restore this Stage 2 path.")
++    }
+     let required = Set([stage2Path] + vendorPaths)
+     let names = files.keys.sorted()
+     guard required.isSubset(of: Set(names)),
+diff --git a/Recovery/Sources/main.swift b/Recovery/Sources/main.swift
+index 0e642cd..ec958aa 100644
+--- a/Recovery/Sources/main.swift
++++ b/Recovery/Sources/main.swift
+@@ -320,7 +320,9 @@ final class InstallerModel {
+   }
+ 
+   private var installationTask: Task<Void, Never>?
+-  var bootSelection: BootSelection { BootSelection() }
++  var bootSelection: BootSelection {
++    BootSelection(configuredMode: try? RecoveryActions.configuration.get().bootMode)
++  }
+ 
+   var steps: [String] {
+     recoveryInterface
+diff --git a/Recovery/Tests/BootSelectionCheck.swift b/Recovery/Tests/BootSelectionCheck.swift
+index 2344b16..bd41801 100644
+--- a/Recovery/Tests/BootSelectionCheck.swift
++++ b/Recovery/Tests/BootSelectionCheck.swift
+@@ -9,6 +9,10 @@ import Foundation
+         groupUUID: "target", allowCustomBootArguments: true) == ["-nca", "-v", "target"])
+     let initial = BootSelection()
+     precondition(initial.mode == .raw && !initial.nestedVirtualization)
++    precondition(BootSelection(configuredMode: "macho").mode == .macho)
++    for configured in ["raw", nil, "other"] as [String?] {
++      precondition(BootSelection(configuredMode: configured).mode == .raw)
++    }
+     let volume = "/Volumes/Volume With Spaces"
+     for macho in [false, true] {
+       for nv in [false, true] {
+@@ -19,14 +23,17 @@ import Foundation
+         precondition(arguments[0] == "configure-boot")
+         precondition(arguments[2] == stage1 && arguments[4] == volume)
+         if macho {
+-          precondition(arguments.count == 5)
+-          precondition(selection.mode.stage2Path.hasSuffix(".pkg"))
++          // A padded Mach-O Stage 1 is enrolled compressed and loads the confined Stage 2.
++          precondition(Array(arguments.dropFirst(5)) == ["--compress"])
++          precondition(selection.mode.stage2Path == "macho/boot-ctxr.bin")
++          precondition(selection.mode.espStage2Path == "m1n1/boot-ctxr.bin")
+         } else {
+           precondition(
+             Array(arguments.dropFirst(5)) == [
+               "--raw", "--entry-point", "2048", "--lowest-virtual-address", "0",
+             ])
+           precondition(selection.mode.stage2Path.hasSuffix("boot.bin"))
++          precondition(selection.mode.espStage2Path == "m1n1/boot.bin")
+         }
+         let restored = try JSONDecoder().decode(
+           BootSelection.self, from: JSONEncoder().encode(selection))
+@@ -36,7 +43,7 @@ import Foundation
+       }
+     }
+     print(
+-      "PASS default raw; all four option combinations; exact raw/Mach-O argument separation; paths with spaces; JSON round trip"
++      "PASS default raw; configured mode; all four option combinations; exact raw/Mach-O (--compress, confined Stage 2) argument separation; paths with spaces; JSON round trip"
+     )
+   }
+ }
+diff --git a/Recovery/Tests/InstallConfigurationCheck.swift b/Recovery/Tests/InstallConfigurationCheck.swift
+index af1e077..9b3100b 100644
+--- a/Recovery/Tests/InstallConfigurationCheck.swift
++++ b/Recovery/Tests/InstallConfigurationCheck.swift
+@@ -12,6 +12,20 @@ import Foundation
+     ]
+     let config = try InstallConfiguration.decode(JSONSerialization.data(withJSONObject: value))
+     precondition(config.volumeName == "Omarchy Test" && config.bootMode == "raw")
++    var macho = value
++    macho["bootMode"] = "macho"
++    macho["stage2Path"] = "m1n1/boot-ctxr.bin"
++    let confined = try InstallConfiguration.decode(JSONSerialization.data(withJSONObject: macho))
++    precondition(confined.bootMode == "macho" && confined.stage2Path == "m1n1/boot-ctxr.bin")
++    for (mode, path) in [("raw", "m1n1/boot-ctxr.bin"), ("macho", "m1n1/boot.bin"), ("macho", "m1n1/aura-stage2.pkg")] {
++      var mixed = value
++      mixed["bootMode"] = mode
++      mixed["stage2Path"] = path
++      do {
++        _ = try InstallConfiguration.decode(JSONSerialization.data(withJSONObject: mixed))
++        preconditionFailure("accepted \(mode) with \(path)")
++      } catch {}
++    }
+     for (key, bad) in [
+       ("schema", 1), ("schema", true), ("bootMode", "macho"),
+       ("stage2Path", "../boot.bin"), ("systemUUID", "disk0s1"),
+@@ -61,6 +75,6 @@ import Foundation
+         preconditionFailure("accepted invalid bootstrap \(key)")
+       } catch {}
+     }
+-    print("PASS strict per-install configuration, raw-only mode, IDs, paths and missing fields")
++    print("PASS strict per-install configuration, raw or Mach-O (confined Stage 2) mode, IDs, paths and missing fields")
+   }
+ }
+diff --git a/Recovery/Tests/MachOBootObjectCheck.swift b/Recovery/Tests/MachOBootObjectCheck.swift
+new file mode 100644
+index 0000000..ebb1bca
+--- /dev/null
++++ b/Recovery/Tests/MachOBootObjectCheck.swift
+@@ -0,0 +1,414 @@
++// Ported from aurora-silicon/aurora-installer macOS/Recovery/Tests/MachOBootObjectCheck.swift
++// (79a7549, MIT), without the Stage 1 configuration, fill and chip checks this Recovery doesn't carry.
++import Foundation
++
++@main struct MachOBootObjectCheck {
++  static let base: UInt64 = 0xFFFF_FE00_0700_4000
++
++  struct Segment {
++    var name: String
++    var offset: UInt64
++    var size: UInt64
++    var fileOffset: UInt64? = nil
++  }
++
++  static func object(
++    _ segments: [Segment], entry: UInt64 = 0x10800, filetype: UInt32 = 12
++  ) -> Data {
++    func le<T: FixedWidthInteger>(_ value: T) -> [UInt8] {
++      withUnsafeBytes(of: value.littleEndian, Array.init)
++    }
++    var commands: [UInt8] = []
++    for segment in segments {
++      var name = Array(segment.name.utf8)
++      name += [UInt8](repeating: 0, count: 16 - name.count)
++      commands += le(UInt32(0x19)) + le(UInt32(72)) + name
++      commands += le(base + segment.offset) + le(segment.size)
++      commands += le(segment.fileOffset ?? segment.offset) + le(segment.size)
++      commands += le(UInt32(1)) + le(UInt32(1)) + le(UInt32(0)) + le(UInt32(0))
++    }
++    var registers = [UInt64](repeating: 0, count: 34)
++    registers[32] = base + entry
++    commands += le(UInt32(5)) + le(UInt32(16 + 34 * 8)) + le(UInt32(6)) + le(UInt32(0x44))
++    for register in registers { commands += le(register) }
++    var bytes = le(UInt32(0xFEED_FACF)) + le(UInt32(0x0100_000C)) + le(UInt32(0xC000_0002))
++    bytes += le(filetype) + le(UInt32(segments.count + 1)) + le(UInt32(commands.count))
++    bytes += le(UInt32(0)) + le(UInt32(0)) + commands
++    let end = segments.map { $0.offset + $0.size }.max() ?? 0
++    bytes += [UInt8](repeating: 0, count: Int(end) - bytes.count)
++    return Data(bytes)
++  }
++
++  static let valid = [
++    Segment(name: "__TEXT", offset: 0, size: 0x8000),
++    Segment(name: "__PRELINK_TEXT", offset: 0x8000, size: 0x8000),
++    Segment(name: "__TEXT_EXEC", offset: 0x10000, size: 0x430000),
++    Segment(name: "__PRELINK_INFO", offset: 0x440000, size: 0x4000),
++    Segment(name: "__DATA", offset: 0x444000, size: 0x4000),
++    Segment(name: "__LINKEDIT", offset: 0x448000, size: 0x4000),
++  ]
++
++  static func rejects(_ data: Data, _ why: String) {
++    do {
++      try MachOBootObject.check(data)
++      preconditionFailure("accepted: \(why)")
++    } catch {}
++  }
++
++  static func le<T: FixedWidthInteger>(_ value: T) -> [UInt8] {
++    withUnsafeBytes(of: value.littleEndian, Array.init)
++  }
++
++  static func name16(_ name: String) -> [UInt8] {
++    Array(name.utf8) + [UInt8](repeating: 0, count: 16 - name.utf8.count)
++  }
++
++  /// One LC_SEGMENT_64 of aura's layout: file offset equals virtual offset.
++  static func command(
++    _ name: String, _ offset: UInt64, _ size: UInt64, section: (String, UInt64)? = nil
++  ) -> [UInt8] {
++    var bytes = le(UInt32(0x19)) + le(UInt32(72 + (section == nil ? 0 : 80))) + name16(name)
++    bytes += le(base + offset) + le(size) + le(offset) + le(size)
++    bytes += le(UInt32(1)) + le(UInt32(1)) + le(UInt32(section == nil ? 0 : 1)) + le(UInt32(0))
++    if let section {
++      bytes += name16(section.0) + name16(name) + le(base + offset) + le(section.1)
++      bytes += le(UInt32(offset)) + [UInt8](repeating: 0, count: 28)
++    }
++    return bytes
++  }
++
++  /// The boot object aura's tools/macho_boot_object.py makes for `raw`.
++  static func auraObject(
++    raw: Data, extraCommand: [UInt8] = [], symbols: UInt32 = 0, fixup: UInt32 = 0
++  ) -> Data {
++    let size = UInt64(raw.count)
++    let info: UInt64 = 0x10000 + size
++    let data = info + 0x4000
++    let linkedit = data + 0x4000
++    var registers = [UInt64](repeating: 0, count: 34)
++    registers[16] = base + 0x10000
++    registers[32] = base + 0x10800
++    var thread = le(UInt32(5)) + le(UInt32(16 + 34 * 8)) + le(UInt32(6)) + le(UInt32(0x44))
++    for register in registers { thread += le(register) }
++    let uuid = le(UInt32(0x1B)) + le(UInt32(24)) + [UInt8](repeating: 0x5A, count: 16)
++    let build = le(UInt32(0x32)) + le(UInt32(24)) + [UInt8](repeating: 0, count: 16)
++    let code = command("__TEXT_EXEC", 0x10000, size)
++    let dataSegment = command("__DATA", data, 0x4000)
++    let linkeditSegment = command("__LINKEDIT", linkedit, 0x4000)
++    let member = Array("com.apple.kernel".utf8) + [0, 0, 0, 0, 0, 0, 0, 0]
++    let fileset =
++      le(UInt32(0x8000_0035)) + le(UInt32(32 + member.count)) + le(base + 0x8000)
++      + le(UInt64(0x8000)) + le(UInt32(32)) + le(UInt32(0)) + member
++    let fixups = le(UInt32(0x8000_0034)) + le(UInt32(16)) + le(UInt32(linkedit)) + le(UInt32(56))
++    func header(_ type: UInt32, _ commands: [[UInt8]]) -> [UInt8] {
++      let payload = commands.flatMap { $0 }
++      return le(UInt32(0xFEED_FACF)) + le(UInt32(0x0100_000C)) + le(UInt32(0xC000_0002))
++        + le(type) + le(UInt32(commands.count)) + le(UInt32(payload.count)) + le(UInt32(0))
++        + le(UInt32(0)) + payload
++    }
++    let outer = header(
++      12,
++      [
++        uuid, build, thread, fixups, command("__TEXT", 0, 0x8000),
++        command("__PRELINK_TEXT", 0x8000, 0x8000, section: ("__text", 0x8000)), code,
++        command("__PRELINK_INFO", info, 0x4000, section: ("__info", 0x20)), dataSegment,
++        linkeditSegment, fileset,
++      ] + (extraCommand.isEmpty ? [] : [extraCommand]))
++    let primary = header(
++      2,
++      [
++        command("__TEXT", 0x8000, 0x8000), code, dataSegment, linkeditSegment,
++        le(UInt32(0x2)) + le(UInt32(24)) + le(symbols) + [UInt8](repeating: 0, count: 12),
++        le(UInt32(0xB)) + le(UInt32(80)) + [UInt8](repeating: 0, count: 72), uuid, build, thread,
++      ])
++    var result = Data(count: Int(linkedit) + 0x4000)
++    result.replaceSubrange(0..<outer.count, with: outer)
++    result.replaceSubrange(0x8000..<(0x8000 + primary.count), with: primary)
++    result.replaceSubrange(0x10000..<(0x10000 + raw.count), with: raw)
++    let info0 = Int(info)
++    result.replaceSubrange(info0..<(info0 + 4), with: [0xDE, 0xAD, 0xBE, 0xEF])
++    // A valid fixup table naming no fixups: seven header words, then the starts.
++    var table: [UInt8] = []
++    for word: UInt32 in [0, 28, 56, 56, 0, 1, 0, 6, 0, 0, fixup, 0, 0, 0] { table += le(word) }
++    result.replaceSubrange(Int(linkedit)..<(Int(linkedit) + table.count), with: table)
++    return result
++  }
++
++  static func rawImage(footprint: UInt64 = 0x18000) -> Data {
++    var raw = Data((0..<0x18000).map { UInt8(truncatingIfNeeded: $0 &* 13 &+ 3) })
++    let header =
++      Array("AURALOAD".utf8) + le(UInt32(1)) + le(UInt32(1)) + le(footprint) + le(UInt64(0))
++    raw.replaceSubrange(0x808..<(0x808 + header.count), with: header)
++    return raw
++  }
++
++  static func segmentFields(_ data: Data, header: Int, name: String) -> (
++    UInt64, UInt64, UInt64, UInt64
++  )? {
++    func u32(_ at: Int) -> UInt32 {
++      data.subdata(in: at..<(at + 4)).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
++    }
++    func u64(_ at: Int) -> UInt64 {
++      data.subdata(in: at..<(at + 8)).withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }
++    }
++    var offset = header + 32
++    for _ in 0..<Int(u32(header + 16)) {
++      if u32(offset) == 0x19, data.subdata(in: (offset + 8)..<(offset + 24)) == Data(name16(name)) {
++        return (u64(offset + 24), u64(offset + 32), u64(offset + 40), u64(offset + 48))
++      }
++      offset += Int(u32(offset + 4))
++    }
++    return nil
++  }
++
++  static func refusesExpansion(
++    _ data: Data, window: UInt64 = 0x100000, slot: UInt64 = 0x20000, _ why: String
++  ) {
++    do {
++      _ = try MachOBootObject.expandExecuteWindow(data, window: window, slot: slot)
++      preconditionFailure("expanded: \(why)")
++    } catch {}
++  }
++
++  static func checkExpansion() throws {
++    let raw = rawImage()
++    let original = auraObject(raw: raw)
++    try MachOBootObject.check(original)
++    let window: UInt64 = 0x100000
++    let slot: UInt64 = 0x20000
++    let expanded = try MachOBootObject.expandExecuteWindow(original, window: window, slot: slot)
++    let codeSize = slot + ExecuteWindow.alignment - 0x4000 + window
++    let growth = codeSize - 0x18000
++    precondition(ExecuteWindow.codeSize(window: window, slot: slot) == codeSize)
++    precondition(expanded.padding == growth)
++    precondition(expanded.readOnlySize == 0x10000 + codeSize)
++    precondition(expanded.size == UInt64(original.count) + growth)
++
++    // The whole file, with its padding, is what kmutil and iBoot see.
++    let file = expanded.head + Data(count: Int(expanded.padding)) + expanded.tail
++    let (segments, entry) = try MachOBootObject.layout(file)
++    try MachOBootObject.check(file)
++    precondition(entry == base + 0x10800)
++    let headLayout = try MachOBootObject.layout(expanded.head, fileSize: expanded.size)
++    precondition(headLayout.entry == entry)
++    // Code, and everything below it but the load commands, keep their bytes.
++    precondition(file.subdata(in: 0x10000..<0x28000) == raw)
++    precondition(file.suffix(0xC000) == original.suffix(0xC000))
++    precondition(file.subdata(in: 0x28000..<(0x28000 + Int(growth))).allSatisfy { $0 == 0 })
++    for (name, offset, size) in [
++      ("__PRELINK_INFO", UInt64(0x28000), UInt64(0x4000)), ("__DATA", 0x2c000, 0x4000),
++      ("__LINKEDIT", 0x30000, 0x4000),
++    ] {
++      let moved = segments[name]!
++      precondition(moved.vmaddr == base + offset + growth && moved.fileoff == offset + growth)
++      precondition(moved.vmsize == size && moved.filesize == size)
++    }
++    // The fileset member's copy of each moved segment agrees, as kmutil requires.
++    for name in ["__TEXT_EXEC", "__DATA", "__LINKEDIT"] {
++      let outer = segmentFields(file, header: 0, name: name)!
++      let inner = segmentFields(file, header: 0x8000, name: name)!
++      precondition(outer == inner, name)
++    }
++    precondition(segmentFields(file, header: 0, name: "__TEXT_EXEC")!.1 == codeSize)
++    precondition(segmentFields(file, header: 0, name: "__TEXT_EXEC")!.3 == codeSize)
++    precondition(segmentFields(file, header: 0x8000, name: "__TEXT")!.0 == base + 0x8000)
++    // __info's section and the fixup table move with their segments.
++    let bytes = [UInt8](file)
++    func word(_ at: Int) -> UInt32 {
++      (0..<4).reduce(UInt32(0)) { $0 | UInt32(bytes[at + $1]) << (8 * $1) }
++    }
++    var offset = 32
++    var sawInfo = false
++    var sawFixups = false
++    for _ in 0..<Int(word(16)) {
++      if word(offset) == 0x19,
++        Data(bytes[(offset + 8)..<(offset + 24)]) == Data(name16("__PRELINK_INFO"))
++      {
++        let section = offset + 72
++        precondition(word(section + 48) == UInt32(0x28000 + growth))
++        let at = Int(word(section + 48))
++        precondition(Array(bytes[at..<(at + 4)]) == [0xDE, 0xAD, 0xBE, 0xEF])
++        sawInfo = true
++      } else if word(offset) == 0x8000_0034 {
++        precondition(word(offset + 8) == UInt32(0x30000 + growth))
++        precondition(word(Int(word(offset + 8)) + 28) == 6)
++        sawFixups = true
++      }
++      offset += Int(word(offset + 4))
++    }
++    precondition(sawInfo && sawFixups)
++
++    // An aligned window fits past aura wherever iBoot loads the object.
++    let full = ExecuteWindow.codeSize()
++    for load in stride(from: UInt64(0x1_0000_4000), to: 0x1_0020_8000, by: 0x4000) {
++      let free = load + 0x10000 + ExecuteWindow.auraSlot
++      let start = (free + ExecuteWindow.alignment - 1) & ~(ExecuteWindow.alignment - 1)
++      precondition(start + ExecuteWindow.size <= load + 0x10000 + full)
++    }
++
++    refusesExpansion(
++      auraObject(raw: rawImage(footprint: slot + 1)), "aura needs more than its slot")
++    refusesExpansion(auraObject(raw: Data(count: 0x18000)), "no aura load header")
++    refusesExpansion(auraObject(raw: raw, fixup: 8), "a real chained fixup")
++    refusesExpansion(auraObject(raw: raw, symbols: 0x40), "a symbol table")
++    refusesExpansion(
++      auraObject(raw: raw, extraCommand: le(UInt32(0x1D)) + le(UInt32(16)) + le(UInt64(0))),
++      "LC_CODE_SIGNATURE, which it cannot move")
++    refusesExpansion(original, window: 0x100, "a window of part of a page")
++    refusesExpansion(file, "an object that is already expanded")
++    refusesExpansion(object(valid), "not aura's object")
++    // A crafted object is refused, never a trap on the arithmetic.
++    func patched(_ name: String, field: Int, value: UInt64) -> Data {
++      var data = original
++      var offset = 0x8000 + 32
++      while data.subdata(in: (offset + 8)..<(offset + 24)) != Data(name16(name)) {
++        offset += Int(
++          data.subdata(in: (offset + 4)..<(offset + 8))
++            .withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) })
++      }
++      data.replaceSubrange((offset + field)..<(offset + field + 8), with: le(value))
++      return data
++    }
++    refusesExpansion(
++      patched("__DATA", field: 24, value: UInt64.max - 0x100), "a virtual address that overflows")
++    refusesExpansion(
++      patched("__DATA", field: 40, value: UInt64.max - 0x100), "a file offset that overflows")
++    refusesExpansion(
++      original, window: UInt64.max - 0x3FFF, "a window that overflows the segment size")
++    refusesExpansion(
++      original, window: 0x4000, slot: UInt64.max - 0x3FFF, "a slot that overflows the segment size")
++    var repeating: [UInt8] = le(UInt32(0x8000_0035))
++    repeating += le(UInt32(32 + 24))
++    repeating += le(base)
++    repeating += le(UInt64(0))
++    repeating += le(UInt32(32))
++    repeating += le(UInt32(0))
++    repeating += Array("com.apple.kernel".utf8)
++    repeating += [0, 0, 0, 0, 0, 0, 0, 0]
++    refusesExpansion(auraObject(raw: raw, extraCommand: repeating), "a member naming itself")
++
++    // The default window is what reaches disk: a hole, not the whole window.
++    let defaults = try MachOBootObject.expandExecuteWindow(original)
++    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
++      "aura-execute-window-" + UUID().uuidString)
++    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
++    defer { try? FileManager.default.removeItem(at: directory) }
++    let path = directory.appendingPathComponent("stage1")
++    try defaults.write(to: path)
++    try defaults.write(to: path)  // A resumed setup replaces the earlier file.
++    let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
++    precondition(names == ["stage1"])
++    var info = stat()
++    precondition(stat(path.path, &info) == 0)
++    precondition(UInt64(info.st_size) == defaults.size && info.st_mode & 0o777 == 0o600)
++    precondition(defaults.size > ExecuteWindow.size && UInt64(info.st_blocks) * 512 < 16 << 20)
++    let handle = try FileHandle(forReadingFrom: path)
++    defer { try? handle.close() }
++    let readHead = try handle.read(upToCount: defaults.head.count)
++    precondition(readHead == defaults.head)
++    let middle = UInt64(defaults.head.count) + defaults.padding / 2
++    try handle.seek(toOffset: middle)
++    let readHole = try handle.read(upToCount: 0x4000)
++    precondition(readHole == Data(count: 0x4000))
++    try handle.seek(toOffset: defaults.size - UInt64(defaults.tail.count))
++    let readTail = try handle.read(upToCount: defaults.tail.count)
++    precondition(readTail == defaults.tail)
++    do {
++      try defaults.write(to: directory.appendingPathComponent("missing/stage1"))
++      preconditionFailure("wrote into a missing directory")
++    } catch {}
++  }
++
++  static func checkSpace() throws {
++    let expanded = try MachOBootObject.expandExecuteWindow(auraObject(raw: rawImage()))
++    // The default window: aura's slot, its alignment slack, the window and the object around them.
++    precondition(ExecuteWindow.size == 128 << 20 && expanded.size > 146 << 20)
++    precondition(expanded.size < 147 << 20)
++    try expanded.requireSpace(freeBytes: expanded.size)
++    do {
++      try expanded.requireSpace(freeBytes: expanded.size - 1)
++      preconditionFailure("a sparse object is counted at its whole decompressed size")
++    } catch {
++      precondition(error.localizedDescription.contains("147 MiB"), error.localizedDescription)
++    }
++  }
++
++  static func main() throws {
++    try MachOBootObject.check(object(valid))
++    try checkExpansion()
++    try checkSpace()
++
++    var boot = valid
++    boot.insert(Segment(name: "__TEXT_BOOT_EXEC", offset: 0x440000, size: 0x4000), at: 3)
++    boot[4].offset = 0x444000
++    boot[5].offset = 0x448000
++    boot[6].offset = 0x44c000
++    rejects(object(boot), "a nonempty __TEXT_BOOT_EXEC starts SPTM")
++    var empty = valid
++    empty.insert(Segment(name: "__TEXT_BOOT_EXEC", offset: 0x440000, size: 0), at: 3)
++    try MachOBootObject.check(object(empty))
++
++    rejects(object(valid, filetype: 2), "not a fileset")
++    rejects(object(valid.filter { $0.name != "__PRELINK_INFO" }), "kmutil requires __PRELINK_INFO")
++    rejects(object(valid, entry: 0x8000), "entry outside __TEXT_EXEC")
++    var moved = valid
++    moved[2].fileOffset = 0x14000
++    rejects(object(moved), "file offset differs from virtual offset")
++    rejects(object(valid).prefix(0x20000), "segments past the end of the file")
++    rejects(Data(count: 0x10000), "raw image")
++
++    // Output of `kmutil inspect --show-mach-boot-properties` on macOS 26.6.2 (25G83).
++    let inspection = """
++      Mach-O boot properties derived for boot kernel collection:
++      {
++          kclo : 18446741874803752960
++          kcep : 18446741874803820544
++          kcrf : 0
++          kcrz : 4456448
++          kcsf : 0
++          kcsz : 0
++          kcxf : 0
++          kcxz : 0
++          kcbf : 0
++          kcbz : 0
++          kcwf : 4456448
++          kcwz : 32768
++          kclf : 4489216
++          kclz : 16384
++      }
++      """
++    precondition(MachOBootObject.bootExecSize(fromInspection: inspection) == 0)
++    precondition(
++      MachOBootObject.bootExecSize(
++        fromInspection: inspection.replacingOccurrences(
++          of: "kcbz : 0", with: "kcbz : 32768")) == 32768)
++    precondition(MachOBootObject.bootExecSize(fromInspection: "no properties") == nil)
++    let used = try MachOBootObject.checkInspection(inspection, readOnlySize: 4_456_448)
++    precondition(used == "kcrz 4456448")
++    func inspectionRefused(_ output: String, _ why: String) {
++      do {
++        _ = try MachOBootObject.checkInspection(output, readOnlySize: 4_456_448)
++        preconditionFailure("accepted inspection: \(why)")
++      } catch {}
++    }
++    inspectionRefused("no properties", "nothing reported")
++    inspectionRefused(
++      inspection.replacingOccurrences(of: "kcbz : 0", with: "kcbz : 32768"), "SPTM would start")
++    inspectionRefused(
++      inspection.replacingOccurrences(of: "kcrz : 4456448", with: "kcrz : 4472832"),
++      "a different read-only region")
++    // kcrz decides even when kcwf agrees. Without it, only an exact kcwf passes.
++    let noRegion = inspection.replacingOccurrences(of: "    kcrz : 4456448\n", with: "")
++    let fallback = try MachOBootObject.checkInspection(noRegion, readOnlySize: 4_456_448)
++    precondition(fallback == "kcwf 4456448, no kcrz")
++    inspectionRefused(
++      noRegion.replacingOccurrences(of: "kcwf : 4456448", with: "kcwf : 4472832"),
++      "no kcrz and a different kcwf")
++    inspectionRefused(
++      noRegion.replacingOccurrences(of: "    kcwf : 4456448\n", with: ""), "neither property")
++
++    print(
++      "PASS Mach-O boot object: no __TEXT_BOOT_EXEC, kmutil's required segments, linear file backing, entry in __TEXT_EXEC; kcbz and kcrz from kmutil inspect; execute-window padding keeps code, stays sparse and counts its whole size for free space"
++    )
++  }
++}
+diff --git a/Recovery/test-all.sh b/Recovery/test-all.sh
+index 5aa83d8..a63b70a 100755
+--- a/Recovery/test-all.sh
++++ b/Recovery/test-all.sh
+@@ -18,6 +18,7 @@ compile_run digest Sources/Account/RecoveryDigest.swift Tests/RecoveryDigestChec
+ compile_run owner Sources/RecoveryOwner.swift Tests/RecoveryOwnerCheck.swift
+ compile_run bootstrap-owner Sources/RecoveryOwner.swift Tests/BootstrapOwnerCheck.swift
+ compile_run boot-selection Sources/BootSelection.swift Tests/BootSelectionCheck.swift
++compile_run macho-boot-object Sources/AuraMachO.swift Tests/MachOBootObjectCheck.swift
+ compile_run installer-log Sources/InstallerLog.swift Tests/InstallerLogCheck.swift
+ compile_run log-view Sources/InstallerTheme.swift Sources/LogTextView.swift Tests/LogTextViewCheck.swift
+ compile_run sheet-presenter Sources/SheetPresenter.swift Tests/SheetPresenterCheck.swift
+-- 
+2.56.0
+

@@ -1,0 +1,494 @@
+name: J714s installer app (developer, offline)
+
+# Builds a developer, ad hoc signed Omarchy Installer for ONE Mac, the J714s
+# (MacBook Pro 14-inch M5 Pro, apple,j714s), and publishes it as a prerelease
+# of this repo. Nothing here uses Omacom's Developer ID, notarization or
+# catalog key, and the installed app downloads nothing from Omacom hosts:
+#
+# - the installer tree is omacom/omarchy-mac-installer c07e54c + installer/patches
+#   + the extra patch sets named in `patch-sets` (each pinned by its TREE),
+#   rebuilt by installer/app/rebuild-installer-tree.sh exactly as
+#   installer-image.yml does; `test/all` runs on it;
+# - the engine archive is fetched from `engine-url`, checked against
+#   `engine-sha256` and against the tree's Engine/source-lock.json;
+# - the OS image comes from this repo's image release `image-tag` (split
+#   .partN assets + SHA256SUMS), reassembled and verified. With no image-tag a
+#   few-MiB stand-in payload is built instead, to validate the app build on
+#   macOS; such a run publishes nothing (its packages are a workflow artifact);
+# - the catalog key is made fresh in the job (or taken from the optional
+#   J714S_CATALOG_KEY secret, base64 of a 32-byte Ed25519 seed). It signs the
+#   one sealed catalog of this build, which lists only apple,j714s
+#   (installer/app/make-release-inputs.py), and is never written to disk or
+#   uploaded. Only its public half ends up in the app;
+# - Packaging/build-app.sh builds with OMARCHY_APP_SIGNING_IDENTITY=- and
+#   OMARCHY_DEVELOPER_BUILD=1; the offline variant adds OMARCHY_OFFLINE_BUILD=1
+#   and embeds the engine, installer_data.json and the OS package;
+# - Packaging/build-developer-pkg.sh makes the unsigned installer package.
+#   Packaging/release/release-guard (and sign-and-package, its .dmg path) is
+#   never run: it refuses sealed catalogs and ad hoc signatures by design.
+#
+# Variants: `offline` (~3.6 GB package, split into .partN assets like the
+# image releases) and `online` (small package; the app downloads the image's
+# parts from the image release and checks each one against the sealed catalog).
+# Both catalogs of a run share one issue time, so their sequence is equal and
+# either package can be installed after the other on one Mac. Apple's restore
+# firmware is still downloaded from Apple at install time.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: Tag of the new prerelease (must not exist), e.g. omarchy-j714s-1; ignored for a stand-in run
+        type: string
+        default: ''
+      release-name:
+        description: Name of the new prerelease, e.g. "omarchy-j714s 1"; ignored for a stand-in run
+        type: string
+        default: ''
+      image-tag:
+        description: Image release of this repo (split .partN assets, installer_data.json, SHA256SUMS); empty = stand-in payload, publish nothing
+        type: string
+        default: ''
+      engine-url:
+        description: Engine archive (a release asset of this repo); its name must be the tree's pinned one
+        type: string
+        default: https://github.com/betizzel/omarchy-m5/releases/download/engine-v0.9.2-omarchy.20261113.b25a51d6df57/installer-v0.9.2-omarchy.20261113.b25a51d6df57.tar.gz
+      engine-sha256:
+        description: SHA-256 of the engine archive
+        type: string
+        default: bab388624d7dd19077afba4aedb0a0fc9008caf0bc4a1cb5bb097141ff5a3f21
+      patch-sets:
+        description: Extra installer patch sets, in order (installer/patches-<name>, each pinned by its TREE)
+        type: string
+        default: upstream-27.3 j714s
+      variants:
+        description: Which packages to build
+        type: choice
+        options: [both, offline, online]
+        default: both
+      app-version:
+        description: App version (X.Y.Z, at least the engine's minimum_app_version)
+        type: string
+        default: 2.3.16
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-app-${{ inputs.release-tag || github.run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  RELEASE_TAG: ${{ inputs.release-tag }}
+  RELEASE_NAME: ${{ inputs.release-name }}
+  IMAGE_TAG: ${{ inputs.image-tag }}
+  ENGINE_URL: ${{ inputs.engine-url }}
+  ENGINE_SHA256: ${{ inputs.engine-sha256 }}
+  PATCH_SETS: ${{ inputs.patch-sets }}
+  VARIANTS: ${{ inputs.variants }}
+  APP_VERSION: ${{ inputs.app-version }}
+
+jobs:
+  engine:
+    name: Rebuild the tree, test it, fetch the engine
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          path: omarchy-m5
+
+      - name: Check the inputs
+        run: |
+          set -euo pipefail
+          if [[ -n $IMAGE_TAG ]]; then
+            [[ $IMAGE_TAG =~ ^j714s-developer-image-[A-Za-z0-9._-]+$ ]] || { echo "::error::bad image-tag"; exit 1; }
+            [[ $RELEASE_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]] || { echo "::error::bad or missing release-tag"; exit 1; }
+            name_pattern='^[A-Za-z0-9][A-Za-z0-9 ._()+-]{0,99}$'
+            [[ $RELEASE_NAME =~ $name_pattern ]] || { echo "::error::bad or missing release-name"; exit 1; }
+          else
+            echo "::notice::no image-tag: stand-in payload, nothing is published"
+          fi
+          [[ $ENGINE_URL =~ ^https://github\.com/betizzel/omarchy-m5/releases/download/[A-Za-z0-9._-]+/installer-v[A-Za-z0-9._-]+\.tar\.gz$ ]] \
+            || { echo "::error::bad engine-url"; exit 1; }
+          [[ $ENGINE_SHA256 =~ ^[0-9a-f]{64}$ ]] || { echo "::error::bad engine-sha256"; exit 1; }
+          [[ $PATCH_SETS =~ ^[a-z0-9.\ -]*$ ]] || { echo "::error::bad patch-sets"; exit 1; }
+          [[ $APP_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad app-version"; exit 1; }
+
+      - name: Rebuild the installer tree
+        run: |
+          set -euo pipefail
+          read -r -a sets <<<"$PATCH_SETS"
+          bash omarchy-m5/installer/app/rebuild-installer-tree.sh installer ${sets[@]+"${sets[@]}"} 2>&1 \
+            | { grep -v -e 'whitespace' -e '^\.git/rebase-apply' -e '^ ' || true; }
+
+      - name: Portable installer checks (test/all)
+        working-directory: installer
+        run: ./test/all
+
+      - name: Fetch the engine and check it against the tree's lock
+        working-directory: installer
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/engine"
+          read -r name digest size < <(python3 Packaging/read-validation-engine.py)
+          [[ ${ENGINE_URL##*/} == "$name" ]] || { echo "::error::engine-url names ${ENGINE_URL##*/}; the tree pins $name"; exit 1; }
+          [[ $ENGINE_SHA256 == "$digest" ]] || { echo "::error::engine-sha256 is not the tree's pinned $digest"; exit 1; }
+          curl --fail --silent --show-error --location --proto '=https' -o "$RUNNER_TEMP/engine/$name" -- "$ENGINE_URL"
+          printf '%s  %s\n' "$ENGINE_SHA256" "$RUNNER_TEMP/engine/$name" | sha256sum --check -
+          [[ $(stat -c %s "$RUNNER_TEMP/engine/$name") == "$size" ]]
+          # The same checks prepare-engine.py runs on a reproduced archive (modes, native code).
+          python3 Engine/prepare-engine.py --output "$RUNNER_TEMP/engine" --cache "$RUNNER_TEMP/engine-cache"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: engine
+          path: ${{ runner.temp }}/engine/*.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  app:
+    name: Build the J714s developer app and packages
+    needs: engine
+    runs-on: macos-26
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+          path: omarchy-m5
+
+      - name: Record the host and refuse an existing release
+        run: |
+          set -euo pipefail
+          [[ $(uname -m) == arm64 ]]
+          [[ $PATCH_SETS =~ ^[a-z0-9.\ -]*$ ]]
+          [[ $APP_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ -n $IMAGE_TAG ]]; then
+            [[ $IMAGE_TAG =~ ^j714s-developer-image-[A-Za-z0-9._-]+$ ]]
+            [[ $RELEASE_TAG =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$ ]]
+            if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "::error::release $RELEASE_TAG already exists"; exit 1
+            fi
+            echo "PUBLISH=true" >>"$GITHUB_ENV"
+            echo "DOWNLOAD_BASE=https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG" >>"$GITHUB_ENV"
+          else
+            echo "PUBLISH=false" >>"$GITHUB_ENV"
+            echo "DOWNLOAD_BASE=https://github.com/$GITHUB_REPOSITORY/releases/download/stand-in-$GITHUB_RUN_ID" >>"$GITHUB_ENV"
+          fi
+          WORK=$RUNNER_TEMP/j714s-app
+          mkdir -p "$WORK/evidence" "$WORK/out"
+          # One issue time for both catalogs: equal sequences, so the helper's
+          # rollback guard accepts either package after the other.
+          {
+            echo "WORK=$WORK"
+            echo "BUILD_NUMBER=$(date -u +%y%m%d%H%M)"
+            echo "ISSUED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >>"$GITHUB_ENV"
+          { sw_vers; xcodebuild -version; xcrun swift --version; python3 --version; bash --version | head -1; df -h "$RUNNER_TEMP"; } \
+            | tee "$WORK/evidence/host.txt"
+
+      - name: Rebuild the installer tree
+        run: |
+          set -euo pipefail
+          read -r -a sets <<<"$PATCH_SETS"
+          bash omarchy-m5/installer/app/rebuild-installer-tree.sh installer ${sets[@]+"${sets[@]}"} 2>&1 \
+            | { grep -v -e 'whitespace' -e '^\.git/rebase-apply' -e '^ ' || true; } | tee "$WORK/evidence/tree.txt"
+          python3 - installer/scripts/supported-models.json <<'PY'
+          import json, sys
+          if "apple,j714s" not in json.load(open(sys.argv[1])).get("developer", {}):
+              raise SystemExit("the tree does not admit apple,j714s in developer builds (add the j714s patch set)")
+          PY
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: engine
+          path: installer/Engine/artifacts
+
+      - name: Check the engine against the tree's lock
+        working-directory: installer
+        run: |
+          set -euo pipefail
+          read -r name digest size < <(python3 Packaging/read-validation-engine.py)
+          engine=Engine/artifacts/$name
+          [[ $(shasum -a 256 "$engine" | cut -d' ' -f1) == "$digest" && $(stat -f %z "$engine") == "$size" ]]
+          echo "ENGINE=$PWD/$engine" >>"$GITHUB_ENV"
+          echo "engine $name $digest $size" | tee "$WORK/evidence/engine.txt"
+          [[ -z $(git status --porcelain) ]]
+
+      - name: Fetch, verify and reassemble the image
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          image=$WORK/image
+          mkdir "$image"
+          gh release download "$IMAGE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$image"
+          cd "$image"
+          cp SHA256SUMS "$WORK/evidence/image-SHA256SUMS"
+          # The whole file is the one SHA256SUMS line that is neither a part nor the metadata.
+          whole=$(awk '{print $2}' SHA256SUMS | grep -v -E '\.part[0-9]+$' | grep -v -x installer_data.json)
+          [[ $(wc -l <<<"$whole") == 1 && $whole =~ ^[A-Za-z0-9._-]+\.zip$ ]]
+          parts=()
+          while read -r part; do parts+=("$part"); done < <(
+            awk '{print $2}' SHA256SUMS | grep -E '\.part[0-9]+$' | awk -F'[.]part' '{print $NF" "$0}' | sort -n | cut -d' ' -f2)
+          (( ${#parts[@]} >= 2 ))
+          for name in "${parts[@]}" installer_data.json; do
+            [[ -f $name && ! -L $name ]]
+            grep -E "^[0-9a-f]{64}  ${name//./\\.}\$" SHA256SUMS | shasum -a 256 -c -
+          done
+          cat "${parts[@]}" >"$whole"
+          grep -E "^[0-9a-f]{64}  ${whole//./\\.}\$" SHA256SUMS | shasum -a 256 -c -
+          {
+            echo "PAYLOAD=$image/$whole"
+            echo "METADATA=$image/installer_data.json"
+            echo "IMAGE_BASE=https://github.com/$GITHUB_REPOSITORY/releases/download/$IMAGE_TAG"
+            echo "EVIDENCE_REVISION=$(tr '[:upper:]' '[:lower:]' <<<"$IMAGE_TAG")"
+            printf 'PAYLOAD_PARTS='; for part in "${parts[@]}"; do printf '%s ' "$image/$part"; done; echo
+          } >>"$GITHUB_ENV"
+          df -h "$RUNNER_TEMP"
+
+      - name: Make a stand-in payload (no image release given)
+        if: env.PUBLISH != 'true'
+        run: |
+          set -euo pipefail
+          image=$WORK/image
+          mkdir -p "$image/content/esp"
+          cd "$image"
+          whole=omarchy-stand-in-aarch64-apple-silicon-mac-edge-os-package.zip
+          echo "stand-in, not an image" >content/esp/README
+          head -c 3145728 /dev/urandom >content/root.img
+          (cd content && zip -q -r "../$whole" .)
+          rm -rf content
+          python3 - "$whole" <<'PY'
+          import json, sys
+          entry = {
+              "allowed_device_classes": ["j714sap"],
+              "aurora_stage1": {"kind": "common-raw-v1",
+                                "qualified_machines": {"j714sap": ["27.3"]},
+                                "qualified_system_firmware": {"j714sap": ["mBoot-20457.60.65.0.1"]}},
+              "name": "Omarchy stand-in (not installable)",
+              "package": sys.argv[1],
+          }
+          json.dump({"os_list": [entry]}, open("installer_data.json", "w"), indent=2)
+          PY
+          # Two parts, so the online catalog path is exercised; their URLs lead nowhere.
+          split -b 2097152 "$whole" "$whole.part"
+          mv "$whole.partaa" "$whole.part0"
+          mv "$whole.partab" "$whole.part1"
+          {
+            echo "PAYLOAD=$image/$whole"
+            echo "METADATA=$image/installer_data.json"
+            echo "IMAGE_BASE=https://github.com/$GITHUB_REPOSITORY/releases/download/stand-in-$GITHUB_RUN_ID"
+            echo "EVIDENCE_REVISION=stand-in-$GITHUB_RUN_ID"
+            echo "PAYLOAD_PARTS=$image/$whole.part0 $image/$whole.part1"
+          } >>"$GITHUB_ENV"
+
+      - name: Write the release inputs (a fresh trust root, sealed J714s catalog)
+        env:
+          J714S_CATALOG_KEY: ${{ secrets.J714S_CATALOG_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z $J714S_CATALOG_KEY ]]; then
+            # A key for this build only: kept in this process's environment, never on disk or uploaded.
+            J714S_CATALOG_KEY=$(openssl rand -base64 32)
+            echo "::add-mask::$J714S_CATALOG_KEY"
+            echo "catalog key: fresh for this build, discarded at the end of this step"
+          else
+            echo "catalog key: the J714S_CATALOG_KEY secret"
+          fi
+          export J714S_CATALOG_KEY
+          common=(--tree installer --engine "$ENGINE" --metadata "$METADATA" --payload "$PAYLOAD"
+            --download-base-url "$DOWNLOAD_BASE" --catalog-base-url "$DOWNLOAD_BASE/no-channel"
+            --app-version "$APP_VERSION" --evidence-revision "$EVIDENCE_REVISION"
+            --now "$ISSUED" --link --key-env J714S_CATALOG_KEY)
+          if [[ $VARIANTS != online ]]; then
+            python3 -I omarchy-m5/installer/app/make-release-inputs.py "${common[@]}" \
+              --mode offline --output "$WORK/inputs-offline" | tee "$WORK/evidence/inputs-offline.json"
+          fi
+          if [[ $VARIANTS != offline ]]; then
+            read -r -a parts <<<"$PAYLOAD_PARTS"
+            part_arguments=()
+            for part in "${parts[@]}"; do part_arguments+=(--payload-part "$part"); done
+            python3 -I omarchy-m5/installer/app/make-release-inputs.py "${common[@]}" \
+              --mode online "${part_arguments[@]}" --image-base-url "$IMAGE_BASE" \
+              --output "$WORK/inputs-online" | tee "$WORK/evidence/inputs-online.json"
+          fi
+          unset J714S_CATALOG_KEY
+          # The parts are no longer needed: the online catalog pins them, the offline inputs hold a link to the whole file.
+          read -r -a parts <<<"$PAYLOAD_PARTS"
+          rm -f "${parts[@]}"
+          for variant in offline online; do
+            [[ -d $WORK/inputs-$variant ]] || continue
+            # Independent check with the tree's own tool: the signature verifies against the trust root.
+            xcrun swift installer/scripts/catalog-signing.swift verify "$WORK/inputs-$variant/trust-root.ed25519.pub" \
+              "$WORK/inputs-$variant/catalog.json" "$WORK/inputs-$variant/catalog.json.sig"
+            mkdir "$WORK/evidence/inputs-$variant"
+            cp "$WORK/inputs-$variant/"{release.json,trust-root.ed25519.pub,catalog.json,catalog.json.sig} "$WORK/evidence/inputs-$variant/"
+          done
+          df -h "$RUNNER_TEMP"
+
+      - name: Build the native Recovery template
+        working-directory: installer
+        run: |
+          set -euo pipefail
+          source Packaging/identity.conf
+          bash Recovery/build-recovery.sh "$WORK/recovery"
+          echo "OMARCHY_RECOVERY_TEMPLATE=$WORK/recovery/$INSTALLER_RECOVERY_APP_NAME.app" >>"$GITHUB_ENV"
+
+      - name: Build and package the online app
+        if: env.VARIANTS != 'offline'
+        working-directory: installer
+        env:
+          OMARCHY_APP_SIGNING_IDENTITY: '-'
+          OMARCHY_DEVELOPER_BUILD: '1'
+        run: |
+          set -euo pipefail
+          source Packaging/identity.conf
+          OMARCHY_APP_VERSION=$APP_VERSION OMARCHY_APP_BUILD_NUMBER=$BUILD_NUMBER \
+            bash Packaging/build-app.sh "$WORK/inputs-online" "$WORK/app-online"
+          app="$WORK/app-online/$INSTALLER_APP_NAME.app"
+          bash ../omarchy-m5/installer/app/check-app.sh "$app" online "$WORK/inputs-online" | tee "$WORK/evidence/app-online.txt"
+          pkg=$WORK/out/Omarchy-Installer-J714s-online-$APP_VERSION-$BUILD_NUMBER.pkg
+          bash Packaging/build-developer-pkg.sh "$app" "$pkg"
+          echo "ONLINE_PKG=$pkg" >>"$GITHUB_ENV"
+          df -h "$RUNNER_TEMP"
+
+      - name: Build and package the offline app
+        if: env.VARIANTS != 'online'
+        working-directory: installer
+        env:
+          OMARCHY_APP_SIGNING_IDENTITY: '-'
+          OMARCHY_DEVELOPER_BUILD: '1'
+          OMARCHY_OFFLINE_BUILD: '1'
+        run: |
+          set -euo pipefail
+          source Packaging/identity.conf
+          OMARCHY_APP_VERSION=$APP_VERSION OMARCHY_APP_BUILD_NUMBER=$BUILD_NUMBER \
+            bash Packaging/build-app.sh "$WORK/inputs-offline" "$WORK/app-offline"
+          app="$WORK/app-offline/$INSTALLER_APP_NAME.app"
+          bash ../omarchy-m5/installer/app/check-app.sh "$app" offline "$WORK/inputs-offline" | tee "$WORK/evidence/app-offline.txt"
+          # The app holds its own verified copy now.
+          rm -rf "$WORK/inputs-offline/offline-artifacts" "$PAYLOAD"
+          df -h "$RUNNER_TEMP"
+          pkg=$WORK/out/Omarchy-Installer-J714s-$APP_VERSION-$BUILD_NUMBER.pkg
+          bash Packaging/build-developer-pkg.sh "$app" "$pkg"
+          rm -rf "$WORK/app-offline"
+          echo "OFFLINE_PKG=$pkg" >>"$GITHUB_ENV"
+          df -h "$RUNNER_TEMP"
+
+      - name: Check the packages, split the large one, write SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd "$WORK/out"
+          for pkg in ${ONLINE_PKG:-} ${OFFLINE_PKG:-}; do
+            # Unsigned on purpose: no Developer ID Installer identity.
+            pkgutil --check-signature "$pkg" | tee -a "$WORK/evidence/packages.txt" || true
+            pkgutil --payload-files "$pkg" | grep -E '^\./(Applications/Omarchy Installer\.app/Contents/Info\.plist|Library/LaunchDaemons/)' \
+              | tee -a "$WORK/evidence/packages.txt"
+            stat -f '%z bytes %N' "$pkg" | tee -a "$WORK/evidence/packages.txt"
+          done
+          split=$GITHUB_WORKSPACE/omarchy-m5/installer/app/split-for-release.py
+          # 1900 MiB parts, as the image releases use; a smaller file only gets its SHA256SUMS line.
+          # The splitter prints the parts in order; publish keeps that order.
+          : >"$WORK/offline-parts.txt"
+          [[ -z ${OFFLINE_PKG:-} ]] || python3 "$split" "$OFFLINE_PKG" 1900 | xargs -n1 basename >"$WORK/offline-parts.txt"
+          if [[ -n ${ONLINE_PKG:-} ]]; then
+            [[ -z $(python3 "$split" "$ONLINE_PKG" 1900) ]] || { echo "::error::the online package is too large to publish whole"; exit 1; }
+          fi
+          cp "$ENGINE" .
+          shasum -a 256 "$(basename "$ENGINE")" >>SHA256SUMS
+          shasum -a 256 -c SHA256SUMS
+          # (No mapfile: the runner's bash may be 3.2.)
+          offline_parts=()
+          while read -r part; do offline_parts+=("$part"); done <"$WORK/offline-parts.txt"
+          if (( ${#offline_parts[@]} > 0 )); then
+            # Reassembly check, then drop the whole file: only its parts are published.
+            cat "${offline_parts[@]}" | cmp - "$OFFLINE_PKG"
+            rm "$OFFLINE_PKG"
+          fi
+          cp SHA256SUMS "$WORK/evidence/SHA256SUMS"
+          ls -l
+          df -h "$RUNNER_TEMP"
+
+      - name: Keep the stand-in packages
+        if: env.PUBLISH != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: j714s-app-stand-in-${{ github.run_id }}
+          path: ${{ runner.temp }}/j714s-app/out/
+          retention-days: 7
+
+      - name: Publish the prerelease
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          cd "$WORK/out"
+          offline_name=Omarchy-Installer-J714s-$APP_VERSION-$BUILD_NUMBER.pkg
+          online_name=Omarchy-Installer-J714s-online-$APP_VERSION-$BUILD_NUMBER.pkg
+          offline_parts=()
+          while read -r part; do offline_parts+=("$part"); done <"$WORK/offline-parts.txt"
+          parts="${offline_parts[*]+${offline_parts[*]}}"
+          [[ -z ${OFFLINE_PKG:-} || -n $parts ]] || { echo "::error::the offline package was not split"; exit 1; }
+          inputs_json=$WORK/evidence/inputs-offline.json
+          [[ -f $inputs_json ]] || inputs_json=$WORK/evidence/inputs-online.json
+          fingerprint=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["trust_root_fingerprint"])' "$inputs_json")
+          tree=$(git -C "$GITHUB_WORKSPACE/installer" rev-parse 'HEAD^{tree}')
+          {
+            echo "**Developer build for one Mac: the MacBook Pro 14-inch M5 Pro (J714s, \`apple,j714s\`). Ad hoc signed, not notarized, unsupported; this package has not been installed on hardware yet. It repartitions the internal disk: back up first.**"
+            echo
+            echo "Installs the image from [\`$IMAGE_TAG\`](https://github.com/$GITHUB_REPOSITORY/releases/tag/$IMAGE_TAG) with the Omarchy Mac installer app (omacom/omarchy-mac-installer c07e54c + \`installer/patches\` + \`$PATCH_SETS\`, tree \`$tree\`), app $APP_VERSION build $BUILD_NUMBER. The app trusts only this build's catalog key (\`$fingerprint\`, made for this build and discarded) and reads only the catalog sealed inside it, which lists only the J714s. Nothing is downloaded from Omacom; Apple's restore firmware still comes from Apple."
+            echo
+            echo "**Requirements:** a J714s on macOS 27.3. The image only qualifies system firmware \`mBoot-20457.60.65.0.1\` (27.3 26C5035r); on other firmware expect the installer to refuse. Free space for the Linux partitions (EFI 500 MB, Boot 2 GiB, Root at least 32 GiB) plus room to stage the 3.6 GB package; the app shows the exact sizes before it changes anything. Keep the charger connected."
+            echo
+            if [[ -n $parts ]]; then
+              echo "### Offline package (everything inside, ~3.6 GB)"
+              echo
+              echo "1. Download every \`$offline_name.partN\` and \`SHA256SUMS\` into one folder (Downloads)."
+              echo "2. In Terminal: \`cd ~/Downloads && cat $parts > $offline_name\`"
+              echo "3. Check it: \`grep ' $offline_name\$' SHA256SUMS | shasum -a 256 -c\` must print \`OK\`."
+              echo "4. Open the package (double-click). If macOS refuses it, open System Settings › Privacy & Security, click **Open Anyway** for this package, and open it again. It asks for an administrator password and installs \`/Applications/Omarchy Installer.app\` and its helper."
+              echo
+            fi
+            if [[ -n ${ONLINE_PKG:-} ]]; then
+              echo "### Online package (small; the app downloads the image's parts from the image release and checks each one)"
+              echo
+              echo "1. Download \`$online_name\` and \`SHA256SUMS\`; check it: \`grep ' $online_name\$' SHA256SUMS | shasum -a 256 -c\`."
+              echo "2. Open it as in step 4 above (Privacy & Security › Open Anyway if refused)."
+              echo
+            fi
+            echo "### Then"
+            echo
+            echo "Open **Omarchy Installer** from Applications (Open Anyway again if macOS asks), review the plan and follow the app through the Recovery step. To remove the helper later: \`sudo launchctl bootout system/org.omarchy.installer.helper\`, then delete \`/Library/LaunchDaemons/org.omarchy.installer.helper.plist\`."
+            echo
+            echo "Built by run [$GITHUB_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) from commit $GITHUB_SHA."
+          } >"$WORK/notes.md"
+          cat "$WORK/notes.md"
+          # Draft first so a half-uploaded release is never visible.
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --draft --prerelease --title "$RELEASE_NAME" --notes-file "$WORK/notes.md"
+          assets=(SHA256SUMS "$(basename "$ENGINE")")
+          [[ -z ${ONLINE_PKG:-} ]] || assets+=("$online_name")
+          assets+=(${offline_parts[@]+"${offline_parts[@]}"})
+          for asset in "${assets[@]}"; do
+            gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "$asset"
+          done
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: j714s-app-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/j714s-app/evidence/
+          retention-days: 30

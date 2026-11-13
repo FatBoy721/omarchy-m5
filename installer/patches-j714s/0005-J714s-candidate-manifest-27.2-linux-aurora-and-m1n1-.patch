@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 00:13:39 -0500
+Subject: [PATCH 5/6] J714s candidate manifest: 27.2 linux-aurora and
+ m1n1-aurora pins (placeholders)
+
+linux-aurora 7.3.0.aurora17.v272-1 and m1n1-aurora 1.6.1.aurora24.v272-1, the
+versions of installer/recipes/linux-aurora-j714s and m1n1-aurora-j714s in
+betizzel/omarchy-m5 before their first build. Their sha256, size and source
+commit are zero until the packages land, so finish-inputs refuses any archive
+for them; set_sha256 and the set name are recomputed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../candidate-package-manifest.json           | 24 +++++++++----------
+ 1 file changed, 12 insertions(+), 12 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+index 90934f9..b7fedbe 100644
+--- a/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
++++ b/Integration/M5/J714s-Normal-System/candidate-package-manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "schema": 1,
+   "candidate_only": true,
+-  "set": "j714s-dev-runtime-60d0be7e4391",
++  "set": "j714s-dev-runtime-ee093296b339",
+   "source": {
+     "repository": "omacom/omarchy",
+     "commit": "a948d8a6871f446b335258c827648ac5f4e9428b",
+@@ -102,27 +102,27 @@
+     },
+     {
+       "name": "linux-aurora",
+-      "version": "7.3.0.aurora17.up273-10",
++      "version": "7.3.0.aurora17.v272-1",
+       "arch": "aarch64",
+-      "filename": "linux-aurora-7.3.0.aurora17.up273-10-aarch64.pkg.tar.zst",
+-      "sha256": "8df8da5215ff0ffba28ae7d04dc367502c2c9c9849e539c3ff68b0244bf13090",
++      "filename": "linux-aurora-7.3.0.aurora17.v272-1-aarch64.pkg.tar.zst",
++      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "152b6ef6d89ba550bb0aa07c8ebd0c9ff71fe326"
++        "commit": "0000000000000000000000000000000000000000"
+       },
+-      "size_bytes": 44126128
++      "size_bytes": 0
+     },
+     {
+       "name": "m1n1-aurora",
+-      "version": "1.6.1.aurora24.up273-3",
++      "version": "1.6.1.aurora24.v272-1",
+       "arch": "aarch64",
+-      "filename": "m1n1-aurora-1.6.1.aurora24.up273-3-aarch64.pkg.tar.zst",
+-      "sha256": "f5d8b15c199dac759e4a187ce9ec84593f7c149ff6e3daa73e3e482ff2bb316d",
++      "filename": "m1n1-aurora-1.6.1.aurora24.v272-1-aarch64.pkg.tar.zst",
++      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+       "source": {
+         "repository": "betizzel/omarchy-m5",
+-        "commit": "222a68992d1dbea936d2e9462b40deed688a4547"
++        "commit": "0000000000000000000000000000000000000000"
+       },
+-      "size_bytes": 1770692
++      "size_bytes": 0
+     },
+     {
+       "name": "mesa-aurora",
+@@ -240,5 +240,5 @@
+     "No physical installer or hardware qualification",
+     "No supported release or catalog promotion"
+   ],
+-  "set_sha256": "60d0be7e43913be4cd1cd84efecc6cd89bbd8c36887eee49e8ee8ab250ac562d"
++  "set_sha256": "ee093296b339b72161f4cb30619ebe02e307d392d3570f3a1733f9a7a733e888"
+ }
+-- 
+2.56.0
+
