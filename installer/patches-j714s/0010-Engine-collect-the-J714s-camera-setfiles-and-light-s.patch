@@ -1,0 +1,473 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 12:43:54 -0500
+Subject: [PATCH] Engine: collect the J714s camera setfiles and light-sensor
+ calibration
+
+A J714s install collected no IMX958 setfile and no ALS calibration the
+engine's own way: the Neo's collectors run only for j700ap, and upstream's
+ISP collector reads only appleh13camerad.
+
+- omarchy_asahi.py: _j714s_peripheral_collectors, entered with the Neo's in
+  the stub's collect_firmware, for device_class "j714sap" only:
+  - ISP: omarchy_isp.collection_class(asahi_firmware.isp), which scans
+    appleh13camerad and appleh16camerad and knows IMX958 2224_01XX and
+    2226_02XX, so apple/isp_2226_02XX.dat (and 2224_01XX when present)
+    reach the vendor firmware. A collection error or a missing 2226_02XX is
+    logged and the install goes on (the image's first-boot
+    aurora-j714s-camera-setfile is the fallback).
+  - ALS: this Mac's `ioreg -r -a -n als -l` CalibrationData, first child
+    chain, stored verbatim as apple/aop-als-cal.bin (then upstream's raw
+    HmCA factory copy). A failure is logged, never fatal, and no other
+    Mac's data is substituted.
+  - The fallback archive keeps appleh16camerad, as the Neo's does
+    (_WithNeoFirmwareArchive without the Neo's raw LSCI).
+- omarchy_als.py: j714s_calibration / read_j714s_calibration, gathered
+  from aurora-silicon/aurora-installer asahi_firmware/als.py (MIT), as
+  tools/als-calibration/save-als-cal.py does.
+- Tests: J714sPeripheralCollectionTests (both collectors and the archive on
+  the J714s, failures logged not fatal, the Neo and other boards
+  untouched), J714sAlsTests; the Centauri flow test checks the stub enters
+  the J714s collectors.
+- Engine renamed v0.9.2-omarchy.20261113.774d9abc59d3 and repacked from
+  the authenticated engine.28 base: 17913790 bytes, sha256
+  927bf3f3a22a3549c807f7526c4e9cfe0626ad716d49e731ae5bac2dd97cfd42, two
+  identical repacks.
+
+Checked: engine overlay tests (441), engine tooling tests, test/all,
+image-builder/test/all (except the edge-dispatch template test that
+already fails on release 1), engine_pin.py check, verify-source-lock.py,
+read-validation-engine.py, prepare-engine.py. Not run on a J714s: the
+ioreg layout and appleh16camerad contents are as save-als-cal.py and the
+J714c setfile work found them.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Engine/overlay/src/omarchy_als.py          |  38 ++++++
+ Engine/overlay/src/omarchy_asahi.py        |  67 +++++++++-
+ Engine/overlay/tests/test_omarchy_als.py   |  38 ++++++
+ Engine/overlay/tests/test_omarchy_asahi.py | 138 ++++++++++++++++++++-
+ Engine/source-lock.json                    |  16 +--
+ 5 files changed, 284 insertions(+), 13 deletions(-)
+
+diff --git a/Engine/overlay/src/omarchy_als.py b/Engine/overlay/src/omarchy_als.py
+index 6feafe5..051f00b 100644
+--- a/Engine/overlay/src/omarchy_als.py
++++ b/Engine/overlay/src/omarchy_als.py
+@@ -80,3 +80,41 @@ def read_lsci(run=subprocess.run):
+ 
+ def collect(run=subprocess.run):
+     return {FIRMWARE_NAME: calibration(read_lsci(run))}
++
++
++# The J714s (M5 Pro) light sensor: macOS keeps this Mac's calibration as the
++# CalibrationData of the "als" node's first child chain (AppleSPUVD6286), and
++# the aop_als driver takes it verbatim as apple/aop-als-cal.bin and reports
++# only once that file exists. Gathered from aurora-silicon/aurora-installer
++# asahi_firmware/als.py (MIT), as tools/als-calibration/save-als-cal.py does.
++J714S_FIRMWARE_NAME = "apple/aop-als-cal.bin"
++
++
++def j714s_calibration(data):
++    """This Mac's verbatim CalibrationData from `ioreg -r -a -n als -l` output."""
++    try:
++        roots = plistlib.loads(data)
++    except (ValueError, TypeError, ExpatError, plistlib.InvalidFileException) as error:
++        raise AlsError("invalid als IORegistry property list") from error
++    try:
++        node = roots[0]
++        for _ in range(3):
++            node = node["IORegistryEntryChildren"][0]
++        calibration_data = node["CalibrationData"]
++    except (KeyError, IndexError, TypeError) as error:
++        raise AlsError("the als IORegistry node has no CalibrationData") from error
++    if not isinstance(calibration_data, bytes) or not calibration_data:
++        raise AlsError("the als CalibrationData is empty or not data")
++    return calibration_data
++
++
++def read_j714s_calibration(run=subprocess.run):
++    """Read this booted Mac's als CalibrationData, without writes."""
++    result = run(
++        ["/usr/sbin/ioreg", "-r", "-a", "-n", "als", "-l"],
++        capture_output=True,
++        check=True,
++    )
++    if not result.stdout:
++        raise AlsError("this Mac has no als IORegistry node")
++    return j714s_calibration(result.stdout)
+diff --git a/Engine/overlay/src/omarchy_asahi.py b/Engine/overlay/src/omarchy_asahi.py
+index cfed18b..cb9433e 100644
+--- a/Engine/overlay/src/omarchy_asahi.py
++++ b/Engine/overlay/src/omarchy_asahi.py
+@@ -719,9 +719,10 @@ class _WithDecryptedImage:
+ 
+ 
+ class _WithNeoFirmwareArchive(_WithoutRecoveryMount):
+-    """Preserve the newer camera daemon and raw ALS input in fallback data."""
++    """Preserve the newer camera daemon and, on the Neo, the raw ALS input in
++    fallback data. The J714s keeps only the camera daemon (no RAW_DIRECTORY)."""
+ 
+-    def __init__(self, module, raw_directory):
++    def __init__(self, module, raw_directory=None):
+         super().__init__(module)
+         self.raw_directory = raw_directory
+ 
+@@ -731,7 +732,8 @@ class _WithNeoFirmwareArchive(_WithoutRecoveryMount):
+             camera_directory = os.path.abspath("recovery/usr/sbin")
+             if os.path.isfile(os.path.join(camera_directory, "appleh16camerad")):
+                 command += ["-C", camera_directory, "appleh16camerad"]
+-            command += ["-C", self.raw_directory, "j700-exbright-LSCI.bin"]
++            if self.raw_directory is not None:
++                command += ["-C", self.raw_directory, "j700-exbright-LSCI.bin"]
+         # Mount handling remains delegated to the original stub module (or
+         # the encrypted-Recovery wrapper), not suppressed by this wrapper.
+         return self._module.run(command, *args, **kwargs)
+@@ -782,6 +784,62 @@ def _neo_peripheral_collectors(installer):
+             stub.AlsFWCollection, stub.ISPFWCollection, stub.subprocess = old_als, old_isp, old_process
+ 
+ 
++# The J714s camera's IMX958 setfile, from appleh16camerad. The image also has
++# a first-boot fallback (omarchy-aurora-firmware aurora-j714s-camera-setfile).
++J714S_CAMERA_SETFILE = "apple/isp_2226_02XX.dat"
++
++
++@contextlib.contextmanager
++def _j714s_peripheral_collectors(installer):
++    """The J714s's camera setfiles and light-sensor calibration, as the Neo's
++    collectors do, except that neither may fail the install: a missing file
++    is logged and collection goes on. Never substitutes another Mac's data."""
++    if getattr(getattr(installer, "sysinfo", None), "device_class", "") != "j714sap":
++        yield
++        return
++    upgraded_isp = omarchy_isp.collection_class(asahi_firmware.isp)
++    old_als, old_isp, old_process = stub.AlsFWCollection, stub.ISPFWCollection, stub.subprocess
++
++    class J714sIspCollection(upgraded_isp):
++        def __init__(self, source_path):
++            try:
++                super().__init__(source_path)
++            except Exception as error:  # the camera is optional; never fail the install
++                logging.warning("J714s camera firmware collection failed; continuing: %s", error)
++                self.fwfiles = []
++            names = sorted(name for name, _ in self.fwfiles)
++            if J714S_CAMERA_SETFILE in names:
++                logging.info("J714s camera firmware: %s", ", ".join(names))
++            else:
++                logging.warning(
++                    "J714s camera setfile %s not found; first boot will try to extract it",
++                    J714S_CAMERA_SETFILE)
++
++    class J714sAlsCollection(old_als):
++        def load(self):
++            try:
++                data = omarchy_als.read_j714s_calibration()
++            except (OSError, ValueError, subprocess.CalledProcessError) as error:
++                logging.warning(
++                    "J714s light sensor calibration unavailable; the sensor will not report: %s",
++                    error)
++                return
++            name = omarchy_als.J714S_FIRMWARE_NAME
++            self.fwfiles.append((name, asahi_firmware.core.FWFile(name, data)))
++            logging.info("J714s light sensor calibration: %d bytes", len(data))
++            factory = getattr(stub, "FACTORY_DIR", None)
++            if factory is not None:
++                self.copy_raw(factory)
++
++    try:
++        stub.AlsFWCollection = J714sAlsCollection
++        stub.ISPFWCollection = J714sIspCollection
++        stub.subprocess = _WithNeoFirmwareArchive(old_process)
++        yield
++    finally:
++        stub.AlsFWCollection, stub.ISPFWCollection, stub.subprocess = old_als, old_isp, old_process
++
++
+ def stub_installer(sysinfo, dutil, osinfo):
+     """A StubInstaller that reads macOS 26 firmware's bootcaches.plist and
+     writes Omarchy's own step2.sh as its Recovery setup."""
+@@ -800,7 +858,8 @@ def stub_installer(sysinfo, dutil, osinfo):
+     collect_firmware = installer.collect_firmware
+ 
+     def collect_firmware_from_an_encrypted_recovery(pkg):
+-        with _newer_trackpad_keys(), _neo_peripheral_collectors(installer):
++        with _newer_trackpad_keys(), _neo_peripheral_collectors(installer), \
++                _j714s_peripheral_collectors(installer):
+             result = _collect_firmware(pkg)
+         try:
+             omarchy_centauri.collect(installer, pkg)
+diff --git a/Engine/overlay/tests/test_omarchy_als.py b/Engine/overlay/tests/test_omarchy_als.py
+index 0de65c4..482850f 100644
+--- a/Engine/overlay/tests/test_omarchy_als.py
++++ b/Engine/overlay/tests/test_omarchy_als.py
+@@ -87,5 +87,43 @@ class AlsTests(unittest.TestCase):
+             als.collect(run)
+ 
+ 
++def als_tree(calibration=b"\x01\x02j714s-calibration", depth=3):
++    """`ioreg -r -a -n als -l` output: the als node, its first child chain."""
++    node = {"IORegistryEntryName": "AppleSPUVD6286", "CalibrationData": calibration}
++    if calibration is None:
++        del node["CalibrationData"]
++    for _ in range(depth):
++        node = {"IORegistryEntryName": "als", "IORegistryEntryChildren": [node, {"other": 1}]}
++    return plistlib.dumps([node])
++
++
++class J714sAlsTests(unittest.TestCase):
++    def test_takes_the_first_child_chains_calibration_verbatim(self):
++        self.assertEqual(als.j714s_calibration(als_tree()), b"\x01\x02j714s-calibration")
++        self.assertEqual(als.J714S_FIRMWARE_NAME, "apple/aop-als-cal.bin")
++
++    def test_rejects_missing_empty_or_malformed_calibration(self):
++        for data in (als_tree(calibration=None), als_tree(calibration=b""),
++                     als_tree(calibration="text"), als_tree(depth=2),
++                     plistlib.dumps([]), plistlib.dumps({"not": "a list"}), b"not a plist"):
++            with self.subTest(data=data[:40]), self.assertRaises(als.AlsError):
++                als.j714s_calibration(data)
++
++    def test_reads_this_macs_als_node_only(self):
++        calls = []
++
++        def run(args, **kwargs):
++            calls.append((args, kwargs))
++            return SimpleNamespace(stdout=als_tree())
++
++        self.assertEqual(als.read_j714s_calibration(run), b"\x01\x02j714s-calibration")
++        self.assertEqual(calls, [(["/usr/sbin/ioreg", "-r", "-a", "-n", "als", "-l"],
++                                  {"capture_output": True, "check": True})])
++
++    def test_a_mac_without_an_als_node_is_an_error_not_empty_data(self):
++        with self.assertRaisesRegex(als.AlsError, "no als"):
++            als.read_j714s_calibration(lambda *args, **kwargs: SimpleNamespace(stdout=b""))
++
++
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/Engine/overlay/tests/test_omarchy_asahi.py b/Engine/overlay/tests/test_omarchy_asahi.py
+index a8780ab..63e5552 100644
+--- a/Engine/overlay/tests/test_omarchy_asahi.py
++++ b/Engine/overlay/tests/test_omarchy_asahi.py
+@@ -149,13 +149,22 @@ class CentauriFirmwareFlowTests(unittest.TestCase):
+         selected.collect_firmware = lambda package: seen.append("legacy-collected")
+         package = SimpleNamespace(add_file=lambda name, data: seen.append((name, data)))
+         firmware = SimpleNamespace(core=SimpleNamespace(FWFile=lambda name, data: data))
++
++        # The fixture is a J714s; its camera and light-sensor collectors have
++        # their own tests (J714sPeripheralCollectionTests).
++        @contextmanager
++        def j714s_collectors(installer):
++            seen.append(("j714s-collectors", installer.sysinfo.device_class))
++            yield
++
+         with patch("omarchy_asahi.stub.StubInstaller", return_value=selected), patch(
+             "omarchy_asahi._is_encrypted", return_value=False
+         ), patch.dict(
+             sys.modules, {"asahi_firmware": firmware}
+-        ):
++        ), patch("omarchy_asahi._j714s_peripheral_collectors", j714s_collectors):
+             installer = stub_installer(selected.sysinfo, "dutil", "osinfo")
+             installer.collect_firmware(package)
++        self.assertEqual(seen.pop(0), ("j714s-collectors", "j714sap"))
+         self.assertEqual(seen[0], "legacy-collected")
+         self.assertEqual(seen[1][0], "apple/centauri/j714s-ftab.bin")
+         self.assertEqual(seen[1][1][0x20:0x28], b"rkosftab")
+@@ -2676,6 +2685,133 @@ class NeoPeripheralCollectionTests(unittest.TestCase):
+         _validate_neo_firmware_package(package)
+ 
+ 
++class J714sPeripheralCollectionTests(unittest.TestCase):
++    """The J714s collects its camera setfiles and light-sensor calibration
++    like the Neo, but a missing piece is logged and never fails the install."""
++
++    def setUp(self):
++        self.installer = SimpleNamespace(sysinfo=SimpleNamespace(device_class="j714sap"))
++        self.commands = []
++        self.process = SimpleNamespace(run=lambda command, **kwargs: self.commands.append(command))
++        self.raw_copies = []
++        test = self
++
++        class UpstreamAls:
++            def __init__(self, path=None):
++                self.fwfiles = []
++                self.load()
++            def files(self):
++                return self.fwfiles
++            def load(self):
++                raise AssertionError("the upstream ALS reader replaced on the J714s")
++            def copy_raw(self, path):
++                test.raw_copies.append(path)
++
++        self.original_als, self.original_isp = UpstreamAls, object()
++        self.stub = SimpleNamespace(AlsFWCollection=UpstreamAls, ISPFWCollection=self.original_isp,
++                                    subprocess=self.process, FACTORY_DIR="/factory")
++        self.firmware = SimpleNamespace(core=SimpleNamespace(FWFile=lambda name, data: (name, data)), isp=object())
++        self.names = {"apple/isp_2226_02XX.dat", "apple/isp_2224_01XX.dat"}
++        self.isp_error = None
++
++        class Collection:
++            def __init__(self, path):
++                self.fwfiles = []
++                if test.isp_error is not None:
++                    raise test.isp_error
++                self.fwfiles = [(name, b"setfile") for name in sorted(test.names)]
++            def files(self):
++                return self.fwfiles
++
++        self.stack = __import__("contextlib").ExitStack()
++        self.addCleanup(self.stack.close)
++        self.stack.enter_context(patch("omarchy_asahi.stub", self.stub))
++        self.stack.enter_context(patch("omarchy_asahi.asahi_firmware", self.firmware))
++        self.read = self.stack.enter_context(patch(
++            "omarchy_asahi.omarchy_als.read_j714s_calibration", return_value=b"this Mac's CalibrationData"))
++        self.stack.enter_context(patch("omarchy_asahi.omarchy_isp.collection_class", return_value=Collection))
++        self.stack.enter_context(patch("omarchy_asahi.omarchy_als.read_lsci",
++                                       side_effect=AssertionError("Neo LSCI read on the J714s")))
++
++    def _collect(self):
++        from omarchy_asahi import _j714s_peripheral_collectors, _neo_peripheral_collectors
++        with tempfile.TemporaryDirectory() as work:
++            old = os.getcwd()
++            os.chdir(work)
++            try:
++                Path("recovery/usr/sbin").mkdir(parents=True)
++                Path("recovery/usr/sbin/appleh16camerad").write_bytes(b"h16")
++                with _neo_peripheral_collectors(self.installer), \
++                        _j714s_peripheral_collectors(self.installer):
++                    als = self.stub.AlsFWCollection().files()
++                    isp = self.stub.ISPFWCollection("recovery/usr/sbin").files()
++                    self.stub.subprocess.run(["tar", "czf", "all_firmware.tar.gz", "old-input"])
++                    self.stub.subprocess.run(["hdiutil", "attach", "recovery"])
++            finally:
++                os.chdir(old)
++        self.assertIs(self.stub.AlsFWCollection, self.original_als)
++        self.assertIs(self.stub.ISPFWCollection, self.original_isp)
++        self.assertIs(self.stub.subprocess, self.process)
++        return als, isp
++
++    def test_j714s_collects_camera_setfiles_and_this_macs_als_calibration(self):
++        with self.assertLogs(level="INFO") as logs:
++            als, isp = self._collect()
++        self.assertEqual(als, [("apple/aop-als-cal.bin",
++                                ("apple/aop-als-cal.bin", b"this Mac's CalibrationData"))])
++        self.assertEqual(self.raw_copies, ["/factory"])
++        self.assertEqual({name for name, _ in isp}, self.names)
++        tar, attach = self.commands[-2:]
++        self.assertEqual(tar[:4], ["tar", "czf", "all_firmware.tar.gz", "old-input"])
++        self.assertEqual(tar[-1], "appleh16camerad")
++        self.assertNotIn("j700-exbright-LSCI.bin", tar)
++        self.assertEqual(attach, ["hdiutil", "attach", "recovery"])
++        self.assertIn("J714s light sensor calibration: 26 bytes", "\n".join(logs.output))
++
++    def test_a_missing_camera_setfile_is_logged_not_fatal(self):
++        self.names.discard("apple/isp_2226_02XX.dat")
++        with self.assertLogs(level="WARNING") as logs:
++            _als, isp = self._collect()
++        self.assertEqual({name for name, _ in isp}, {"apple/isp_2224_01XX.dat"})
++        self.assertIn("isp_2226_02XX.dat not found", "\n".join(logs.output))
++
++    def test_a_failing_camera_collection_is_logged_not_fatal(self):
++        from omarchy_isp import IspError
++        for error in (IspError("truncated ISP setfile"), OSError("no recovery")):
++            with self.subTest(error=error), self.assertLogs(level="WARNING") as logs:
++                self.isp_error = error
++                als, isp = self._collect()
++                self.assertEqual(isp, [])
++                self.assertEqual(len(als), 1)
++                self.assertIn(str(error), "\n".join(logs.output))
++
++    def test_a_failing_light_sensor_read_is_logged_not_fatal_and_never_substituted(self):
++        from omarchy_als import AlsError
++        for error in (AlsError("no als IORegistry node"),
++                      subprocess.CalledProcessError(1, ["ioreg"]), OSError("no ioreg")):
++            with self.subTest(error=error), self.assertLogs(level="WARNING") as logs:
++                self.read.side_effect = error
++                self.raw_copies.clear()
++                als, isp = self._collect()
++                self.assertEqual(als, [])
++                self.assertEqual(self.raw_copies, [])
++                self.assertEqual({name for name, _ in isp}, self.names)
++                self.assertIn("light sensor calibration unavailable", "\n".join(logs.output))
++
++    def test_the_neo_and_other_boards_are_untouched(self):
++        from omarchy_asahi import _j714s_peripheral_collectors
++        for board in ("j700ap", "j714cap", "j314sap", ""):
++            with self.subTest(board=board):
++                self.installer.sysinfo.device_class = board
++                with patch("omarchy_asahi.omarchy_isp.collection_class",
++                           side_effect=AssertionError("not the J714s")):
++                    with _j714s_peripheral_collectors(self.installer):
++                        self.assertIs(self.stub.AlsFWCollection, self.original_als)
++                        self.assertIs(self.stub.ISPFWCollection, self.original_isp)
++                        self.assertIs(self.stub.subprocess, self.process)
++                self.read.assert_not_called()
++
++
+ class NeoRadioFirmwareTests(unittest.TestCase):
+     """The MacBook Neo's MT7932 inputs join its vendor firmware package."""
+ 
+diff --git a/Engine/source-lock.json b/Engine/source-lock.json
+index 20b1ee3..88e8c14 100644
+--- a/Engine/source-lock.json
++++ b/Engine/source-lock.json
+@@ -141,7 +141,7 @@
+     }
+   },
+   "downstream_overlay": {
+-    "version": "v0.9.2-omarchy.20261113.9360b4de398f",
++    "version": "v0.9.2-omarchy.20261113.774d9abc59d3",
+     "capability": "candidate_bound_full_os_stage_one_authenticated_recovery",
+     "minimum_app_version": "2.3.0",
+     "engine_modes": [
+@@ -172,7 +172,7 @@
+       {
+         "path": "overlay/src/omarchy_asahi.py",
+         "destination": "src/omarchy_asahi.py",
+-        "sha256": "73bafd1e748cf395fb2d943e0007deb284322428c1d1af39b41d68e1c6e56121"
++        "sha256": "8cd63eaf17a59681c3a43cb829eb3772c099db1649d94e12092f8d3a81929743"
+       },
+       {
+         "path": "overlay/src/omarchy_contract.py",
+@@ -207,7 +207,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_asahi.py",
+         "destination": "tests/test_omarchy_asahi.py",
+-        "sha256": "39590f262100e3f8452e4acad5c9166c16aac5be5822e7479ff0ae4f0abe0fa6"
++        "sha256": "3088e9cb0bc3c8798b906d8eb3daf47b00bd1236322e6f6f261b14525d22f235"
+       },
+       {
+         "path": "overlay/tests/test_omarchy_contract.py",
+@@ -297,7 +297,7 @@
+       {
+         "path": "overlay/src/omarchy_als.py",
+         "destination": "src/omarchy_als.py",
+-        "sha256": "608fe663aed22dab68e0941bc6f1e7f369366cbfd1995574e5122384a4f05896"
++        "sha256": "2928c4e7e5cc3bcf5c13a2a19a8760e102fb92f295d3c9693cb0379d28e4f63f"
+       },
+       {
+         "path": "overlay/src/omarchy_isp.py",
+@@ -327,7 +327,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_als.py",
+         "destination": "tests/test_omarchy_als.py",
+-        "sha256": "d8b6da8c17bd5730cee899fce9448b24c72a7b8eab52737e079ea1dad9dca53d"
++        "sha256": "2af5b3529af2279a7bc0449cf2ae2e66efc6cf2c1d29720b714ffdb0f9ac08f0"
+       },
+       {
+         "path": "overlay/tests/test_omarchy_isp.py",
+@@ -482,9 +482,9 @@
+     }
+   ],
+   "validation_artifact": {
+-    "filename": "installer-v0.9.2-omarchy.20261113.9360b4de398f.tar.gz",
+-    "size_bytes": 17912715,
+-    "sha256": "5caff1afed8833d809fd61a5de48d766c2e6592640b0125abe2a49e601a333a2",
++    "filename": "installer-v0.9.2-omarchy.20261113.774d9abc59d3.tar.gz",
++    "size_bytes": 17913790,
++    "sha256": "927bf3f3a22a3549c807f7526c4e9cfe0626ad716d49e731ae5bac2dd97cfd42",
+     "reproducibility_scope": "two-identical-python-overlay-repacks-authenticated-base",
+     "signature": "absent",
+     "metadata_sha256": "2e6181ce6b6e17c11039e04bfadade8d10ae0e11889885ad8c9960b68f179a5d"
+-- 
+2.56.0
+
