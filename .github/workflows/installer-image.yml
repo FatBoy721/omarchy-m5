@@ -18,9 +18,21 @@ on:
         type: string
         default: 61a872af9194b42bf8e66bae37fe69d30e85d090e09ebf4cbaba51a265af2cdb
       patch-set:
-        description: Extra installer patch set (installer/patches-<name>, its tree in TREE); empty for the stable image
+        description: Extra installer patch sets, space-separated and applied in order (installer/patches-<name>, each pinned by its TREE); "upstream-27.3 j714s" for omarchy-j714s; empty for the stable image
         type: string
         default: ''
+      recovery-source-tree:
+        description: git tree of Recovery/ in the patched installer (the Recovery app in the bundle was built from it)
+        type: string
+        default: 13705bf0ccab8cc841ee9d418c36b7d7ddcafb48
+      recovery-inventory:
+        description: sha256 of that Recovery app's omarchy-recovery-app.json
+        type: string
+        default: f32296121b1145619f7dff52155fc056b00c1c67942891252bb977ce8291b386
+      image-profile:
+        description: Image profile (image-builder/builder/profiles/<name>); j714s for omarchy-j714s
+        type: string
+        default: j714s-developer
 
 permissions:
   contents: read
@@ -34,12 +46,13 @@ jobs:
       INPUT_URL: ${{ inputs.bundle-url }}
       INPUT_SHA256: ${{ inputs.bundle-sha256 }}
       PATCH_SET: ${{ inputs.patch-set }}
+      IMAGE_PROFILE: ${{ inputs.image-profile }}
       INSTALLER_REPO: https://github.com/omacom/omarchy-mac-installer
       INSTALLER_BASE: c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9
       # c07e54c + installer/patches 0001-0010
       INSTALLER_TREE: 7f2f54c09928de609f1d4496e8a49dafc1418933
-      RECOVERY_SOURCE_TREE: 13705bf0ccab8cc841ee9d418c36b7d7ddcafb48
-      RECOVERY_INVENTORY: f32296121b1145619f7dff52155fc056b00c1c67942891252bb977ce8291b386
+      RECOVERY_SOURCE_TREE: ${{ inputs.recovery-source-tree }}
+      RECOVERY_INVENTORY: ${{ inputs.recovery-inventory }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -55,14 +68,15 @@ jobs:
           git -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
             am --quiet --committer-date-is-author-date ../omarchy-m5/installer/patches/*.patch
           [[ $(git rev-parse 'HEAD^{tree}') == "$INSTALLER_TREE" ]]
-          if [[ -n $PATCH_SET ]]; then
-            # An experimental variant: its patches go on top, and its own TREE file pins the result.
-            [[ $PATCH_SET =~ ^[a-z0-9][a-z0-9.-]*$ ]]
-            set_dir=../omarchy-m5/installer/patches-$PATCH_SET
+          [[ $IMAGE_PROFILE =~ ^[a-z0-9][a-z0-9.-]*$ ]]
+          for set in $PATCH_SET; do
+            # Each extra set goes on top in order, and its own TREE file pins the result.
+            [[ $set =~ ^[a-z0-9][a-z0-9.-]*$ ]]
+            set_dir=../omarchy-m5/installer/patches-$set
             git -c user.name=omarchy-m5 -c user.email=omarchy-m5@localhost \
               am --quiet --committer-date-is-author-date "$set_dir"/*.patch
             [[ $(git rev-parse 'HEAD^{tree}') == "$(tr -d '[:space:]' < "$set_dir/TREE")" ]]
-          fi
+          done
           [[ -z $(git status --porcelain) ]]
           git log --oneline -8
 
@@ -94,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ $INPUT_SHA256 =~ ^[0-9a-f]{64}$ ]]
-          [[ $INPUT_URL =~ ^https://github\.com/betizzel/omarchy-m5/releases/download/installer-build-inputs-[A-Za-z0-9._-]+/j714s-developer-inputs-[0-9a-f]{12}\.tar\.zst$ ]]
+          [[ $INPUT_URL =~ ^https://github\.com/betizzel/omarchy-m5/releases/download/installer-build-inputs-[A-Za-z0-9._-]+/(j714s-developer|omarchy-j714s)-inputs-[0-9a-f]{12}\.tar\.zst$ ]]
           curl --fail --silent --show-error --location --proto '=https' -- "$INPUT_URL" > "$WORK/inputs.tar.zst"
           printf '%s  %s\n' "$INPUT_SHA256" "$WORK/inputs.tar.zst" | sha256sum --check -
           zstd --decompress --stdout "$WORK/inputs.tar.zst" > "$WORK/inputs.tar"
@@ -129,9 +143,9 @@ jobs:
           python3 Engine/prepare-engine.py --output "$WORK/engine" --cache "$WORK/engine-cache" | tee "$WORK/evidence/engine-archive.txt"
           [[ $(git rev-parse HEAD:Recovery) == "$RECOVERY_SOURCE_TREE" ]]
           python3 image-builder/builder/recovery_app.py "$WORK/input/recovery" --sha256 "$RECOVERY_INVENTORY"
-          python3 image-builder/builder/candidate_set.py describe --input "$WORK/input/candidate-set" --image-profile j714s-developer | tee "$WORK/evidence/candidate-import.txt"
+          python3 image-builder/builder/candidate_set.py describe --input "$WORK/input/candidate-set" --image-profile "$IMAGE_PROFILE" | tee "$WORK/evidence/candidate-import.txt"
           cp "$WORK/input/source-provenance.json" "$WORK/evidence/"
-          cp image-builder/builder/profiles/j714s-developer/candidate-trust/{policy.json,public.asc} "$WORK/evidence/"
+          cp image-builder/builder/profiles/"$IMAGE_PROFILE"/candidate-trust/{policy.json,public.asc} "$WORK/evidence/" 2>/dev/null || cp image-builder/builder/profiles/j714s-developer/candidate-trust/{policy.json,public.asc} "$WORK/evidence/"
           printf 'input_url=%s\ninput_sha256=%s\n' "$INPUT_URL" "$INPUT_SHA256" > "$WORK/evidence/transport.txt"
 
       - name: Resolve and build with the developer profile
@@ -139,11 +153,11 @@ jobs:
         run: |
           set -euo pipefail
           bash image-builder/bin/mac-image-inputs resolve "$WORK/inputs" \
-            --candidates "$WORK/input/candidate-set" --channel edge --image-profile j714s-developer \
+            --candidates "$WORK/input/candidate-set" --channel edge --image-profile "$IMAGE_PROFILE" \
             --recovery-app "$WORK/input/recovery" --cache "$WORK/cache" \
             --alarm-server 'https://arm-mirror.omarchy.org/$arch/$repo' 2>&1 | tee "$WORK/evidence/resolve.log"
           cp "$WORK/inputs" "$WORK/evidence/inputs"
-          bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile j714s-developer \
+          bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile "$IMAGE_PROFILE" \
             --candidates "$WORK/input/candidate-set" --recovery-app "$WORK/input/recovery" \
             --cache "$WORK/cache" "$WORK/out" 2>&1 | tee "$WORK/evidence/build.log"
 
