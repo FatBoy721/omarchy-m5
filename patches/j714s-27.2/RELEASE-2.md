@@ -9,15 +9,18 @@ Release 2 of the one J714s image (27.2 non-beta stub, Mach-O Stage 1). Prepared 
   (`linux/`). Cross-built on ush. ANE on 27.2 stays refused until step 2 below.
 - **Aura** `m1n1-aurora 1.6.1.aurora24.v272-2`: main `22b71758` + 6 patches (`aura/`). Built on
   ush; Stage 1 fill byte-identical to the engine's, padded object kcrz 153141248.
+- **Boot delay:** 0008's 15000 ms proxy window makes every boot wait 15 s in Aura before Stage 2.
 - **Speakers** `speakerguardd-v2 1.0.0alpha.1-41.1`, `aurora-speaker-upgrade 0.1-16` (v2
   `04169c44`), new support roles. They switch the speakers to v2 at boot on their own once v2's
   own checks pass (see "Speakers" below).
 - **omarchy-aurora-firmware 20261014.j714s8**: one speaker path (the old kernel's speakersafetyd
   profile and software-dsp speaker graph removed), the J714 UCM's laptop verb with upstream's
   speakerguardd v2 condition, VRR range on, the speaker auto-switch, and the first-boot camera
-  setfile collection.
+  setfile collection. The setfile unit (`aurora-j714s-camera-setfile`) has only been tested on a
+  synthetic blob: reading `/usr/sbin/appleh16camerad` from the System volume is an assumption
+  (the installer reads the daemon from the Recovery image), so check it on the first boot.
 - **Installer patch set** `installer/patches-j714s-r2/` 0001 (on top of `patches`,
-  `upstream-27.3`, `j714s` 0001-0009): the two speaker roles (20 roles), the five rebuilt
+  `upstream-27.3`, `j714s` 0001-0010): the two speaker roles (20 roles), the five rebuilt
   packages in the manifest (set `j714s-dev-runtime-ac7e940e5bf9`), the kernel qualification pin
   v272-2. Tests: `test_candidate_set` (20 roles), `test_stage1_qualification`, inspection,
   mac-image-check, image-profile, verify-installed-system and `prepare.sh` pass; in `test/all`
@@ -39,7 +42,13 @@ unenrolled stub, not `--compress` or Aura. Already in `patches-j714s` (other ses
   highlighted Omarchy, sign in, click Install in Omarchy's Finish setup, don't use Startup
   Security Utility.
 
-`patches-j714s-r2` is based on that tree (`ea290c11`); its TREE is `72be086a`. If more
+- **0010** (910c198): the engine collects the J714s IMX958 setfiles (appleh16camerad) and the
+  light-sensor calibration (`ioreg` `als` CalibrationData → `apple/aop-als-cal.bin`), each
+  logged and non-fatal, never substituted. Engine `v0.9.2-omarchy.20261113.774d9abc59d3`,
+  17913790 bytes, sha256 `927bf3f3…97cfd42`, in `~/m5/work/engine-0010/` (regenerate with
+  `Engine/prepare-engine.py --output OUT --cache ~/m5/work/engine-cache` in the rebuilt tree).
+
+`patches-j714s-r2` is based on that tree (`24886802`); its TREE is `e20fc9fa`. If more
 installer patches land in `patches-j714s`, rebase it:
 ```sh
 installer/app/rebuild-installer-tree.sh /tmp/t upstream-27.3 j714s
@@ -55,7 +64,7 @@ git -C /tmp/t rev-parse 'HEAD^{tree}' > installer/patches-j714s-r2/TREE
 2. Put that run's Recovery app into `build-input-provenance.json`'s recovery block (run, artifact,
    zip sha256, inventory sha256, tree, commit; first set in patches-j714s 0007) as a patch in
    `patches-j714s-r2`.
-3. `installer-app.yml` defaults to release 1's engine (`b25a51d6df57`); pass the 0008 engine.
+3. `installer-app.yml` defaults to release 1's engine (`b25a51d6df57`); pass the 0010 engine.
 
 ## After the first 27.2 boot
 
@@ -83,7 +92,9 @@ Collect what `README.md` "What the first 27.2 boot must collect" lists, then:
    rm -rf ../patches && git format-patch -q -o ../patches a34d26c255c2..up-2722
    cat ../patches/*.patch > ~/m5-build/pkg272-2/linux-aurora-j714s/linux-j714s-27.2.patch
    ```
-   Also update the comment above the pin (it still says "refused until"). Copy `../patches/*` to
+   Also update the comment above the pin (it still says "refused until"), and in the same
+   pkgrel the comment in `speakersafetyd-hold.conf` (it still cites `j714.conf`, which j714s8
+   no longer ships). Copy `../patches/*` to
    `patches/j714s-27.2/linux/` and the concatenation to `installer/recipes/linux-aurora-j714s/`,
    set `pkgrel=3` and the patch's sha256 in its PKGBUILD, and rebuild on ush:
    `cd ~/m5-build/pkg272-2/linux-aurora-j714s && ./run.sh` (about 45 min; `MAKEPKG-RC=0` at
@@ -116,8 +127,12 @@ Collect what `README.md` "What the first 27.2 boot must collect" lists, then:
      `test_stage1_qualification.py`) and update `patches-j714s-r2/TREE`.
 
 6. **Inputs and CI** (the release-1 flow, `installer/README.md`):
+   - First check that every betizzel/omarchy-m5 commit the manifest names (1b9d5ef for the
+     release-2 packages) is on origin/main unchanged. A rebase before pushing rewrites it, as it
+     did to release 1's 4724a90; then regenerate `patches-j714s-r2` 0001 and TREE with the
+     pushed hash.
    - Upload the 20 package set archives and run `finish-inputs.py` on the tree
-     `rebuild-installer-tree.sh DEST upstream-27.3 j714s j714s-r2` makes, with the 0008 engine,
+     `rebuild-installer-tree.sh DEST upstream-27.3 j714s j714s-r2` makes, with the 0010 engine,
      giving a new `installer-build-inputs-j714s-<sha>` release.
    - `installer-image.yml` with `patch-set: upstream-27.3 j714s j714s-r2`, `image-profile:
      j714s`, image number 2; then the `update-check` workflow (must change 0 packages and keep
@@ -146,6 +161,11 @@ kernel, speakerguardd or parity.json changes, and the speakers stay at the kerne
   `/run/speakerguardd-graph/speakerguardd-owns-speakers`), so v2's voicing sink is the only way
   to them.
 
+If verify does pass, the switch happens at boot with no person present: v2 then owns the
+speakers at upstream's first-start voicing level (30 %), before anyone has run the low-level test.
+While v2 is not switched, the UCM still offers the raw speaker device, silent at the kernel floor:
+the claim is one path that can make sound, not no other path.
+
 Check on the first boot: `journalctl -u aurora-speaker-upgrade`, `speakerguardd-gate explain`
 (exactly one stack, or none), `aurora-speaker-upgrade status`. If it qualifies, follow the
 low-level test in `installer/recipes/speakerguardd-v2-upstream/README.md` (5 % then 10 %, with
@@ -155,13 +175,8 @@ collection made on macOS) is the way.
 
 ## Not in release 2, and why
 
-- **ALS calibration:** macOS keeps it only in the IORegistry (`als` CalibrationData), so it must
-  be read on macOS by the installer, which collects it for the MacBook Neo only. Adding the J714s
-  is another engine change and re-pin (as 0008 did); not done here. Until then
-  `tools/als-calibration/save-als-cal.py` (run on macOS) is the way.
-- **The camera setfile in the installer:** the engine also collects the IMX958 setfiles for the
-  Neo only. The image collects them itself at first boot instead (`aurora-j714s-camera-setfile`),
-  so this needs no installer change; moving it into the engine can come with the ALS change.
+- **ALS calibration and the camera setfile** are collected by the installer since 0010 (and the
+  camera setfile again at first boot by the image). Both are untested on a J714s.
 - **ANE on 27.2:** needs step 2.
 - **AVE encode on 27.2:** probe only until step 4's encode test passes (a wrong command layout
   can wedge the encoder).

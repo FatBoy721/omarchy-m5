@@ -127,10 +127,12 @@ Checked: engine overlay tests (426), engine tooling tests, `test/all`, image-bui
 ## omarchy-j714s 2 (prepared 2026-11-13, not built as an image)
 
 Patch set [`patches-j714s-r2/`](patches-j714s-r2) goes on top of `patches/`,
-`patches-upstream-27.3/` and `patches-j714s/` 0001-0009 (tree in its `TREE`). It changes only the
+`patches-upstream-27.3/` and `patches-j714s/` 0001-0010 (tree in its `TREE`). It changes only the
 package set. `patches-j714s` 0008 (15000 ms Stage 1 proxy window, a `compress` switch that stays
-on, engine `v0.9.2-omarchy.20261113.9360b4de398f`) and 0009 (the Finish setup instructions) do
-change the Recovery app, so its provenance needs a new macOS run before an image.
+on) and 0009 (the Finish setup instructions) do
+change the Recovery app, so its provenance needs a new macOS run before an image; 0010 (engine
+`v0.9.2-omarchy.20261113.774d9abc59d3`) collects the J714s camera setfiles and light-sensor
+calibration.
 
 | # | What |
 | --- | --- |
