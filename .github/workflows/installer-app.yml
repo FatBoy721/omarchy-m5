@@ -450,7 +450,8 @@ jobs:
             echo
             echo "Installs the image from [\`$IMAGE_TAG\`](https://github.com/$GITHUB_REPOSITORY/releases/tag/$IMAGE_TAG) with the Omarchy Mac installer app (omacom/omarchy-mac-installer c07e54c + \`installer/patches\` + \`$PATCH_SETS\`, tree \`$tree\`), app $APP_VERSION build $BUILD_NUMBER. The app trusts only this build's catalog key (\`$fingerprint\`, made for this build and discarded) and reads only the catalog sealed inside it, which lists only the J714s. Nothing is downloaded from Omacom; Apple's restore firmware still comes from Apple."
             echo
-            echo "**Requirements:** a J714s on macOS 27.3. The image only qualifies system firmware \`mBoot-20457.60.65.0.1\` (27.3 26C5035r); on other firmware expect the installer to refuse. Free space for the Linux partitions (EFI 500 MB, Boot 2 GiB, Root at least 32 GiB) plus room to stage the 3.6 GB package; the app shows the exact sizes before it changes anything. Keep the charger connected."
+            qualified=$(python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["os_list"][0].get("aurora_stage1",{}); print("; ".join(k + ": stub macOS " + ", ".join(v) for k,v in s.get("qualified_machines",{}).items()) or "see installer_data.json")' "$METADATA")
+            echo "**Requirements:** a J714s with macOS at least as new as the stub it makes. The image's Stage 1 (\`installer_data.json\`) is qualified for $qualified; on anything else expect the installer to refuse. Free space for the Linux partitions (EFI 500 MB, Boot 2 GiB, Root at least 32 GiB) plus room to stage the 3.6 GB package; the app shows the exact sizes before it changes anything. Keep the charger connected."
             echo
             if [[ -n $parts ]]; then
               echo "### Offline package (everything inside, ~3.6 GB)"
