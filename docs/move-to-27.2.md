@@ -22,7 +22,13 @@ Each claim is labelled:
 - **Our route is not SPTM-mediated, as far as our files show.** We enrol m1n1 as a **raw** object
   (`--raw --entry-point 2048 --lowest-virtual-address 0`). On a raw object iBoot does not load SPTM
   either. All 15 CPUs come up only because Apple fixed raw boot objects in the 27.3 beta 1 mBoot
-  (182898702). A saved bare-metal log shows Linux started at EL2 on all CPUs. See section 2.
+  (182898702). See section 2.
+- **This J714s has already booted a padded Aura Mach-O Stage 1** **[verified, private evidence]**.
+  - On 2026-11-07/08, on stub firmware `mBoot-18000.161.10`, a padded object was enrolled:
+    `kcbz 0`, `kcrz 153141248`.
+  - Aura 1.0.0b9's Stage 1 USB proxy enumerated on the PC's cable.
+  - Linux started at EL2 on **1 CPU**.
+  - The trial isn't in the repo docs. Section 2.1 has the evidence.
 - **The 27.2 stub must be built from the IPSW.** macOS stays on 27.3 beta 1, so cloning the host (what
   `prep-stub.sh` and `refresh-stub-firmware.sh` do) would give 27.3 again. The IPSW is
   `UniversalMac_27.2_26B123_Restore.ipsw`, and its J714s iBoot is `mBoot-20457.41.3`. We have no tool
@@ -32,8 +38,10 @@ Each claim is labelled:
   re-enrolling one finger.
 - **Rollback keeps the 27.3 stub.** The 27.2 stub goes in its own new APFS container. Going back to
   27.3 is then a startup-disk choice, with no 1TR.
-- **Touch ID: plan to re-enrol.** A new stub is a new volume group. The T6050 Secure Enclave identity
-  is `/chosen/apfs-preboot-uuid`, so the existing enrolment is orphaned.
+- **Touch ID: plan to re-enrol on 27.2.** A new stub is a new volume group. The T6050 Secure Enclave
+  identity is `/chosen/apfs-preboot-uuid`, so on 27.2 the existing enrolment is orphaned.
+  - Keep the 27.3 enrolment and its host files until 27.2 is accepted. Then rollback still has
+    Touch ID.
 - **Our 27.3 patches do not all carry over.** The 27.2 GPU, display, ANE, AVE and camera each need
   27.2 rows. Some can't be written until the first 27.2 boot, because their values come from that
   boot's ADT. The PCIe storage fix (0007), the softdep (0009), the notch default (in 0003), the camera
@@ -206,12 +214,9 @@ No `bputil` change to macOS. macOS keeps Full Security.
 - `docs/smp-t6050-findings.md:181-184`: "iBoot loads SPTM only on the kernelcache path ... m1n1 is
   installed `--raw` ... no SPTM is loaded at all".
 - Aura's own doc says a raw object is jumped to directly (`macho-boot-object.md:11-13`).
-- A saved bare-metal J714s log of the raw path on the 27.3 stub
-  (`~/m5/private/ctxr-v5b-evidence-20261108/s27c-run-20261108T014537Z.txt`, kernel 7.2.2-m5slim)
-  reads "CPU: All CPU(s) started at EL2" **[verified]**. That is Linux at EL2 with no SPTM, and no
-  monitor under it.
-- No saved dmesg of the Aura/up273 stack is on the PC. Those logs are on p5 under `/var/lib/m5test`.
-  Two read-only checks would settle it:
+- Which exception level today's raw-path Linux runs at is **not recorded on the PC**. The
+  `started at EL2` lines in `~/m5/private` come from the Mach-O trial (section 2.1), not the raw path.
+  The Aura/up273 boot logs are on p5 under `/var/lib/m5test`. Two read-only checks would settle it:
   - on the Mac: `dmesg | grep 'started at EL'`;
   - in 1TR: `bputil -d` (Kernel CTRR status).
 - The real difference from upstream:
@@ -220,6 +225,35 @@ No `bputil` change to macOS. macOS keeps Full Security.
   - upstream gets SMP from Aura's CTXR probe and spin-table, which 27.2 allows.
 - The maintainer may have read our 27.3 dependence as SPTM. Answer with the facts above, and don't
   argue the label.
+
+### 2.1 The Mach-O trials of 2026-11-07/08
+
+These were agent runs, recorded only in `~/m5/private`. They are not in the repo docs.
+
+**What ran:**
+- `ctxr-v5b-evidence-20261108/s1b-run.private.txt`: `kmutil inspect` of `aura-j714s-confined.macho`.
+  `kcbz : 0`, `kcrz : 153141248`, `kcep-kclo = 0x10800`, and "stub container free 2174009344 B".
+- `fuos-inspect-s4ctxr.txt`: the IMG4 stored in the stub's Preboot is a `fuos` Mach-O
+  (`KernelManagement_executables-487.100.11`), `__TEXT_EXEC` 0x91fc000 (about 146 MiB). Its payload
+  is byte-identical to the padded object. So the padded object really was enrolled.
+- `s5x-run.private.txt`: `m5.rvbar=fw:mBoot-18000.161.10,...,locked:15`. That is the 26.6.2-era stub
+  firmware, not 27.2.
+
+**Results:**
+- `aura-usb-trace-redacted.txt`: "aura uartproxy 1.0.0b9-dirty" (1209:316d) enumerated twice on PC
+  hub port 3-3.3, about 10 s after the Apple DFU device. **Aura's Stage 1 proxy did reach the PC on
+  the cable then.**
+- `s27c-run-...txt`, `smp-evidence-20261108-macho/journal-k-550f03b5.txt` and `s5-macho-boot-1.txt`
+  all show "CPU: All CPU(s) started at EL2" and "smp: Brought up 1 node, 1 CPU". Some ran with
+  `maxcpus=1`.
+
+**What it means for 27.2:**
+- iBoot on this J714s accepts a padded Mach-O Stage 1, Aura Stage 1 brings USB up on the cable port,
+  and Linux runs at EL2. All three are demonstrated.
+- All CPUs under a Mach-O object is **not** shown on this Mac. That is the open question 27.2
+  answers. On 18000.161.10, SMP was broken on every path.
+- The enrolment ceremony for a padded object has been done here. Kept unpadded or raw objects were
+  rolled back the same way (`bringup.md:1584-1586`).
 
 ## 3. What carries over to 27.2
 
@@ -297,13 +331,23 @@ No `bputil` change to macOS. macOS keeps Full Security.
   - and arm `--expect` for the policy rewrite.
   - Against it: `OS-IDENTITY.md` warns "never test identity changes on a machine with enrolments
     that matter", and the old 27.3 stub's lane would then be shared by two boot policies.
-- **Recommendation: re-enrol.** It is one finger, about 2 minutes at the Mac.
-  - Before the move: `fprintd-delete tripleu` on the dev Linux, and stop `aurora-sep.service`.
-  - Then nothing writes enclave state on the first 27.2 boot until we choose to.
-  - Do not restore old keybag or host files afterwards: "file rollback does not roll back the
-    enclave's counters".
-  - macOS's own Touch ID records stay untouched, because the xART guard protects them. That was
-    verified at enrolment (`docs/left-out.md`, Touch ID row).
+- **Recommendation: re-enrol on 27.2, and only once 27.2 is accepted.** It is one finger, about
+  2 minutes at the Mac.
+  - Until then, keep the SEP driver unloaded on 27.2 boots:
+    - `aurora-sep.service` disabled;
+    - `/etc/modprobe.d/aurora-sep-xart.conf` moved aside, so the image default
+      `xart_writes=0 provision_keybag=0` applies if anything loads it.
+  - Leave the 27.3 enrolment and the p5 host files (`/var/lib/aurora-sep-*.bin`, `/var/lib/fprint`)
+    alone. The old stub then keeps a working Touch ID for rollback.
+- **The catch:** p5's host files are shared by both stubs, because one root boots under either.
+  - Re-enrolling on 27.2 creates a new keybag under the new identity. That is the point where a
+    rollback to 27.3 loses Touch ID.
+  - Before it, copy the 27.3 host files aside: `/var/lib/aurora-sep-*.bin` and `/var/lib/fprint`.
+  - Putting them back after a rollback might work, because the 27.3 lane's counters were not touched
+    by the 27.2 lane. It is **[untested]**, and `XART-SAFETY.md` warns that "file rollback does not
+    roll back the enclave's counters" within a lane.
+- macOS's own Touch ID records stay untouched, because the xART guard protects them. That was
+  verified at enrolment (`docs/left-out.md`, Touch ID row).
 - **Before anything:** keep the iBoot System Container backup
   (`~/m5/backup/iboot-system-container-2026-11-12.img.zst`). Also take a fresh `aurora-sep-policy-change`
   backup (`/var/lib/aurora-rollback/...`) as evidence.
@@ -317,7 +361,7 @@ No `bputil` change to macOS. macOS keeps Full Security.
 | ESP p4 (`m5local/*`, the old `cpu.bin`) | old files stay for the 27.3 stub. The 27.2 Stage 1 is pointed at a **new** folder (`m5local/s272/boot-ctxr.bin`). That is a deliberate boot-file write to p4, which needs the owner's OK under the RAM-only rule |
 | Dev Linux p5 | carries over: the root is firmware-independent. It needs a 27.2 kernel (up272-N, modules on p5) and its loader file on p4 |
 | Installed image p7/p8/p9 | its packages are 27.3-specific (0002/0006 gates, 0004 rows), so it won't get the display, ANE, AVE or camera on 27.2. Its own chain goes through U-Boot's EFI path. edimoldovan's U-Boot 70e99081 contains u-boot #32 (`compare 62ee4709...70e99081`: ahead 5, behind 0) **[verified]**, and our kernel config has `CONFIG_EFI_ZBOOT` unset, so the UKI path can use the window **[derived]**. It needs a rebuilt image (27.2 packages, Stage 2 at `m1n1/boot-ctxr.bin`) or a reinstall. It is also the candidate source of free space (below) |
-| RAM catcher (`catch-loop-up.sh`, `loader-*-bm.bin`) | built around **m1n1's** stage-1 proxy. After the move, Stage 1 is **Aura**. Its proxy window is set with `--window-ms` in the Stage 1 config (`j700-install.md:36-42`). Whether Aura Stage 1's proxy enumerates on our cable port is **unknown**: Aura **Stage 2's** proxy does not (`m5-ram-only-tests` memory). Chainloading under CTXR uses aura #186's copy stub, because the locked RVBAR moves each boot |
+| RAM catcher (`catch-loop-up.sh`, `loader-*-bm.bin`) | built around **m1n1's** stage-1 proxy. After the move, Stage 1 is **Aura**. Its proxy window is set with `--window-ms` in the Stage 1 config (`j700-install.md:36-42`). An Aura 1.0.0b9 Stage 1 proxy **did** enumerate on the cable on 2026-11-07 (section 2.1). Aura **Stage 2's** proxy, chainloaded today, does not (`m5-ram-only-tests` memory). Chainloading under CTXR uses aura #186's copy stub, because the locked RVBAR moves each boot |
 | `loader-daily-dcp-bm.bin` fallback (old m1n1 kernel) | **does not carry**: its kernel has no `CONFIG_ARM64_CTXR_EXECMEM`. On 27.2 a raw path is one CPU anyway |
 
 ## 4. Migration plan
@@ -360,12 +404,18 @@ The design:
 
 ### Phase 1: RAM-only pre-tests on today's 27.3 setup (about 1 h, hands-free)
 
-- **R1: does Aura Stage 1's proxy reach the PC?**
-  1. Chainload the **raw** filled Aura Stage 1 (with `--window-ms`) from the m1n1 stage-1 proxy.
-  2. Watch for 1209:316d on the PC.
+- **R1: does today's Aura Stage 1 proxy reach the PC?** 2026-11-07 says it did with b9 (section 2.1).
+  This checks the current build:
+  1. Fill a **test** copy of the raw Aura Stage 1 (`--window-ms`) with a Stage 2 path that already
+     exists on p4: today's `m5local/cpu.bin`. Not `s272/`, which doesn't exist yet: a missing file
+     ends in Aura's proxy.
+  2. Build it with the test watchdog (`~/m5/work/up/aura-testwdt.diff`).
+  3. Chainload it with `bmboot-wdt.sh`, which arms the watchdog first.
+  4. Watch for 1209:316d on the PC.
 
-  This decides whether the catcher survives the move. It is only an approximation: the USB state
-  after a chainload differs from a cold iBoot start.
+  Packaged Aura disables the watchdog on T6050 (`patches/upstream-27.3/README.md:354`). Without the
+  test build, a stuck run needs a power-cycle. The USB state after a chainload is only an
+  approximation of a cold iBoot start.
 - **R2:** up272-1 through today's loader on 27.3. It should boot as up273-10 does, with ANE and AVE
   refused safely (27.3 rows are dropped only if we drop them). This catches build regressions before
   the firmware changes.
@@ -378,10 +428,15 @@ The design:
 
 ### Phase 2: Touch ID (2 min, on the dev Linux over ssh)
 
-1. `aurora-sep-policy-change --expect`. This is for its backup, not to keep the enrolment.
-2. `fprintd-delete tripleu`.
+1. `aurora-sep-policy-change --expect`, for its backup (gigalocker extent, host files,
+   `/var/lib/fprint` into `/var/lib/aurora-rollback/`). Then `aurora-sep-policy-change --cancel`, so
+   no write allowance is armed.
+2. Copy `/var/lib/aurora-sep-*.bin` and `/var/lib/fprint` to `/root/sep-27.3/`.
 3. `systemctl disable aurora-sep.service`.
-4. Leave `/etc/modprobe.d/aurora-sep-xart.conf` in place until re-enrolment.
+4. Move `/etc/modprobe.d/aurora-sep-xart.conf` to `/root/sep-27.3/`. On a 27.3 rollback, put both
+   back.
+
+The 27.3 enrolment is not deleted.
 
 ### Phase 3: make the 27.2 stub (physical step 1: about 30-45 min, the user at the Mac for ~2 min)
 
@@ -390,6 +445,17 @@ The design:
   container's usage.
 - `cat /proc/device-tree/chosen/firmware-version`, which should be 20457.60.65.0.1.
 - That `omarchy-stage1/` (the m1n1 rollback) is on p4.
+
+**Also check before writing:**
+- **Name the new stub distinctly** (`Omarchy272`). Two "Omarchy" entries look the same in the
+  picker. `bless --mount /Volumes/Omarchy`, `refresh-stub-firmware.sh` and the step2 scripts all key
+  on the name.
+- **The dev initrd selects p5 by slot.** Logs show `m5.root=s5`, and the initrd pins the GPT size.
+  - macOS renumbers `disk0sN` by disk position (`bringup.md:88-94`). `diskutil addPartition` may
+    re-sort GPT entries.
+  - So create the new partition from Linux with `sgdisk`, at a new entry index after the last one,
+    type Apple APFS. Then turn it into a container from macOS with `diskutil apfs createContainer`.
+  - Afterwards, check `sfdisk -l` again: p4, p5 and p7-p9 must keep their numbers.
 
 **Space for a new ~7 GB container.** Do not shrink macOS. Pick one:
 - **(a) Shrink p9**, the image's btrfs root. From the dev Linux:
@@ -407,7 +473,7 @@ The design:
    on, `ssh macbook` does the rest.
 2. On macOS:
    1. Decrypt the BaseSystem: `omarchy-restore-image ...`.
-   2. Create the container in the free space: `diskutil addPartition`, as asahi does.
+   2. `diskutil apfs createContainer` on the partition made from Linux.
    3. `prep-stub.sh --bundle` for the volumes: System/Data/Preboot/Recovery, the restore bundle, and
       `arm64eBaseSystem.dmg`.
    4. `finish-install.sh` with the Mach-O step2 and the **padded** object as `boot.bin`.
@@ -438,6 +504,9 @@ answers the password prompts.
 ### Phase 5: first 27.2 boots (hands-free if R1 passed, about 1 h)
 
 1. The catcher sees Aura Stage 1's window. On a miss, Stage 1 loads `m5local/s272/boot-ctxr.bin`.
+   - For the first boots, make that file the **test-watchdog** Aura build.
+   - With packaged Aura, a Stage 2 refusal ("No usable window", or "No valid payload found") sits in
+     Aura's proxy with no watchdog, and only a power-hold gets out.
 2. Check:
    - `/proc/device-tree/chosen/firmware-version` = `mBoot-20457.41.3`;
    - "All CPU(s) started at EL2" on 15 CPUs;
@@ -453,19 +522,25 @@ answers the password prompts.
 
 ### Phase 6: Touch ID (physical step 3: about 2 min)
 
-`aurora-sep-policy-change --status` must be clean. Then put the opt-in back, start the service and
-enrol: `fprintd-enroll`, with touches at the Mac. Then `fprintd-verify` before and after a reboot.
+Only after 27.2 is accepted. Then:
+1. Check that the copies in `/root/sep-27.3/` exist.
+2. Move the live `/var/lib/aurora-sep-*.bin` aside, so a new keybag is created under the new identity.
+3. Put the opt-in conf back and start the service.
+4. `fprintd-enroll`, with touches at the Mac.
+5. `fprintd-verify`, before and after a reboot.
+
+From here a 27.3 rollback has no working Touch ID, unless the restore described in 3.2 works.
 
 ### Rollback to 27.3
 
 | From | How | Physical? |
 | --- | --- | --- |
 | A bad 27.2 kernel or Stage 2 | the catcher or a RAM loader, or restore `boot-ctxr.bin` on p4 from the backup | no |
-| A bad 27.2 Stage 1 | 1TR of the 27.2 stub: enrol the kept unpadded or raw image (`enroll-stage1.sh --keep`) | yes (1TR) |
-| Give up on 27.2 | choose the old "Omarchy" stub as startup disk: power-hold picker → Omarchy, or `bless --mount <old stub> --setBoot` from macOS. The old stub keeps its raw m1n1, its Permissive policy, its p4 `cpu.bin` and `daily-up`, and its own Touch ID lane | one power-hold (about 1 min), or none from an unlocked macOS |
+| A bad 27.2 Stage 1 | there is no useful fallback **inside** the 27.2 stub: raw on 27.2 is one CPU and needs `bputil -nc` again, and an unpadded object can only run the proxy. Go to the old stub (next row). A fixed padded object needs another 1TR of the 27.2 stub | one power-hold, or a 1TR for the fix |
+| Give up on 27.2 | choose the old "Omarchy" stub as startup disk: power-hold picker → Omarchy, or `bless --mount /Volumes/Omarchy --setBoot` from macOS. The old stub keeps its raw m1n1, its Permissive policy, its p4 `cpu.bin` and `daily-up`, and its own Touch ID lane. Before Phase 6, Touch ID works again once `/root/sep-27.3/` is put back | one power-hold (about 1 min), or none from an unlocked macOS |
 
-Re-enrolment is needed again after a rollback: identity follows the volume group. Removing the 27.2
-stub later is the same container deletion as in `bringup.md:88-103`, minus the macOS resize.
+Removing the 27.2 stub later is the same container deletion as in `bringup.md:88-103`, minus the
+macOS resize.
 
 ### Physical steps, plainly
 
@@ -489,17 +564,28 @@ stub later is the same container deletion as in `bringup.md:88-103`, minus the m
 ## 5. Risks
 
 - **Nobody has booted a J714s on 27.2 Mach-O.**
-  - The T6050 evidence is K116s on 26B8125 (linux#1724, aura #186/#187/#188, all Jens Axboe via
-    Thomas Glanzmann), on private `aura-internal` branches.
-  - Our 128 MiB padded object would be its first J714s boot. The aurora-installer README says "This
-    128 MiB size has not been booted yet" for its own release; it was booted on a J616s with 1.0.0b7.
+  - This Mac has booted a padded Aura object to Linux at EL2, but on 18000.161.10 and on 1 CPU
+    (section 2.1).
+  - All CPUs on a T6050 under Mach-O is reported only for K116s on 26B8125 (linux#1724, aura
+    #186/#187/#188, all Jens Axboe via Thomas Glanzmann), on private `aura-internal` branches.
+  - The aurora-installer README says "This 128 MiB size has not been booted yet" for its own release.
+    It was booted on a J616s with 1.0.0b7.
+- **This Mac's own enrolment traps** (`bringup.md:1360-1405`):
+  - Raw objects that weren't a 16 KiB multiple, or had a config appended (`chainload=`),
+    boot-looped.
+  - Fill Aura's config block in place (`fill_stage1_config.py` keeps the length and `STACKBOT`
+    tail), never append.
+  - The padded object from 2026-11-07 did enrol and boot.
+  - `make aura-test` (`bringup.md:203-366`) is older Mach-O tooling, pinned to Aura 1.0.0b4. Use
+    Aura's current `macho_boot_object.py --execute-window` instead.
 - **Hand-built 27.2 stub.**
   - The stub.py port and AEA decryption are new code.
   - A wrong bundle fails at `bless`, or in 1TR ("macOS needs to be reinstalled"). It does not affect
     macOS or the old stub.
 - **The catcher may not survive** (R1). Aura Stage 2's proxy is unreachable on our cable port today.
-  - If Stage 1's is too, recovery from a bad boot needs the watchdog: packaged Aura disables it on
-    T6050 (`wdt-version` 3).
+  Aura Stage 1's b9 proxy was reachable on 2026-11-07.
+  - If the current one isn't, recovery from a bad boot needs the watchdog: packaged Aura disables
+    it on T6050 (`wdt-version` 3).
   - Or a power-hold.
 - **CTXR window rules** (`macho-boot-object.md:162-186`): a kernel outside the window, or a `boot=`
   image that is too big, makes Aura refuse ("No usable window"), and the boot falls into the proxy.
@@ -511,7 +597,9 @@ stub later is the same container deletion as in `bringup.md:88-103`, minus the m
   - s2idle (lid sleep) is unaffected **[derived]**.
 - **27.2 rows we can't write in advance:** DCP UUID, ANE pin and layout, camera. The first boot will
   have simpledrm (unless the DCP UUID matches 27.0's), and no ANE, AVE or camera.
-- **Touch ID** has to be re-enrolled. Pinning the old identity is possible but untested.
+- **Touch ID** has to be re-enrolled on 27.2. That makes a 27.3 rollback lose Touch ID, unless
+  restoring the saved host files works, which is untested. Pinning the old identity is possible but
+  also untested.
 - **Space:** shrinking p9 is a btrfs shrink on the image root. If it fails, delete p7-p9 instead
   (the image needs rebuilding anyway).
 - **The 27.2.1 temptation:** same iBoot, but the GPU firmware digest is unchecked. Stay on 26B123
@@ -545,6 +633,9 @@ stub later is the same container deletion as in `bringup.md:88-103`, minus the m
 - This repo:
   - `docs/bringup.md:21-70,151-197,1550-1647`;
   - `docs/smp-t6050-findings.md:1-10,181-184`;
+  - `docs/bringup.md:203-366,1360-1405`;
+  - `~/m5/private/ctxr-v5b-evidence-20261108/` and `~/m5/private/smp-evidence-20261108-macho/`
+    (private: the Mach-O trial);
   - `patches/upstream-27.3/README.md` and patches 0002, 0004;
   - `installer/recipes/aurora-sep-upstream/README.md:205-213`;
   - `installer/recipes/linux-aurora-upstream/config:622,2221`;
