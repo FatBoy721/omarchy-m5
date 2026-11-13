@@ -353,3 +353,15 @@ or 2 has answered.
 - Saved for the retest: `~/m5/work/install-failure-20261113/` (trial object `4f318f1b`, an example
   padded object, the two scripts).
 - Trial evidence: `~/m5/private/ctxr-v5b-evidence-20261108/`, `~/m5/private/smp-evidence-20261108-macho/`.
+
+## Update 2026-11-13 afternoon: collected from macOS — the cause is simpler
+
+Read-only, from macOS over ssh:
+- The new 27.2 stub is volume group `44EF390C-16A3-4083-9AB8-5A72E15CAE3A` (`disk4s2`, mounted as "Omarchy 1"); NVRAM `boot-volume` points at it.
+- `bputil -d -v 44EF390C-…`: **OS Pairing Status: Not Paired, Security Mode: Full, CustomKC/fuOS hash: absent.**
+- The stub's `Aurora/Recovery/State` has only the 11:12 `app-update-*` (status `committed`, the macOS app installing the Recovery app). **No `operation-*` directory and no `installer.log`**: the Recovery app's "Finish setup" never ran an enrolment.
+- No `.panic` report; NVRAM has `panicmedic-telemetry`/`panicmedic-timestamps` from the failed boots of the unenrolled stub.
+
+So the 4-second progress bar and power-off is iBoot trying to boot a stub with no paired OS and no custom kernel, not a fault in our Mach-O object, `--compress` or Aura. The owner's recovery choice ("the permissive option") was not our Finish-setup flow, or was applied elsewhere; it did not reach this stub (still Full).
+
+**Fix:** redo step 5 in the new stub's own recovery and complete Omarchy's "Finish setup" (it runs `bputil -nc` + `kmutil configure-boot`). The ranked causes above remain the plan B if a real enrolment then fails.
