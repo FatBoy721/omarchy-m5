@@ -1,0 +1,499 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 12:01:23 -0500
+Subject: [PATCH] J714s: 15 s Stage 1 proxy window; switchable uncompressed
+ Mach-O enrollment
+
+omarchy-j714s 1 powers off about 4 s after the progress bar once the
+padded Aura Mach-O Stage 1 is enrolled with kmutil configure-boot
+--compress (docs/install-failure-2026-11-13.md). Nothing appeared on the
+USB cable because the engine filled window_ms 0, and --compress is one of
+four things that changed since the 2026-11-07 trial that booted.
+
+- omarchy_asahi.py: BOARD_MACHO["j714sap"] window_ms 0 -> 15000, so Aura
+  opens its USB proxy for 15 s before it chainloads Stage 2 and a boot
+  that stops early is visible on the cable. BoardMachO gains a compress
+  field (default True; j714sap names True), passed to Recovery staging.
+- omarchy_recovery.py: stage() takes macho_compress (a bool, default True)
+  and writes it into the Mach-O mode of the startup bundle's manifest:
+  modes.macho = {espPath, executeWindow, compress}.
+- Recovery app: AuraBootMode.machoCompression(entry) reads "compress"
+  (missing key = true, so older bundles stay compressed; anything but a
+  JSON boolean is refused); enrollmentArguments(..., compress:) passes
+  --compress only when true; stageExpandedStage1 checks that kmutil
+  offers --compress only when compressing. Padding, kmutil inspect,
+  bputil and the rest of the Mach-O path are unchanged. BootSelectionCheck
+  covers both argument forms and the manifest key.
+- Default unchanged: the J714s still enrolls compressed. Uncompressed
+  needs compress=False on the board row and a new engine.
+- Engine renamed v0.9.2-omarchy.20261113.9360b4de398f and repacked from
+  the authenticated engine.28 base: 17912715 bytes, sha256
+  5caff1afed8833d809fd61a5de48d766c2e6592640b0125abe2a49e601a333a2, two
+  identical repacks.
+
+Checked on Linux: engine overlay tests (432), engine tooling tests,
+test/all, image-builder/test/all (except the edge-dispatch template test
+that already fails on release 1), engine_pin.py check,
+verify-source-lock.py, read-validation-engine.py, prepare-engine.py.
+BootSelection.swift + BootSelectionCheck.swift compiled and passed with
+Swift 6.2 on Linux (a test-only CFGetTypeID shim; Linux Foundation lacks
+it), and swift-format 6.2.4 lint --strict passes on the changed Swift.
+
+Not yet checked: the Recovery app build and its fixtures need a macOS run
+(installer-app.yml or the Recovery fixture workflow). After that run,
+build-input-provenance.json's recovery block (run, artifact, zip sha256,
+inventory sha256, tree, commit; set by patches-j714s 0007) must be
+updated to it: the Recovery tree changes with this patch.
+
+Uncompressed enrollment keeps the 300 s authorization limit
+(Recovery/Native/Authorization.c grants 3600 s only to configure-boot
+--compress).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ Engine/overlay/src/omarchy_asahi.py           | 15 +++++++--
+ Engine/overlay/src/omarchy_recovery.py        | 13 +++++---
+ Engine/overlay/tests/test_omarchy_asahi.py    | 32 ++++++++++++++++++-
+ Engine/overlay/tests/test_omarchy_recovery.py | 24 +++++++++++++-
+ Engine/source-lock.json                       | 16 +++++-----
+ Recovery/README.md                            |  2 +-
+ Recovery/Sources/AuraMachO.swift              |  3 +-
+ Recovery/Sources/BootSelection.swift          | 20 +++++++++---
+ Recovery/Sources/RecoveryActions.swift        | 30 ++++++++++++-----
+ Recovery/Tests/BootSelectionCheck.swift       | 29 ++++++++++++++++-
+ 10 files changed, 152 insertions(+), 32 deletions(-)
+
+diff --git a/Engine/overlay/src/omarchy_asahi.py b/Engine/overlay/src/omarchy_asahi.py
+index 726e365..cfed18b 100644
+--- a/Engine/overlay/src/omarchy_asahi.py
++++ b/Engine/overlay/src/omarchy_asahi.py
+@@ -567,14 +567,22 @@ BOARD_STAGE2 = {"j700ap": "esp/m1n1/boot-j700.bin"}
+ # brings the secondary CPUs up inside the window. The engine fills the raw
+ # Stage 1's config block (ESP PARTUUID, confined Stage 2 path) and carries it
+ # into the boot object; Recovery pads it.
++#
++# window_ms is Aura's USB proxy window before it chainloads Stage 2: with it a
++# boot that stops early is visible on the USB cable. compress is how Recovery
++# enrolls the padded object: True passes kmutil --compress (the default, as
++# aurora-installer does); False stores it uncompressed, as the J714s's
++# 2026-11-07 Mach-O trial did.
+ MACHO_CTXR_KIND = "board-macho-ctxr-v1"
+ MACHO_CTXR_STAGE2 = "m1n1/boot-ctxr.bin"
+-BoardMachO = collections.namedtuple("BoardMachO", "raw macho stage2 window_ms os_firmware macs")
++BoardMachO = collections.namedtuple(
++    "BoardMachO", "raw macho stage2 window_ms os_firmware macs compress", defaults=(True,))
+ BOARD_MACHO = {
+     "j714sap": BoardMachO(
+         "esp/aurora/stage1-j714s.bin", "esp/aurora/stage1-j714s.macho",
+-        "esp/" + MACHO_CTXR_STAGE2, 0, "27.2",
++        "esp/" + MACHO_CTXR_STAGE2, 15000, "27.2",
+         "the 14-inch MacBook Pro (M5 Pro) on macOS 27.2 stub firmware",
++        compress=True,
+     ),
+ }
+ 
+@@ -1659,7 +1667,8 @@ class AsahiStage1Adapter:
+                 requirement=self.recovery_requirement if self.use_helper_recovery else None,
+                 authorized_owner=self.authorized_owner if self.use_helper_recovery else None,
+                 expected_bootstrap=self.source_bootstrap if self.use_helper_recovery else None,
+-                **({} if macho_stage1 is None else {"macho_stage1": macho_stage1}),
++                **({} if macho_stage1 is None else {
++                    "macho_stage1": macho_stage1, "macho_compress": self.board_macho.compress}),
+             )
+         self._record_installation(log_only=True)
+         self._clean_esp()
+diff --git a/Engine/overlay/src/omarchy_recovery.py b/Engine/overlay/src/omarchy_recovery.py
+index a487110..0b12f92 100644
+--- a/Engine/overlay/src/omarchy_recovery.py
++++ b/Engine/overlay/src/omarchy_recovery.py
+@@ -27,7 +27,8 @@ MANIFEST_NAME = "omarchy-recovery-app.json"
+ STAGE2_PATH = "m1n1/boot.bin"
+ # A board that enrolls Aura's Mach-O boot object (omarchy_asahi.BOARD_MACHO):
+ # Recovery pads it for the execute window and enrolls it with kmutil
+-# --compress, and its Stage 1 loads the confined Stage 2.
++# --compress unless the board's mode says "compress": false, and its Stage 1
++# loads the confined Stage 2.
+ MACHO_STAGE1_PATH = "macho/aura-boot.macho"
+ MACHO_STAGE2_PATH = "macho/boot-ctxr.bin"
+ MACHO_ESP_STAGE2_PATH = "m1n1/boot-ctxr.bin"
+@@ -369,12 +370,13 @@ def _payload(path, maximum=256 << 20):
+ def stage(installer, esp_uuid, esp_root, app_source=None,
+           manifest_path=None, run=subprocess.run, source_os=None,
+           requirement=None, authorized_owner=None, expected_bootstrap=None,
+-          macho_stage1=None):
++          macho_stage1=None, macho_compress=True):
+     """Called after OS/ESP installation and common stage-1 target patching.
+ 
+     MACHO_STAGE1 is a board's finalized, unpadded Mach-O boot object; with it
+     the installation's only boot mode is Mach-O and its Stage 2 is the
+-    confined m1n1/boot-ctxr.bin.
++    confined m1n1/boot-ctxr.bin. MACHO_COMPRESS is whether Recovery enrolls
++    it with kmutil --compress.
+ 
+     Preserve upstream's Finish Installation resource paths for resume checks;
+     its step2.sh becomes a relative launcher for the native app. The GUI remains
+@@ -385,6 +387,8 @@ def stage(installer, esp_uuid, esp_root, app_source=None,
+     manifest_path = Path(manifest_path) if manifest_path is not None else template_root / MANIFEST_NAME
+     template = validate_source(app_source, manifest_path, run, requirement=requirement)
+     macho = macho_stage1 is not None
++    if not isinstance(macho_compress, bool):
++        raise RecoveryError("invalid Mach-O enrollment compression")
+     config = target_config(
+         installer, esp_uuid, esp_root, source_os, authorized_owner, expected_bootstrap,
+         boot_mode="macho" if macho else "raw",
+@@ -425,7 +429,8 @@ def stage(installer, esp_uuid, esp_root, app_source=None,
+     )
+     if macho:
+         files = {MACHO_STAGE1_PATH: stage1, MACHO_STAGE2_PATH: stage2, **firmware}
+-        modes = {"macho": {"espPath": MACHO_ESP_STAGE2_PATH, "executeWindow": EXECUTE_WINDOW_BYTES}}
++        modes = {"macho": {"espPath": MACHO_ESP_STAGE2_PATH, "executeWindow": EXECUTE_WINDOW_BYTES,
++                           "compress": macho_compress}}
+     else:
+         files = {"raw/aura-raw.bin": stage1, "raw/boot.bin": stage2, **firmware}
+         modes = {"raw": {"espPath": STAGE2_PATH}}
+diff --git a/Engine/overlay/tests/test_omarchy_asahi.py b/Engine/overlay/tests/test_omarchy_asahi.py
+index cf20331..a8780ab 100644
+--- a/Engine/overlay/tests/test_omarchy_asahi.py
++++ b/Engine/overlay/tests/test_omarchy_asahi.py
+@@ -119,9 +119,11 @@ from omarchy_asahi import (  # noqa: E402
+     _collect_neo_radios,
+     _collect_neo_touch_id,
+     STEP2_SCRIPT,
++    BOARD_MACHO,
+     AsahiAdapterError,
+     AsahiInPlaceRepairAdapter,
+     AsahiStage1Adapter,
++    BoardMachO,
+     OmarchyOSInstaller,
+     common_stage1_allowed,
+     esp_board_layout,
+@@ -784,10 +786,38 @@ class AsahiStage1AdapterTests(unittest.TestCase):
+         with patch("omarchy_asahi.omarchy_recovery.stage") as stage:
+             adapter.install_stub_and_esp(self.plan)
+         boot_object = Path(installer.ins.boot_obj_path).read_bytes()
+-        expected_raw = fill_aurora_stage1(raw, self.J714S_ESP, "m1n1/boot-ctxr.bin", 0)
++        # A 15 s proxy window, so a boot that stops early shows on the USB cable.
++        expected_raw = fill_aurora_stage1(raw, self.J714S_ESP, "m1n1/boot-ctxr.bin", 15000)
+         self.assertEqual(boot_object, aura_macho(expected_raw))
+         self.assertIn(b";m1n1/boot-ctxr.bin", boot_object)
+         self.assertEqual(stage.call_args.kwargs["macho_stage1"], boot_object)
++        self.assertIs(stage.call_args.kwargs["macho_compress"], True)
++
++    def test_j714s_board_uses_a_proxy_window_and_compressed_enrollment(self):
++        board = BOARD_MACHO["j714sap"]
++        self.assertEqual(board.window_ms, 15000)
++        self.assertIs(board.compress, True)
++        self.assertIs(board._replace(compress=False).compress, False)
++        # A board row that names no compression keeps the compressed default.
++        self.assertIs(BoardMachO(*board[:6]).compress, True)
++
++    def test_board_macho_install_passes_uncompressed_enrollment_to_recovery(self):
++        self._j714s_payload()
++        self._j714s_metadata()
++        installer = self._j714s_installer()
++        adapter = self._adapter(installer)
++        with patch.dict(BOARD_MACHO, {"j714sap": BOARD_MACHO["j714sap"]._replace(compress=False)}), \
++                patch("omarchy_asahi.omarchy_recovery.validate_payload"):
++            adapter.preflight(self.plan)
++            adapter.prepare_target(self.plan)
++            partition_disk = adapter.osins.partition_disk
++            def with_a_real_esp_uuid(name, size):
++                partition_disk(name, size)
++                adapter.osins.efi_part.uuid = self.J714S_ESP.upper()
++            adapter.osins.partition_disk = with_a_real_esp_uuid
++            with patch("omarchy_asahi.omarchy_recovery.stage") as stage:
++                adapter.install_stub_and_esp(self.plan)
++        self.assertIs(stage.call_args.kwargs["macho_compress"], False)
+         self.assertEqual((self.installed_esp / "m1n1/boot-ctxr.bin").read_bytes(), b"aura ctxr stage2")
+ 
+     def test_legacy_common_policy_without_common_member_keeps_legacy_preflight(self):
+diff --git a/Engine/overlay/tests/test_omarchy_recovery.py b/Engine/overlay/tests/test_omarchy_recovery.py
+index 04a1098..997557f 100644
+--- a/Engine/overlay/tests/test_omarchy_recovery.py
++++ b/Engine/overlay/tests/test_omarchy_recovery.py
+@@ -198,7 +198,29 @@ class RecoveryTests(unittest.TestCase):
+         manifest = json.loads((payloads / "manifest.json").read_text())
+         self.assertEqual(manifest["defaultMode"], "macho")
+         self.assertEqual(manifest["modes"], {"macho": {
+-            "espPath": "m1n1/boot-ctxr.bin", "executeWindow": 128 << 20}})
++            "espPath": "m1n1/boot-ctxr.bin", "executeWindow": 128 << 20, "compress": True}})
++
++    def test_board_macho_install_can_stage_uncompressed_enrollment(self):
++        macho = b"filled-unpadded-aura-boot-object"
++        self.boot.write_bytes(macho)
++        (self.esp / recovery.MACHO_ESP_STAGE2_PATH).write_bytes(b"aura-ctxr-stage2")
++        recovery.stage(self.installer, ESP, str(self.esp), run=self.fake_run,
++                       macho_stage1=macho, macho_compress=False)
++        payloads = self.system / recovery.INSTALL_DATA_DIRECTORY / "AuraPayloads"
++        manifest = json.loads((payloads / "manifest.json").read_text())
++        self.assertEqual(manifest["modes"], {"macho": {
++            "espPath": "m1n1/boot-ctxr.bin", "executeWindow": 128 << 20, "compress": False}})
++
++    def test_board_macho_install_refuses_a_non_boolean_compression(self):
++        macho = b"filled-unpadded-aura-boot-object"
++        self.boot.write_bytes(macho)
++        (self.esp / recovery.MACHO_ESP_STAGE2_PATH).write_bytes(b"aura-ctxr-stage2")
++        for value in (None, 0, 1, "true"):
++            with self.subTest(value=value), self.assertRaisesRegex(
++                    recovery.RecoveryError, "compression"):
++                recovery.stage(self.installer, ESP, str(self.esp), run=self.fake_run,
++                               macho_stage1=macho, macho_compress=value)
++        self.assertFalse((self.system / recovery.APP_NAME).exists())
+ 
+     def test_board_macho_install_refuses_a_stub_boot_object_that_differs(self):
+         (self.esp / recovery.MACHO_ESP_STAGE2_PATH).write_bytes(b"aura-ctxr-stage2")
+diff --git a/Engine/source-lock.json b/Engine/source-lock.json
+index 9e0c5a0..20b1ee3 100644
+--- a/Engine/source-lock.json
++++ b/Engine/source-lock.json
+@@ -141,7 +141,7 @@
+     }
+   },
+   "downstream_overlay": {
+-    "version": "v0.9.2-omarchy.20261113.b25a51d6df57",
++    "version": "v0.9.2-omarchy.20261113.9360b4de398f",
+     "capability": "candidate_bound_full_os_stage_one_authenticated_recovery",
+     "minimum_app_version": "2.3.0",
+     "engine_modes": [
+@@ -172,7 +172,7 @@
+       {
+         "path": "overlay/src/omarchy_asahi.py",
+         "destination": "src/omarchy_asahi.py",
+-        "sha256": "af4df7b59b303e0c2025593071b23e5cce4c15c5523d303c8127ef49fc1976d2"
++        "sha256": "73bafd1e748cf395fb2d943e0007deb284322428c1d1af39b41d68e1c6e56121"
+       },
+       {
+         "path": "overlay/src/omarchy_contract.py",
+@@ -207,7 +207,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_asahi.py",
+         "destination": "tests/test_omarchy_asahi.py",
+-        "sha256": "e0df04f73e8a10e9be483af702d55ea6bafc5bef11f644483c160d89d2071da2"
++        "sha256": "39590f262100e3f8452e4acad5c9166c16aac5be5822e7479ff0ae4f0abe0fa6"
+       },
+       {
+         "path": "overlay/tests/test_omarchy_contract.py",
+@@ -307,7 +307,7 @@
+       {
+         "path": "overlay/src/omarchy_recovery.py",
+         "destination": "src/omarchy_recovery.py",
+-        "sha256": "8211663697d6fb4531e75d0068a338addd5653092a9978a950863522a8460bcb"
++        "sha256": "52da9e5e1c6bb0cf684b22f7b6b66b748cda2bf511341602540382763cfb59b3"
+       },
+       {
+         "path": "overlay/src/omarchy_macho.py",
+@@ -337,7 +337,7 @@
+       {
+         "path": "overlay/tests/test_omarchy_recovery.py",
+         "destination": "tests/test_omarchy_recovery.py",
+-        "sha256": "e47e66a5a97304a94cbf5214680e5b305c95433710047df5350ed6e2ca09fca9"
++        "sha256": "be0a923c4be50a901a9d39bcd6b1b2f4f1e6966fa566a86b051370d37727e13e"
+       },
+       {
+         "path": "overlay/src/omarchy_centauri.py",
+@@ -482,9 +482,9 @@
+     }
+   ],
+   "validation_artifact": {
+-    "filename": "installer-v0.9.2-omarchy.20261113.b25a51d6df57.tar.gz",
+-    "size_bytes": 17912434,
+-    "sha256": "bab388624d7dd19077afba4aedb0a0fc9008caf0bc4a1cb5bb097141ff5a3f21",
++    "filename": "installer-v0.9.2-omarchy.20261113.9360b4de398f.tar.gz",
++    "size_bytes": 17912715,
++    "sha256": "5caff1afed8833d809fd61a5de48d766c2e6592640b0125abe2a49e601a333a2",
+     "reproducibility_scope": "two-identical-python-overlay-repacks-authenticated-base",
+     "signature": "absent",
+     "metadata_sha256": "2e6181ce6b6e17c11039e04bfadade8d10ae0e11889885ad8c9960b68f179a5d"
+diff --git a/Recovery/README.md b/Recovery/README.md
+index 5990ea0..0f7e2f9 100644
+--- a/Recovery/README.md
++++ b/Recovery/README.md
+@@ -27,7 +27,7 @@ This explicitly defines `OMARCHY_STEP2_RECOVERY`, emits `build-recovery/Omarchy
+ 
+ Put the app and adjacent manifest in the OS ZIP under `esp/aurora/recovery/`. The OS template should declare `"recovery_gui": "omarchy-native-v1"`; this requires the app and verifies its entire content inventory before partitioning. Older payloads without this contract or app retain their existing shell Step 2. After creating the target and finalizing Stage 1 and `m1n1/boot.bin`, `omarchy_recovery.stage` copies the signed app unchanged to the stub System volume. It separately publishes `Aurora/Recovery/InstallData/install-config.json` and `Aurora/Recovery/InstallData/AuraPayloads/` with the finalized Stage 1, Stage 2 and device firmware. Both inventories are checked before changing `.IAPhysicalMedia` to launch the app. The signed `OmarchyRecoveryDataLayout=external-install-data-v1` marker is required during payload preflight, staging and app packaging; an older embedded-data binary is refused before partitioning.
+ 
+-Configuration schema 2 includes `volumeName`, `systemUUID`, `groupUUID`, `prebootUUID`, `espUUID`, `bootMode`, `stage2Path` and `bootstrap`. Two pairs are accepted: raw mode with `m1n1/boot.bin`, and Mach-O mode with the confined `m1n1/boot-ctxr.bin` for a board whose engine contract enrolls Aura's Mach-O boot object (the J714s on the 27.2 stub). In Mach-O mode Recovery checks the object (no `__TEXT_BOOT_EXEC`, so iBoot does not start SPTM), pads its `__TEXT_EXEC` for the 128 MiB execute window as a sparse file, checks `kmutil inspect --show-mach-boot-properties` (kcbz 0, the padded kcrz), and enrolls it with `kmutil configure-boot --compress`, which may take up to 30 minutes (the native prompt allows 60 for that command only). The padding, inspection and window code is ported from aurora-silicon/aurora-installer's Recovery (MIT). The installer exposes no alternate boot-mode controls. Runtime target discovery uses the app's containing volume, verified against the configured APFS identity; it does not rely on `/Volumes/Omarchy` or a fixed disk number.
++Configuration schema 2 includes `volumeName`, `systemUUID`, `groupUUID`, `prebootUUID`, `espUUID`, `bootMode`, `stage2Path` and `bootstrap`. Two pairs are accepted: raw mode with `m1n1/boot.bin`, and Mach-O mode with the confined `m1n1/boot-ctxr.bin` for a board whose engine contract enrolls Aura's Mach-O boot object (the J714s on the 27.2 stub). In Mach-O mode Recovery checks the object (no `__TEXT_BOOT_EXEC`, so iBoot does not start SPTM), pads its `__TEXT_EXEC` for the 128 MiB execute window as a sparse file, checks `kmutil inspect --show-mach-boot-properties` (kcbz 0, the padded kcrz), and enrolls it with `kmutil configure-boot --compress`, which may take up to 30 minutes (the native prompt allows 60 for that command only). The startup bundle's Mach-O mode carries `"compress"`: the engine writes `true` (`BoardMachO.compress`, the default); `false` enrolls the padded object without `--compress` (and skips the check that kmutil offers it), as the J714s's 2026-11-07 Mach-O trial did; a bundle without the key is enrolled compressed. The padding, inspection and window code is ported from aurora-silicon/aurora-installer's Recovery (MIT). The installer exposes no alternate boot-mode controls. Runtime target discovery uses the app's containing volume, verified against the configured APFS identity; it does not rely on `/Volumes/Omarchy` or a fixed disk number.
+ 
+ The legacy `Finish Installation.app/Contents/Resources/boot.bin` remains for upstream resume detection; its `step2.sh` becomes a relative launcher for `Omarchy Installer.app`. The new app remains on the stub after completion removes `.IAPhysicalMedia`, and the `aura` command opens its actual executable or invokes recovery actions. The localized `CFBundleDisplayName` must remain present: Recovery's Springboard requires it for this direct native launch contract.
+ 
+diff --git a/Recovery/Sources/AuraMachO.swift b/Recovery/Sources/AuraMachO.swift
+index 76f2593..5e3f4b6 100644
+--- a/Recovery/Sources/AuraMachO.swift
++++ b/Recovery/Sources/AuraMachO.swift
+@@ -187,7 +187,8 @@ public enum ExecuteWindow {
+ /// A Mach-O Stage 1 with __TEXT_EXEC padded by file-backed zeros. kmutil derives
+ /// kcrz from file offsets, so a segment grown only in vmsize leaves it unchanged
+ /// and the padding has to be in the file. `write(to:)` leaves it as a hole, and
+-/// `kmutil configure-boot --compress` keeps it from reaching Preboot.
++/// `kmutil configure-boot --compress` (the default) keeps it from reaching
++/// Preboot; a bundle that says "compress": false stores the whole object there.
+ public struct ExpandedMachOBootObject {
+   public struct WriteFailure: Error, LocalizedError {
+     public let reason: String
+diff --git a/Recovery/Sources/BootSelection.swift b/Recovery/Sources/BootSelection.swift
+index ae223b8..4932a5e 100644
+--- a/Recovery/Sources/BootSelection.swift
++++ b/Recovery/Sources/BootSelection.swift
+@@ -20,17 +20,29 @@ enum AuraBootMode: String, Codable {
+   }
+ 
+   /// kmutil records a Mach-O object's __TEXT_BOOT_EXEC size as kcbz; without it
+-  /// iBoot does not start SPTM. The padded object is enrolled compressed, so its
+-  /// zero padding never reaches Preboot.
+-  func enrollmentArguments(stage1: String, volume: String) -> [String] {
++  /// iBoot does not start SPTM. The padded object is enrolled compressed by
++  /// default, so its zero padding never reaches Preboot; a board's startup
++  /// bundle may ask for it uncompressed instead. `compress` applies only to Mach-O.
++  func enrollmentArguments(stage1: String, volume: String, compress: Bool = true) -> [String] {
+     var arguments = ["configure-boot", "-c", stage1, "-v", volume]
+     if self == .raw {
+       arguments += ["--raw", "--entry-point", "2048", "--lowest-virtual-address", "0"]
+-    } else {
++    } else if compress {
+       arguments.append("--compress")
+     }
+     return arguments
+   }
++
++  /// Whether a Mach-O mode's manifest entry asks for `kmutil --compress`.
++  /// Bundles staged before the key existed were always enrolled compressed, so
++  /// a missing key means true; anything but a JSON boolean is refused (nil).
++  static func machoCompression(_ entry: [String: Any]) -> Bool? {
++    guard let value = entry["compress"] else { return true }
++    guard let flag = value as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID() else {
++      return nil
++    }
++    return flag.boolValue
++  }
+ }
+ 
+ struct BootSelection: Codable {
+diff --git a/Recovery/Sources/RecoveryActions.swift b/Recovery/Sources/RecoveryActions.swift
+index c53fd9c..328c6ca 100644
+--- a/Recovery/Sources/RecoveryActions.swift
++++ b/Recovery/Sources/RecoveryActions.swift
+@@ -96,11 +96,16 @@ enum RecoveryActions {
+   /// Pads the Mach-O Stage 1 and checks what kmutil derives from the file it will
+   /// enroll: kcbz 0, so iBoot doesn't start SPTM, and the padded kcrz. From
+   /// aurora-silicon/aurora-installer's Recovery (RecoveryActions.stageExpandedStage1).
+-  static func stageExpandedStage1(_ stage1: Data, window: UInt64, at path: URL) throws {
+-    let usage = try run("/usr/bin/kmutil", ["configure-boot", "--help"])
+-    try check(
+-      String(decoding: usage, as: UTF8.self).contains("--compress"),
+-      "This Recovery's kmutil cannot compress startup software, which this Mac needs.")
++  /// kmutil must offer --compress only when the object is enrolled compressed.
++  static func stageExpandedStage1(
++    _ stage1: Data, window: UInt64, compress: Bool, at path: URL
++  ) throws {
++    if compress {
++      let usage = try run("/usr/bin/kmutil", ["configure-boot", "--help"])
++      try check(
++        String(decoding: usage, as: UTF8.self).contains("--compress"),
++        "This Recovery's kmutil cannot compress startup software, which this Mac needs.")
++    }
+     let expanded = try MachOBootObject.expandExecuteWindow(stage1, window: window)
+     try expanded.requireSpace(freeBytes: freeBytes(path.deletingLastPathComponent()))
+     try expanded.write(to: path)
+@@ -407,15 +412,23 @@ enum RecoveryActions {
+         message: "This boot mode’s complete startup bundle has not been staged yet.")
+     }
+     // A Mach-O Stage 1 is padded here for the execute window it names, then
+-    // enrolled compressed (aurora-silicon/aurora-installer's Recovery does the same).
++    // enrolled compressed (aurora-silicon/aurora-installer's Recovery does the same)
++    // unless the bundle says "compress": false. A bundle without the key is compressed.
+     var executeWindow: UInt64?
++    var compress = true
+     if selection.mode == .macho {
+       guard let window = entry["executeWindow"] as? Int, UInt64(window) == ExecuteWindow.size
+       else {
+         throw RecoveryFailure(message: "This Mach-O startup bundle names no usable execute window.")
+       }
++      guard let compression = AuraBootMode.machoCompression(entry) else {
++        throw RecoveryFailure(message: "This Mach-O startup bundle names no usable compression.")
++      }
+       try MachOBootObject.check(stage1)
+       executeWindow = UInt64(window)
++      compress = compression
++      InstallerLog.shared.append(
++        "The startup software will be enrolled \(compress ? "compressed" : "uncompressed").")
+     }
+     progress(0.15, "Checking the recovery environment")
+     try run("/sbin/mount", ["-u", "-w", volume.path])
+@@ -475,7 +488,7 @@ enum RecoveryActions {
+     let stage1Path = operation.appendingPathComponent("stage1")
+     if let window = executeWindow {
+       progress(0.2, "Preparing the startup software")
+-      try stageExpandedStage1(stage1, window: window, at: stage1Path)
++      try stageExpandedStage1(stage1, window: window, compress: compress, at: stage1Path)
+     } else {
+       try RecoveryFileTransaction.write(stage1, to: stage1Path)
+     }
+@@ -516,7 +529,8 @@ enum RecoveryActions {
+           progress(0.55, "Installing the startup software")
+           try authorized(
+             "/usr/bin/kmutil",
+-            selection.mode.enrollmentArguments(stage1: stage1Path.path, volume: volume.path),
++            selection.mode.enrollmentArguments(
++              stage1: stage1Path.path, volume: volume.path, compress: compress),
+             owner: owner, password: password)
+         },
+         finalize: {
+diff --git a/Recovery/Tests/BootSelectionCheck.swift b/Recovery/Tests/BootSelectionCheck.swift
+index bd41801..de99f31 100644
+--- a/Recovery/Tests/BootSelectionCheck.swift
++++ b/Recovery/Tests/BootSelectionCheck.swift
+@@ -25,6 +25,13 @@ import Foundation
+         if macho {
+           // A padded Mach-O Stage 1 is enrolled compressed and loads the confined Stage 2.
+           precondition(Array(arguments.dropFirst(5)) == ["--compress"])
++          precondition(
++            selection.mode.enrollmentArguments(stage1: stage1, volume: volume, compress: true)
++              == arguments)
++          // Uncompressed enrollment drops only --compress.
++          precondition(
++            selection.mode.enrollmentArguments(stage1: stage1, volume: volume, compress: false)
++              == Array(arguments.prefix(5)))
+           precondition(selection.mode.stage2Path == "macho/boot-ctxr.bin")
+           precondition(selection.mode.espStage2Path == "m1n1/boot-ctxr.bin")
+         } else {
+@@ -34,6 +41,10 @@ import Foundation
+             ])
+           precondition(selection.mode.stage2Path.hasSuffix("boot.bin"))
+           precondition(selection.mode.espStage2Path == "m1n1/boot.bin")
++          // Compression is a Mach-O choice; raw arguments never change.
++          precondition(
++            selection.mode.enrollmentArguments(stage1: stage1, volume: volume, compress: false)
++              == arguments)
+         }
+         let restored = try JSONDecoder().decode(
+           BootSelection.self, from: JSONEncoder().encode(selection))
+@@ -42,8 +53,24 @@ import Foundation
+             && restored.nestedVirtualization == selection.nestedVirtualization)
+       }
+     }
++    // The manifest's Mach-O "compress" key, as JSONSerialization reads it.
++    func compression(_ value: String?) throws -> Bool? {
++      let key = value.map { #", "compress": "# + $0 } ?? ""
++      let json = #"{"espPath": "m1n1/boot-ctxr.bin", "executeWindow": 134217728"# + key + "}"
++      guard let entry = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
++      else { preconditionFailure("the fixture is not a JSON object") }
++      return AuraBootMode.machoCompression(entry)
++    }
++    let missing = try compression(nil)
++    let compressed = try compression("true")
++    let uncompressed = try compression("false")
++    precondition(missing == true && compressed == true && uncompressed == false)
++    for invalid in ["1", "0", #""true""#, "null", "[]"] {
++      let refused = try compression(invalid)
++      precondition(refused == nil)
++    }
+     print(
+-      "PASS default raw; configured mode; all four option combinations; exact raw/Mach-O (--compress, confined Stage 2) argument separation; paths with spaces; JSON round trip"
++      "PASS default raw; configured mode; all four option combinations; exact raw/Mach-O (--compress unless the bundle says compress false, confined Stage 2) argument separation; manifest compress key (missing is true, non-boolean refused); paths with spaces; JSON round trip"
+     )
+   }
+ }
+-- 
+2.56.0
+
