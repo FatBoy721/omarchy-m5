@@ -90,7 +90,8 @@ jobs:
             echo "changed packages: $(diff before.txt after.txt | grep -c '^>')"
             echo
             echo "J714s packages before -> after:"
-            for p in linux-aurora m1n1-aurora uboot-aurora mesa-aurora vulkan-aurora hyprland-m5 hyprland omarchy-aurora-firmware omarchy omarchy-settings omarchy-mac omarchy-mac-boot; do
+            for p in linux-aurora m1n1-aurora uboot-aurora mesa-aurora vulkan-aurora hyprland-m5 hyprland omarchy-aurora-firmware omarchy omarchy-settings omarchy-mac omarchy-mac-boot \
+                     speakerguardd speakerguardd-v2 aurora-speaker-upgrade aurora-sep libfprint-aurora; do
               printf '  %-26s %-40s %s\n' "$p" "$(grep "^$p " before.txt | cut -d' ' -f2 || true)" "$(grep "^$p " after.txt | cut -d' ' -f2 || echo '(absent)')"
             done
             echo

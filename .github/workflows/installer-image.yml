@@ -33,6 +33,10 @@ on:
         description: Image profile (image-builder/builder/profiles/<name>); j714s for omarchy-j714s
         type: string
         default: j714s-developer
+      image-version:
+        description: Image number N of a named image line (omarchy-j714s-<N>); empty = 1. Only for image-profile j714s
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -47,6 +51,7 @@ jobs:
       INPUT_SHA256: ${{ inputs.bundle-sha256 }}
       PATCH_SET: ${{ inputs.patch-set }}
       IMAGE_PROFILE: ${{ inputs.image-profile }}
+      IMAGE_VERSION: ${{ inputs.image-version }}
       INSTALLER_REPO: https://github.com/omacom/omarchy-mac-installer
       INSTALLER_BASE: c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9
       # c07e54c + installer/patches 0001-0010
@@ -69,6 +74,7 @@ jobs:
             am --quiet --committer-date-is-author-date ../omarchy-m5/installer/patches/*.patch
           [[ $(git rev-parse 'HEAD^{tree}') == "$INSTALLER_TREE" ]]
           [[ $IMAGE_PROFILE =~ ^[a-z0-9][a-z0-9.-]*$ ]]
+          [[ -z $IMAGE_VERSION || $IMAGE_VERSION =~ ^[1-9][0-9]{0,5}$ ]]
           for set in $PATCH_SET; do
             # Each extra set goes on top in order, and its own TREE file pins the result.
             [[ $set =~ ^[a-z0-9][a-z0-9.-]*$ ]]
@@ -158,6 +164,7 @@ jobs:
             --alarm-server 'https://arm-mirror.omarchy.org/$arch/$repo' 2>&1 | tee "$WORK/evidence/resolve.log"
           cp "$WORK/inputs" "$WORK/evidence/inputs"
           bash image-builder/bin/build-mac-image --inputs "$WORK/inputs" --image-profile "$IMAGE_PROFILE" \
+            ${IMAGE_VERSION:+--image-version "$IMAGE_VERSION"} \
             --candidates "$WORK/input/candidate-set" --recovery-app "$WORK/input/recovery" \
             --cache "$WORK/cache" "$WORK/out" 2>&1 | tee "$WORK/evidence/build.log"
 

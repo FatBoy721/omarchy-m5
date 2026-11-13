@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TripleU <182648541+TripleU613@users.noreply.github.com>
+Date: Fri, 13 Nov 2026 13:00:25 -0500
+Subject: [PATCH] J714s release 2: the Recovery app built from this patch set
+
+build-input-provenance.json: the Recovery app is the one betizzel/omarchy-m5
+run 43477703681 (installer-recovery.yml, patch sets "upstream-27.3 j714s
+j714s-r2") built from Recovery/ tree 2f10aee7, commit f3375020 = c07e54c +
+installer/patches + patches-upstream-27.3 + patches-j714s 0001-0010 +
+patches-j714s-r2 0001. It carries patches-j714s 0008 (15 s Stage 1 proxy
+window, the compress switch) and 0009 (the Finish setup instructions).
+Artifact 14062718355 (zip sha256 15143a71...), app inventory sha256
+7347ba8a....
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../build-input-provenance.json                    | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/Integration/M5/J714s-Normal-System/build-input-provenance.json b/Integration/M5/J714s-Normal-System/build-input-provenance.json
+index b2f2cc5..2b06b63 100644
+--- a/Integration/M5/J714s-Normal-System/build-input-provenance.json
++++ b/Integration/M5/J714s-Normal-System/build-input-provenance.json
+@@ -18,13 +18,13 @@
+   "recovery": {
+     "repository": "omacom/omarchy-mac-installer",
+     "ci_repository": "betizzel/omarchy-m5",
+-    "patch_sets": "installer/patches, patches-upstream-27.3, patches-j714s (on omacom c07e54c)",
+-    "source_commit": "80296579759ca7421035aa84fbfd2c17b063e301",
+-    "source_tree": "21baedbc611e659ef063611281caeabb618da14a",
+-    "ci_run": 43379125218,
+-    "artifact_id": 14015278818,
+-    "artifact_sha256": "36cf0a27fd4d1372b4fd82809feea5daecefe4888fd040f80bb0340c3ab800c9",
+-    "inventory_sha256": "725aab0c70f759ac622f9e7017996af23015ba240a52468aca489bac777a06a6"
++    "patch_sets": "installer/patches, patches-upstream-27.3, patches-j714s, patches-j714s-r2 0001 (on omacom c07e54c)",
++    "source_commit": "f3375020299efb2b257fc46985fdc9e8986d2bd1",
++    "source_tree": "2f10aee719b698259256530f6068674ebef47bce",
++    "ci_run": 43477703681,
++    "artifact_id": 14062718355,
++    "artifact_sha256": "15143a71974e7cfd4c3927c0b0a52c4b458ad9bc512405843f8ed12a4b3ca797",
++    "inventory_sha256": "7347ba8acf50c664cb0acea69967abd791ebf94be358d36305088b644b656cfb"
+   },
+   "native_mesa": {
+     "repository": "TripleU613/omarchy-pkgs",
+-- 
+2.56.0
+
