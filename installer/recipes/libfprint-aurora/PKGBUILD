@@ -103,7 +103,10 @@ build() {
 check() {
   # On the J714s (15 cores) egis_etu905's umockdev replay fails when the suite runs in
   # parallel and passes on its own (3 of 3), so a failed parallel run is repeated serially.
-  meson test -C build --print-errorlogs || meson test -C build --print-errorlogs --num-processes 1
+  # LIBFPRINT_TEST_TIMEOUT_MULTIPLIER (unset natively): an emulated aarch64 build (qemu-user)
+  # runs the umockdev replays 5-10x slower than their 15-30 s timeouts allow; 10 passes 131/131.
+  local t=(${LIBFPRINT_TEST_TIMEOUT_MULTIPLIER:+--timeout-multiplier "$LIBFPRINT_TEST_TIMEOUT_MULTIPLIER"})
+  meson test -C build --print-errorlogs "${t[@]}" || meson test -C build --print-errorlogs --num-processes 1 "${t[@]}"
 }
 
 package() {

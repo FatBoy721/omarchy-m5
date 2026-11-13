@@ -118,3 +118,25 @@ is 02:07 UTC), so this series still carries them and the built packages stay as 
 - aurora-silicon/linux #1747 (e3acfff0d34f), the AVE 27.3 table: 0008's AVE half overlaps it.
   Rebase 0008 and 0018 onto it, keeping 0018's 26B123 row and CRC selection.
 - aurora-silicon/aura #203 (e3c1075f4144) is Aura 0006 (the storage auto-PM fix): drop it.
+
+## Packages (built 2026-11-13 on ush; the Mac was unreachable)
+
+The kernel was cross-built on ush (`OMARCHY_CROSS_KERNEL=1`, kernel package only: the headers
+package would carry x86 host tools; build it natively for headers). Aura is bare-metal, so its x86
+build is the same code. The rest were built in an Arch Linux ARM container under qemu-user
+(`ArchLinuxARM-aarch64-latest`, signature checked). Every `check()` passed. Files on ush in
+`~/m5-build/pkg272/out/`. None of these has been installed or booted.
+
+| Package | sha256 | Bytes |
+| --- | --- | --- |
+| `linux-aurora-7.3.0.aurora17.v272-1-aarch64.pkg.tar.zst` (`7.3.0-17.v272-1-ARCH`) | `7ed9869122af9ac70361a41521833fd495f8a98edbb1ee01a4c513bb03fa19e2` | 44157755 |
+| `m1n1-aurora-1.6.1.aurora24.v272-1-aarch64.pkg.tar.zst` | `1f30e3fffb1b6a36cad8e5b91d4cd8b844a5ded50565c9f82ff2c3a420b094bf` | 2458500 |
+| `speakerguardd-v2-1.0.0alpha.1-40.1-aarch64.pkg.tar.zst` (ships disabled) | `d8078f1a9bf9cf6370fb521770623940803c42bead95e346a1fb59c024929440` | 1751517 |
+| `aurora-speaker-upgrade-0.1-15-any.pkg.tar.zst` (ships disabled) | `f63d4dcd1b50e51a6c4a373d0ace10b4b909308f23607204f4dc28d538ac4934` | 66114 |
+| `aurora-sep-1.17.g8679514f4dff-1-any.pkg.tar.zst` (read-only: `xart_writes=0 provision_keybag=0`) | `6fa7ec892ea43462a5cbaa4d59bc5db224040c30ca342e0ef0a80d6be17f411c` | 72452 |
+| `libfprint-aurora-1.94.100-1-aarch64.pkg.tar.zst` | `6f4c2ca4c795f66d0b700c935be6c6646d9b974d19e0a1e6b5d1235d710d8172` | 521161 |
+
+aurora-sep stays at 8679514f: up to 572eb88e only its read-only status tool changed (two new
+diag lines), and the SEP UAPI header is byte-identical (sep-bio 5, sep-key 4). The kernel keeps
+the speakersafetyd hold for the J714s, so the speakers stay silent until speakerguardd v2 is
+switched on with this Mac's tuning.
