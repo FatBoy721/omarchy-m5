@@ -114,4 +114,12 @@ Builds:
 - Image: `installer-image.yml` with `patch-set: upstream-27.3 j714s`, `image-profile: j714s`, the bundle's Recovery tree/inventory, and a bundle made by `finish-inputs.py` with the engine above.
 - App: `installer-app.yml` (macOS runner) builds an ad hoc developer app with a sealed catalog signed by a per-run key, as an offline package (engine and image inside, split into `.partN`) and an online one (downloads the image parts from the image release).
 
+Built (2026-11-13):
+- Inputs: release `installer-build-inputs-j714s-d96c04cf8da5` (finish-inputs on the tree `rebuild-installer-tree.sh` makes, HEAD 5982b6f).
+- Image: run 43392759505 (headSha 1dd43b4) → release `j714s-developer-image-omarchy-j714s-1`, `omarchy-j714s-1-aarch64-apple-silicon-mac-os-package.zip` sha256 `a0a0ebad…26c5`. Inspection and provenance checks passed.
+- update-check: run 43395221712. `pacman -Syu` changed 0 packages and kept every J714s package.
+- App: `installer-app.yml` → prerelease `omarchy-j714s-1`.
+
+Left out of the set: `linux-aurora-headers` (no headers role in the j714s profile; `mac-image-check` drops it for this profile) and speakerguardd v2 / `aurora-speaker-upgrade` (no J714s board files in v2 yet).
+
 Checked: engine overlay tests (426), engine tooling tests, `test/all`, image-builder tests, the Recovery fixtures and build on macOS-26 (throwaway run 43369240212). The engine's config fill is byte-identical to aura's `fill_stage1_config.py` on the real 27.2 Aura build, `aura-boot.macho` passes the layout check (`aura.macho` does not), and aura pads the carried object to kcrz 153141248, the value this Mac's 2026-11-07 Mach-O trial enrolled. Not booted on any J714s.
